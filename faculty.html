@@ -230,8 +230,13 @@ tbody tr.clickable{cursor:pointer}
 .doc-row .fm-doc-desc{flex:2 1 220px;min-width:160px}
 .doc-row .fm-doc-date{flex:0 0 170px}
 .doc-row .fm-doc-url{flex:2 1 220px;min-width:160px}
-.doc-badge{display:inline-block;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;
-  color:var(--teal);background:var(--ltteal,rgba(20,150,150,.12));border-radius:3px;padding:2px 6px;margin-right:8px;vertical-align:middle}
+.doc-cat{margin:0 0 6px}
+.doc-cat summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--navytx);padding:4px 0;list-style:none}
+.doc-cat summary::-webkit-details-marker{display:none}
+.doc-cat summary::before{content:'▸ '}
+.doc-cat[open] summary::before{content:'▾ '}
+.doc-count{font-size:11px;font-weight:400;color:var(--dgray);margin-left:4px}
+.doc-item{padding:3px 0 3px 16px}
 .doc-sub{font-size:11px;font-weight:600;color:var(--dgray);vertical-align:middle}
 .rrm{flex:0 0 auto;width:28px;height:32px;border:1px solid var(--mgray);background:var(--surface);color:var(--dgray);border-radius:5px;cursor:pointer;font-size:15px;line-height:1}
 .rrm:hover{background:var(--ltred);color:var(--red);border-color:var(--red)}
@@ -1280,19 +1285,64 @@ function safeUrl(u){return /^https?:\/\//i.test(String(u||''))?u:null;}
 // member's own self-view; `locked` just adds the same "admin-tier data"
 // badge the Notes/Identifiers cards use, so it's on for admin and off for
 // self, matching how those other cards already distinguish the two.
+// Category groups follow the admin-configured Document Categories list
+// order (so HR/Reviews/etc. show in whatever order the admin set them in,
+// not alphabetically); anything with a category value no longer in that
+// list — orphaned by a list edit — still shows, just appended alphabetically
+// at the end rather than silently dropped.
+function groupDocsByCategory(docs){
+  const order=getList('facultyDocCategories');
+  const groups={};
+  docs.forEach(d=>{
+    const cat=d.category||'Uncategorized';
+    (groups[cat]=groups[cat]||[]).push(d);
+  });
+  const known=order.filter(c=>groups[c]);
+  const extra=Object.keys(groups).filter(c=>!known.includes(c)).sort((a,b)=>a.localeCompare(b));
+  return [...known,...extra].map(cat=>({category:cat,items:sortDocs(groups[cat])}));
+}
+// Within a category: sub-category A→Z, then document date newest→oldest
+// (undated last), then description A→Z.
+function sortDocs(items){
+  return items.slice().sort((a,b)=>{
+    const subA=(a.subcategory||'').toLowerCase(),subB=(b.subcategory||'').toLowerCase();
+    if(subA!==subB)return subA<subB?-1:1;
+    const dA=docDateSortKey(a.doc_date),dB=docDateSortKey(b.doc_date);
+    if(dA!==dB){
+      if(!dA)return 1;
+      if(!dB)return -1;
+      return dA<dB?1:-1;   // descending — newest first
+    }
+    const descA=(a.description||'').toLowerCase(),descB=(b.description||'').toLowerCase();
+    return descA<descB?-1:descA>descB?1:0;
+  });
+}
+// Pads a partial-precision date out to its latest possible day so mixed
+// precisions (a bare "2020" against a "2020-06-15") still sort sensibly.
+function docDateSortKey(v){
+  if(!v)return '';
+  const s=String(v);
+  if(/^\d{4}$/.test(s))return s+'-12-31';
+  if(/^\d{4}-\d{2}$/.test(s))return s+'-31';
+  return s;
+}
 function docsCardHTML(fid,locked){
   const docs=DOCS[fid]||[];
   if(!docs.length)return '';
   const lockSpan=locked?' <span class="lock">🔒 faculty admin</span>':'';
-  return `<div class="card"><h3>Documents${lockSpan}</h3>`+docs.map(d=>{
-    const url=safeUrl(d.sp_url);
-    const sub=N(d.subcategory)?` <span class="doc-sub">${esc(d.subcategory)}</span>`:'';
-    const date=fmtDocDate(d.doc_date);
-    return `<div class="longtext"><span class="doc-badge">${esc(d.category||'')}</span>${sub} ${esc(d.description||'')}`+
-      (date?` <span class="hintr">(${date})</span>`:'')+
-      (url?` — <a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--teal)">Open in SharePoint ↗</a>`:'')+
-      `</div>`;
-  }).join('')+`</div>`;
+  const body=groupDocsByCategory(docs).map(g=>{
+    const rows=g.items.map(d=>{
+      const url=safeUrl(d.sp_url);
+      const sub=N(d.subcategory)?`<span class="doc-sub">${esc(d.subcategory)}</span> `:'';
+      const date=fmtDocDate(d.doc_date);
+      return `<div class="longtext doc-item">${sub}${esc(d.description||'')}`+
+        (date?` <span class="hintr">(${date})</span>`:'')+
+        (url?` — <a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--teal)">Open in SharePoint ↗</a>`:'')+
+        `</div>`;
+    }).join('');
+    return `<details class="doc-cat" open><summary>${esc(g.category)} <span class="doc-count">${g.items.length}</span></summary>${rows}</details>`;
+  }).join('');
+  return `<div class="card"><h3>Documents${lockSpan}</h3>${body}</div>`;
 }
 
 function renderProf(id){
