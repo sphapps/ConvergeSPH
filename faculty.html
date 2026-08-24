@@ -1886,12 +1886,22 @@ async function saveDocs(){
   if(badDate){setSS('⚠ Document date must be YYYY, YYYY-MM, or YYYY-MM-DD');return;}
   setSS('Saving…');
   if(!await replaceChildRows('faculty_documents',fid,docRows))return;
+  // Reflect the save immediately rather than waiting on reload()'s round
+  // trip — if that fetch is slow or hiccups, the modal (or the profile card
+  // behind it) shouldn't be able to show stale pre-edit data with nothing
+  // on screen indicating anything's off.
+  DOCS[fid]=docRows.map((r,i)=>({...r,faculty_id:fid,sort_order:i}));
   closeM('mo-docs');
-  await reload();
   const after=snap(FAC.find(x=>String(x.id)===String(fid)));
   await logChange('update',fid,after&&after.name,before,after);
   setSS('● Saved');
   route(fid);
+  // Reconcile with the server (real row ids, etc.) in the background. If
+  // this hiccups for any reason, the optimistic DOCS patch above is already
+  // correct and stays in place — a failed reconcile shouldn't revert what's
+  // already showing correctly on screen.
+  try{ await reload(); }
+  catch(e){ console.error('Post-save reload failed, keeping local document state:',e); }
 }
 
 /* Category membership is a set, not a column: diff it and write only the delta. */
