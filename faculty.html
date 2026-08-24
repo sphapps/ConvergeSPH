@@ -224,6 +224,9 @@ tbody tr.clickable{cursor:pointer}
 .repeat-row{display:flex;gap:6px;align-items:center}
 .repeat-row input{flex:1;min-width:0}
 .edu-row .rd{flex:0 0 84px}.edu-row .ry{flex:0 0 92px}
+.doc-row .fm-doc-cat{flex:0 0 130px}
+.doc-badge{display:inline-block;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;
+  color:var(--teal);background:var(--ltteal,rgba(20,150,150,.12));border-radius:3px;padding:2px 6px;margin-right:8px;vertical-align:middle}
 .rrm{flex:0 0 auto;width:28px;height:32px;border:1px solid var(--mgray);background:var(--surface);color:var(--dgray);border-radius:5px;cursor:pointer;font-size:15px;line-height:1}
 .rrm:hover{background:var(--ltred);color:var(--red);border-color:var(--red)}
 .pubdot{color:var(--txgrn);font-size:9px;vertical-align:middle}
@@ -323,6 +326,7 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
       <button id="btn-admin-tools">🛠 Admin Tools ▾</button>
       <div class="nav-dd-menu" id="admin-tools-menu">
         <button id="btn-req-queue" title="Reviewing does not apply the change — you still make the edit yourself">📝 Edit Requests <span class="req-badge" id="req-badge-dd"></span></button>
+        <button id="btn-manage-lists">🗂 Manage Lists</button>
       </div>
     </div>
     <span id="save-status">Ready</span>
@@ -426,6 +430,10 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
           <input id="fm-admin-detail" class="roledet" placeholder="Administrative role — e.g. Associate Dean" style="display:none">
         </div>
 
+        <div class="sect">Documents <span class="hintr">Metadata only — no files stored here</span><button type="button" class="addrow" id="fm-docs-add">+ Add</button></div>
+        <div class="full hint">Anyone with existing SharePoint access to a linked folder can already open the document — this just points to it.</div>
+        <div class="full repeat" id="fm-docs"></div>
+
         <div class="sect">Notes</div>
         <div class="full"><label>Special Notes</label><textarea id="fm-snotes"></textarea></div>
         <div class="full"><label>Notes</label><textarea id="fm-notes"></textarea></div>
@@ -487,6 +495,24 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
     <div class="mf">
       <button class="btn" data-close="mo-cfm" id="cfm-no">Cancel</button>
       <button class="btn btn-p" id="cfm-ok">OK</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── MANAGE LISTS MODAL ─────────────────────────────────────── -->
+<div class="mo" id="mo-lists">
+  <div class="mc sm">
+    <div class="mh"><h3>Manage Lists</h3><button class="x" data-close="mo-lists">×</button></div>
+    <div class="mb">
+      <div><label>List</label><select id="ld-key" style="width:100%;margin:4px 0 10px"></select></div>
+      <label>Items <span class="hintr">one per line</span></label>
+      <textarea id="ld-items" rows="10" style="width:100%;font-family:ui-monospace,Consolas,monospace;font-size:12px"></textarea>
+      <div class="hint" id="ld-hint"></div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-d lft" id="btn-restore-list">Restore Defaults</button>
+      <button class="btn" data-close="mo-lists">Cancel</button>
+      <button class="btn btn-p" id="btn-save-list">Save</button>
     </div>
   </div>
 </div>
@@ -664,7 +690,15 @@ let WEBPROF={};                     // faculty id → web-profile row (viewer+ad
 let EDU={};                         // faculty id → [education row, …] ordered
 let RES={};                         // faculty id → [research row, …] ordered
 let AWD={};                         // faculty id → [award row, …] ordered
+let DOCS={};                        // faculty id → [faculty_documents row, …] ordered.
+                                     // Admin sees every faculty member's rows; viewer
+                                     // tier only ever gets their own (SELF_ID), fetched
+                                     // separately once SELF_ID resolves — mirrors the
+                                     // self-view admin-columns fetch just below.
 let CEPH={};                        // faculty id → ceph_flag  (ALL tiers, incl. anon)
+let DB={lists:{}};                  // app_lists rows keyed by list_key — admin-editable
+                                     // lists (Document Categories, and whatever else
+                                     // lands here later). Publicly readable, best-effort.
 let currentUserEmail=null;
 // Self-service — "view your own file, request edits to it." SELF_ID is the
 // faculty row (if any) whose email matches the signed-in session; MY_REQUESTS
@@ -758,7 +792,7 @@ async function loadData(){
   // there comes along. The base tables still carry no anon grant — an
   // unpublished biography never reaches an anonymous browser.
   const pfx=TIER==='public'?'_public':'';
-  const [fR,cR,oR,catR,tR,wpR,edR,rsR,awR,cphR,curAyR]=await Promise.all([
+  const [fR,cR,oR,catR,tR,wpR,edR,rsR,awR,cphR,lsR,dlR]=await Promise.all([
     paginate(()=> TIER==='admin'
       ? sb.from('faculty').select('*').eq('is_placeholder',false)
       : sb.from(src).select('*')),
@@ -779,23 +813,32 @@ async function loadData(){
     // carries it for an unpublished profile — cephOf() prefers the full
     // web-profile row when one is present and falls back to here.
     paginate(()=> sb.from('faculty_ceph_public').select('faculty_id,ceph_flag')),
-    // Admin-designated "current" AY, set from the scheduling app's Terms &
-    // Academic Years tool. Best-effort: an unreadable/missing row just means
-    // no designation yet, not a load failure, so its error isn't in the
+    // Admin-editable lists (currentAY designation, Document Categories, …).
+    // Publicly readable and best-effort — a fetch hiccup here just means
+    // built-in defaults are used, not a load failure, so not in the
     // throw-check below.
-    sb.from('app_lists').select('items').eq('list_key','currentAY').maybeSingle()
+    paginate(()=> sb.from('app_lists').select('list_key,items')),
+    // Faculty Documents — admin only here. Viewer/self gets their own rows
+    // fetched separately below, once SELF_ID is known; public gets none.
+    TIER==='admin' ? paginate(()=> sb.from('faculty_documents').select('*'))
+                   : noRows
   ]);
-  for(const r of [fR,cR,oR,catR,tR,wpR,edR,rsR,awR,cphR]){
+  for(const r of [fR,cR,oR,catR,tR,wpR,edR,rsR,awR,cphR,dlR]){
     if(r.error){setLM('');throw r.error;}
   }
 
   TERM_MAP={};
   (tR.data||[]).forEach(t=>{TERM_MAP[t.code]=t;});
   AY_ORDER=[...new Set((tR.data||[]).map(t=>t.academic_year))].sort().reverse();
+  DB.lists={};
+  if(!lsR.error)(lsR.data||[]).forEach(row=>{DB.lists[row.list_key]=row.items;});
   {
-    const override=(!curAyR.error&&curAyR.data&&Array.isArray(curAyR.data.items))?curAyR.data.items[0]:'';
+    const override=(Array.isArray(DB.lists.currentAY)&&DB.lists.currentAY[0])||'';
     CURRENT_AY=(override&&AY_ORDER.includes(override))?override:(AY_ORDER[0]||'');
   }
+  DOCS={};
+  (dlR.data||[]).forEach(d=>{(DOCS[d.faculty_id]=DOCS[d.faculty_id]||[]).push(d);});
+  Object.values(DOCS).forEach(rows=>rows.sort((a,b)=>(a.sort_order||0)-(b.sort_order||0)));
 
   FAC=(fR.data||[]);
   if(TIER==='admin'){
@@ -841,6 +884,17 @@ async function loadData(){
       const{data,error}=await sb.from('faculty_edit_requests').select('*')
         .eq('faculty_id',SELF_ID).order('created_at',{ascending:false}).limit(20);
       if(!error)MY_REQUESTS=data||[];
+    }catch(e){}
+  }
+
+  // Faculty Documents, self-view only — view-only, admin adds/edits these.
+  // faculty_documents_self_read (RLS) restricts this to the caller's own row
+  // regardless of what faculty_id is requested here.
+  if(TIER==='viewer'&&SELF_ID){
+    try{
+      const{data,error}=await sb.from('faculty_documents').select('*')
+        .eq('faculty_id',SELF_ID).order('sort_order',{ascending:true});
+      if(!error)DOCS[SELF_ID]=data||[];
     }catch(e){}
   }
   PENDING_REQ_COUNT=0;
@@ -1197,6 +1251,25 @@ function itemListHTML(cls,rows){
   ).join('')+`</ul>`;
 }
 
+// http(s)-only guard before a stored URL ever becomes an href — same
+// restriction inlineMd already applies to pasted bio/research links.
+function safeUrl(u){return /^https?:\/\//i.test(String(u||''))?u:null;}
+// Documents card — same list for admin (any faculty member) and the faculty
+// member's own self-view; `locked` just adds the same "admin-tier data"
+// badge the Notes/Identifiers cards use, so it's on for admin and off for
+// self, matching how those other cards already distinguish the two.
+function docsCardHTML(fid,locked){
+  const docs=DOCS[fid]||[];
+  if(!docs.length)return '';
+  const lockSpan=locked?' <span class="lock">🔒 faculty admin</span>':'';
+  return `<div class="card"><h3>Documents${lockSpan}</h3>`+docs.map(d=>{
+    const url=safeUrl(d.sp_url);
+    return `<div class="longtext"><span class="doc-badge">${esc(d.category||'')}</span>${esc(d.description||'')}`+
+      (url?` — <a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--teal)">Open in SharePoint ↗</a>`:'')+
+      `</div>`;
+  }).join('')+`</div>`;
+}
+
 function renderProf(id){
   const f=FAC.find(x=>String(x.id)===String(id));
   lastViewedId=id;   // so ← Back lands on this row instead of the top
@@ -1351,6 +1424,8 @@ function renderProf(id){
       ${fld('Source Updated',f.source_updated)}
     </div></div>`;
 
+    h+=docsCardHTML(f.id,true);
+
     if(N(f.special_notes)||N(f.notes)){
       h+=`<div class="card"><h3>Notes <span class="lock">🔒 faculty admin</span></h3>`;
       if(N(f.special_notes))h+=`<div class="longtext"><b>Special:</b> ${esc(f.special_notes)}</div>`;
@@ -1379,6 +1454,7 @@ function renderProf(id){
         ${fld('PSU ID',f.psu_id)}
         ${fld('Source Updated',f.source_updated)}
       </div></div>`;
+      h+=docsCardHTML(f.id,false);
     }else{
       h+=`<div class="card"><h3>Review &amp; Promotion</h3>
         <div class="gate">Review, promotion, and identifier fields are visible to <b>faculty administrators</b> only.</div></div>`;
@@ -1512,6 +1588,21 @@ const FM={ // element id → faculty column
 const NUMCOLS=new Set(['fte_in_sph']);
 const DATECOLS=new Set(['start_date','appt_expiration_date']);
 
+// Faculty Documents row — category (from the admin-editable list), a
+// description, and a SharePoint link. No file is ever stored here; whoever
+// already has SharePoint access to the folder has access to the document
+// itself, same as always.
+function docRowHTML(d){d=d||{};
+  const cats=getList('facultyDocCategories');
+  const cur=d.category||'';
+  const opts=cats.map(c=>`<option value="${esc(c)}"${c===cur?' selected':''}>${esc(c)}</option>`).join('');
+  return `<div class="repeat-row doc-row">`+
+    `<select class="fm-doc-cat">${opts}</select>`+
+    `<input class="fm-doc-desc" placeholder="Description" value="${esc(d.description||'')}">`+
+    `<input class="fm-doc-url" placeholder="SharePoint link (https://…)" value="${esc(d.sp_url||'')}">`+
+    `<button type="button" class="rrm" title="Remove">×</button></div>`;
+}
+
 function catboxHTML(sel){
   const chosen=new Set(sel||[]);
   return CATEGORIES.map(c=>
@@ -1533,6 +1624,8 @@ function openFM(id){
     setv(el,v);
   });
   $('fm-cats').innerHTML=catboxHTML(f?f.categories:[]);
+  const docs=f?(DOCS[f.id]||[]):[];
+  $('fm-docs').innerHTML=(docs.length?docs:[{}]).map(d=>docRowHTML(d)).join('');
   const cb=(id,on)=>{const e=$(id);if(e)e.checked=!!on;};
   cb('fm-pd',   f&&f.is_program_director);
   cb('fm-admin',f&&f.is_administrator);
@@ -1566,12 +1659,19 @@ async function saveFac(){
   let cats=chosenCats();
   if(!eid&&!cats.length)cats=['Inactive'];
   const before=eid?snap(FAC.find(x=>String(x.id)===String(eid))):null;
+  const docRows=readRepeat('fm-docs',r=>({
+    category:r.querySelector('.fm-doc-cat').value,
+    description:N(r.querySelector('.fm-doc-desc').value),
+    sp_url:N(r.querySelector('.fm-doc-url').value),
+    created_by:currentUserEmail
+  })).filter(d=>d.description&&d.sp_url);
 
   if(eid){
     setSS('Saving…');
     const ok=await sbSave(sb.from('faculty').update(row).eq('id',eid),'● Saved');
     if(!ok)return;
     if(!await syncCats(eid,before?before.categories:[],cats))return;
+    if(!await replaceChildRows('faculty_documents',eid,docRows))return;
     closeM('mo-fac');
     await reload();
     const after=snap(FAC.find(x=>String(x.id)===String(eid)));
@@ -1582,6 +1682,7 @@ async function saveFac(){
     const {data,error}=await sb.from('faculty').insert(row).select().single();
     if(error){setSS('⚠ Not added: '+error.message);return;}
     if(!await syncCats(data.id,[],cats))return;
+    if(!await replaceChildRows('faculty_documents',data.id,docRows))return;
     closeM('mo-fac');
     await reload();
     const after=snap(FAC.find(x=>String(x.id)===String(data.id)));
@@ -1749,6 +1850,7 @@ function snap(f){
   o.is_program_director=!!f.is_program_director;
   o.is_administrator=!!f.is_administrator;
   o.categories=(f.categories||[]).slice();
+  o.documents=(DOCS[f.id]||[]).map(d=>({category:d.category,description:d.description,sp_url:d.sp_url}));
   return o;
 }
 async function logChange(action,fid,name,before,after,entity){
@@ -1778,7 +1880,7 @@ const RP_FAC_LABELS={
   is_program_director:'Program Director',is_administrator:'Administrator',categories:'Categories',
   category:'Profile Category',subcategory:'Profile Subcategory',ceph_flag:'CEPH Flag',
   photo_url:'Photo URL',is_published:'Published',biography_md:'Biography',
-  education:'Education',research:'Research',awards:'Awards'
+  education:'Education',research:'Research',awards:'Awards',documents:'Documents'
 };
 function _facLabel(k){return RP_FAC_LABELS[k]||(k.charAt(0).toUpperCase()+k.slice(1)).replace(/_/g,' ');}
 // Render any snapshot value (string, boolean, array of strings, array of
@@ -2045,6 +2147,79 @@ function updateAuthBar(){
   $('f-inact-wrap').style.display=(TIER==='public')?'none':'flex';
 }
 
+/* ─── ADMIN-EDITABLE LISTS ─────────────────────────────────────
+   Same app_lists plumbing as the scheduling app's Manage Lists tool: no row
+   for a key means "use built-in defaults"; a row overrides it. Starts with
+   just Document Categories but is written to take more entries as later
+   roadmap features (Adjunct Tracking, Committees, …) need their own lists. */
+const LISTS={
+  facultyDocCategories:{
+    label:'Document Categories',
+    defaults:['HR','Reviews','Onboarding','Contract','Other'],
+    apply(){populateSelects('.fm-doc-cat',getList('facultyDocCategories'));}
+  }
+};
+function getList(key){
+  const ov=DB.lists&&DB.lists[key];
+  return (Array.isArray(ov)&&ov.length)?ov.slice():LISTS[key].defaults.slice();
+}
+// Refreshes every <select class="fm-doc-cat"> currently in the DOM (there's
+// one per document row), preserving each one's current value.
+function populateSelects(sel,items){
+  document.querySelectorAll(sel).forEach(s=>{
+    const cur=s.value;
+    s.innerHTML=items.map(v=>`<option value="${esc(v)}">${esc(v)}</option>`).join('');
+    if(cur&&items.includes(cur))s.value=cur;
+    else if(cur)ensureOpt(s,cur);
+  });
+}
+function ensureOpt(s,v){
+  if(v==null||v==='')return;
+  if(![...s.options].some(o=>o.value===v)){
+    const o=document.createElement('option');o.value=v;o.textContent=v+' (current)';s.appendChild(o);
+  }
+}
+function applyAllLists(){Object.values(LISTS).forEach(l=>l.apply());}
+
+let ldKey=null;
+function openLists(){
+  const sel=$('ld-key');sel.innerHTML='';
+  Object.entries(LISTS).forEach(([k,l])=>{
+    const o=document.createElement('option');o.value=k;o.textContent=l.label;sel.appendChild(o);
+  });
+  ldKey=sel.value=Object.keys(LISTS)[0];
+  loadListIntoEditor(ldKey);
+  openM('mo-lists');
+}
+function loadListIntoEditor(key){
+  ldKey=key;
+  $('ld-items').value=getList(key).join('\n');
+  const isCustom=Array.isArray(DB.lists&&DB.lists[key]);
+  $('ld-hint').textContent=isCustom?'Customized — differs from defaults.':'Using built-in defaults.';
+}
+async function saveListEdits(){
+  const items=$('ld-items').value.split('\n').map(s=>s.trim()).filter(Boolean);
+  const seen=new Set(),clean=[];
+  items.forEach(v=>{if(!seen.has(v)){seen.add(v);clean.push(v);}});
+  if(!DB.lists)DB.lists={};
+  const isDefault=JSON.stringify(clean)===JSON.stringify(LISTS[ldKey].defaults);
+  if(isDefault)delete DB.lists[ldKey]; else DB.lists[ldKey]=clean;
+  applyAllLists();
+  closeM('mo-lists');
+  // No row = use defaults; a default-equal list is stored by DELETING the row.
+  if(isDefault)await sbSave(sb.from('app_lists').delete().eq('list_key',ldKey),'● List reset to defaults');
+  else await sbSave(sb.from('app_lists').upsert({list_key:ldKey,items:clean,updated_at:new Date().toISOString()}),'● List saved');
+}
+function restoreListDefaults(){
+  showCfm('Restore defaults?','Reset "'+LISTS[ldKey].label+'" to the built-in list? Your custom entries for it will be discarded.',async()=>{
+    if(DB.lists)delete DB.lists[ldKey];
+    $('ld-items').value=LISTS[ldKey].defaults.join('\n');
+    $('ld-hint').textContent='Using built-in defaults.';
+    applyAllLists();
+    await sbSave(sb.from('app_lists').delete().eq('list_key',ldKey),'● Restored defaults');
+  });
+}
+
 /* ─── RELOAD ───────────────────────────────────────────────── */
 async function reload(){
   await loadData();
@@ -2079,9 +2254,14 @@ function wire(){
   $('pm-edu-add').onclick=()=>$('pm-edu').insertAdjacentHTML('beforeend',eduRowHTML());
   $('pm-res-add').onclick=()=>$('pm-res').insertAdjacentHTML('beforeend',resRowHTML());
   $('pm-awd-add').onclick=()=>$('pm-awd').insertAdjacentHTML('beforeend',awdRowHTML());
-  ['pm-edu','pm-res','pm-awd'].forEach(cid=>$(cid).addEventListener('click',e=>{
+  $('fm-docs-add').onclick=()=>$('fm-docs').insertAdjacentHTML('beforeend',docRowHTML());
+  ['pm-edu','pm-res','pm-awd','fm-docs'].forEach(cid=>$(cid).addEventListener('click',e=>{
     const rm=e.target.closest('.rrm'); if(rm)rm.closest('.repeat-row').remove();
   }));
+  $('btn-manage-lists').onclick=openLists;
+  $('ld-key').addEventListener('change',e=>loadListIntoEditor(e.target.value));
+  $('btn-save-list').onclick=saveListEdits;
+  $('btn-restore-list').onclick=restoreListDefaults;
   // Admin Tools dropdown — same fixed-position mechanics as index.html's,
   // since nav sits inside header here rather than a separate <nav> bar.
   $('btn-admin-tools').addEventListener('click',e=>{
