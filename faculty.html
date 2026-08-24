@@ -225,11 +225,11 @@ tbody tr.clickable{cursor:pointer}
 .repeat-row input{flex:1;min-width:0}
 .edu-row .rd{flex:0 0 84px}.edu-row .ry{flex:0 0 92px}
 .doc-row{flex-wrap:wrap}
-.doc-row .fm-doc-cat{flex:0 0 120px}
-.doc-row .fm-doc-sub{flex:1 1 140px;min-width:110px}
-.doc-row .fm-doc-desc{flex:2 1 220px;min-width:160px}
-.doc-row .fm-doc-date{flex:0 0 170px}
-.doc-row .fm-doc-url{flex:2 1 220px;min-width:160px}
+.doc-row .dm-doc-cat{flex:0 0 120px}
+.doc-row .dm-doc-sub{flex:1 1 140px;min-width:110px}
+.doc-row .dm-doc-desc{flex:2 1 220px;min-width:160px}
+.doc-row .dm-doc-date{flex:0 0 170px}
+.doc-row .dm-doc-url{flex:2 1 220px;min-width:160px}
 .doc-cat{margin:0 0 6px}
 .doc-cat summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--navytx);padding:4px 0;list-style:none}
 .doc-cat summary::-webkit-details-marker{display:none}
@@ -443,10 +443,6 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
           <input id="fm-admin-detail" class="roledet" placeholder="Administrative role — e.g. Associate Dean" style="display:none">
         </div>
 
-        <div class="sect">Documents <span class="hintr">Metadata only — no files stored here</span><button type="button" class="addrow" id="fm-docs-add">+ Add</button></div>
-        <div class="full hint">Anyone with existing SharePoint access to a linked folder can already open the document — this just points to it.</div>
-        <div class="full repeat" id="fm-docs"></div>
-
         <div class="sect">Notes</div>
         <div class="full"><label>Special Notes</label><textarea id="fm-snotes"></textarea></div>
         <div class="full"><label>Notes</label><textarea id="fm-notes"></textarea></div>
@@ -496,6 +492,24 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
     <div class="mf">
       <button class="btn" data-close="mo-prof">Cancel</button>
       <button class="btn btn-p" id="btn-save-prof">Save Profile</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── DOCUMENTS MODAL ──────────────────────────────────────── -->
+<div class="mo" id="mo-docs">
+  <div class="mc">
+    <div class="mh"><h3 id="dm-title">Documents</h3><button class="x" data-close="mo-docs">×</button></div>
+    <div class="mb f">
+      <div class="fg">
+        <div class="sect">Documents <span class="hintr">Metadata only — no files stored here</span><button type="button" class="addrow" id="dm-docs-add">+ Add</button></div>
+        <div class="full hint">Anyone with existing SharePoint access to a linked folder can already open the document — this just points to it.</div>
+        <div class="full repeat" id="dm-docs"></div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn" data-close="mo-docs">Cancel</button>
+      <button class="btn btn-p" id="btn-save-docs">Save Documents</button>
     </div>
   </div>
 </div>
@@ -1411,6 +1425,7 @@ function renderProf(id){
     <div class="pact">
       <button class="btn btn-p btn-s admin-only" id="btn-edit">✎ Edit record</button>
       <button class="btn btn-s admin-only" id="btn-edit-prof">✎ Edit profile</button>
+      <button class="btn btn-s admin-only" id="btn-edit-docs">✎ Edit docs</button>
     </div>
   </div>`;
 
@@ -1563,6 +1578,7 @@ function renderProf(id){
   $('pb').onclick=goBack;
   const be=$('btn-edit');if(be)be.onclick=()=>openFM(f.id);
   const bp=$('btn-edit-prof');if(bp)bp.onclick=()=>openPM(f.id);
+  const bd=$('btn-edit-docs');if(bd)bd.onclick=()=>openDM(f.id);
 }
 
 /* Grouped by academic year (newest first), then by term within the year.
@@ -1694,11 +1710,11 @@ function docRowHTML(d){d=d||{};
   const cur=d.category||'';
   const opts=cats.map(c=>`<option value="${esc(c)}"${c===cur?' selected':''}>${esc(c)}</option>`).join('');
   return `<div class="repeat-row doc-row">`+
-    `<select class="fm-doc-cat">${opts}</select>`+
-    `<input class="fm-doc-sub" placeholder="Sub-category / detail" value="${esc(d.subcategory||'')}">`+
-    `<input class="fm-doc-desc" placeholder="Description" value="${esc(d.description||'')}">`+
-    `<input class="fm-doc-date" placeholder="Date: YYYY, YYYY-MM, or YYYY-MM-DD" value="${esc(d.doc_date||'')}">`+
-    `<input class="fm-doc-url" placeholder="SharePoint link (https://…)" value="${esc(d.sp_url||'')}">`+
+    `<select class="dm-doc-cat">${opts}</select>`+
+    `<input class="dm-doc-sub" placeholder="Sub-category / detail" value="${esc(d.subcategory||'')}">`+
+    `<input class="dm-doc-desc" placeholder="Description" value="${esc(d.description||'')}">`+
+    `<input class="dm-doc-date" placeholder="Date: YYYY, YYYY-MM, or YYYY-MM-DD" value="${esc(d.doc_date||'')}">`+
+    `<input class="dm-doc-url" placeholder="SharePoint link (https://…)" value="${esc(d.sp_url||'')}">`+
     `<button type="button" class="rrm" title="Remove">×</button></div>`;
 }
 
@@ -1723,8 +1739,6 @@ function openFM(id){
     setv(el,v);
   });
   $('fm-cats').innerHTML=catboxHTML(f?f.categories:[]);
-  const docs=f?(DOCS[f.id]||[]):[];
-  $('fm-docs').innerHTML=(docs.length?docs:[{}]).map(d=>docRowHTML(d)).join('');
   const cb=(id,on)=>{const e=$(id);if(e)e.checked=!!on;};
   cb('fm-pd',   f&&f.is_program_director);
   cb('fm-admin',f&&f.is_administrator);
@@ -1758,23 +1772,12 @@ async function saveFac(){
   let cats=chosenCats();
   if(!eid&&!cats.length)cats=['Inactive'];
   const before=eid?snap(FAC.find(x=>String(x.id)===String(eid))):null;
-  const docRows=readRepeat('fm-docs',r=>({
-    category:r.querySelector('.fm-doc-cat').value,
-    subcategory:N(r.querySelector('.fm-doc-sub').value),
-    description:N(r.querySelector('.fm-doc-desc').value),
-    doc_date:N(r.querySelector('.fm-doc-date').value),
-    sp_url:N(r.querySelector('.fm-doc-url').value),
-    created_by:currentUserEmail
-  })).filter(d=>d.description&&d.sp_url);
-  const badDate=docRows.find(d=>d.doc_date&&!DOC_DATE_RE.test(d.doc_date));
-  if(badDate){setSS('⚠ Document date must be YYYY, YYYY-MM, or YYYY-MM-DD');return;}
 
   if(eid){
     setSS('Saving…');
     const ok=await sbSave(sb.from('faculty').update(row).eq('id',eid),'● Saved');
     if(!ok)return;
     if(!await syncCats(eid,before?before.categories:[],cats))return;
-    if(!await replaceChildRows('faculty_documents',eid,docRows))return;
     closeM('mo-fac');
     await reload();
     const after=snap(FAC.find(x=>String(x.id)===String(eid)));
@@ -1785,7 +1788,6 @@ async function saveFac(){
     const {data,error}=await sb.from('faculty').insert(row).select().single();
     if(error){setSS('⚠ Not added: '+error.message);return;}
     if(!await syncCats(data.id,[],cats))return;
-    if(!await replaceChildRows('faculty_documents',data.id,docRows))return;
     closeM('mo-fac');
     await reload();
     const after=snap(FAC.find(x=>String(x.id)===String(data.id)));
@@ -1793,6 +1795,40 @@ async function saveFac(){
     setSS('● Faculty added');
     go(data.id);
   }
+}
+
+/* ─── DOCUMENTS MODAL ──────────────────────────────────────── */
+let dmId=null;   // faculty id whose documents are being edited
+function openDM(fid){
+  dmId=fid;
+  const f=FAC.find(x=>String(x.id)===String(fid));
+  $('dm-title').textContent='Documents — '+(f?full(f):'');
+  const docs=DOCS[fid]||[];
+  $('dm-docs').innerHTML=(docs.length?docs:[{}]).map(d=>docRowHTML(d)).join('');
+  openM('mo-docs');
+}
+async function saveDocs(){
+  const fid=dmId; if(!fid)return;
+  const f=FAC.find(x=>String(x.id)===String(fid));
+  const before=snap(f);
+  const docRows=readRepeat('dm-docs',r=>({
+    category:r.querySelector('.dm-doc-cat').value,
+    subcategory:N(r.querySelector('.dm-doc-sub').value),
+    description:N(r.querySelector('.dm-doc-desc').value),
+    doc_date:N(r.querySelector('.dm-doc-date').value),
+    sp_url:N(r.querySelector('.dm-doc-url').value),
+    created_by:currentUserEmail
+  })).filter(d=>d.description&&d.sp_url);
+  const badDate=docRows.find(d=>d.doc_date&&!DOC_DATE_RE.test(d.doc_date));
+  if(badDate){setSS('⚠ Document date must be YYYY, YYYY-MM, or YYYY-MM-DD');return;}
+  setSS('Saving…');
+  if(!await replaceChildRows('faculty_documents',fid,docRows))return;
+  closeM('mo-docs');
+  await reload();
+  const after=snap(FAC.find(x=>String(x.id)===String(fid)));
+  await logChange('update',fid,after&&after.name,before,after);
+  setSS('● Saved');
+  route(fid);
 }
 
 /* Category membership is a set, not a column: diff it and write only the delta. */
@@ -2259,14 +2295,14 @@ const LISTS={
   facultyDocCategories:{
     label:'Document Categories',
     defaults:['HR','Reviews','Onboarding','Contract','Other'],
-    apply(){populateSelects('.fm-doc-cat',getList('facultyDocCategories'));}
+    apply(){populateSelects('.dm-doc-cat',getList('facultyDocCategories'));}
   }
 };
 function getList(key){
   const ov=DB.lists&&DB.lists[key];
   return (Array.isArray(ov)&&ov.length)?ov.slice():LISTS[key].defaults.slice();
 }
-// Refreshes every <select class="fm-doc-cat"> currently in the DOM (there's
+// Refreshes every <select class="dm-doc-cat"> currently in the DOM (there's
 // one per document row), preserving each one's current value.
 function populateSelects(sel,items){
   document.querySelectorAll(sel).forEach(s=>{
@@ -2357,10 +2393,11 @@ function wire(){
   $('pm-edu-add').onclick=()=>$('pm-edu').insertAdjacentHTML('beforeend',eduRowHTML());
   $('pm-res-add').onclick=()=>$('pm-res').insertAdjacentHTML('beforeend',resRowHTML());
   $('pm-awd-add').onclick=()=>$('pm-awd').insertAdjacentHTML('beforeend',awdRowHTML());
-  $('fm-docs-add').onclick=()=>$('fm-docs').insertAdjacentHTML('beforeend',docRowHTML());
-  ['pm-edu','pm-res','pm-awd','fm-docs'].forEach(cid=>$(cid).addEventListener('click',e=>{
+  $('dm-docs-add').onclick=()=>$('dm-docs').insertAdjacentHTML('beforeend',docRowHTML());
+  ['pm-edu','pm-res','pm-awd','dm-docs'].forEach(cid=>$(cid).addEventListener('click',e=>{
     const rm=e.target.closest('.rrm'); if(rm)rm.closest('.repeat-row').remove();
   }));
+  $('btn-save-docs').onclick=saveDocs;
   $('btn-manage-lists').onclick=openLists;
   $('ld-key').addEventListener('change',e=>loadListIntoEditor(e.target.value));
   $('btn-save-list').onclick=saveListEdits;
@@ -2404,7 +2441,7 @@ function wire(){
     b.onclick=()=>closeM(b.dataset.close);
   });
   document.querySelectorAll('.mo').forEach(o=>{
-    o.addEventListener('click',e=>{if(e.target===o&&o.id!=='mo-fac'&&o.id!=='mo-prof')closeM(o.id);});
+    o.addEventListener('click',e=>{if(e.target===o&&o.id!=='mo-fac'&&o.id!=='mo-prof'&&o.id!=='mo-docs')closeM(o.id);});
   });
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape')document.querySelectorAll('.mo.open').forEach(o=>closeM(o.id));
