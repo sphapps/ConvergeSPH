@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SPH Course Scheduling — AY 2026-27</title>
+<title>ConvergeSPH — Course Scheduling — AY 2026-27</title>
 <!-- Theme: applied before first paint so there is no white flash on load.
      Explicit choice wins; otherwise follow the OS setting. -->
 <script>
@@ -14,6 +14,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js"></script>
 <style>
 /* ═══ TOKENS ═════════════════════════════════════════════════
    Every colour in the app resolves through one of these. The dark set below
@@ -88,7 +89,35 @@ nav button{padding:0 18px;height:44px;border:none;background:none;font-size:13px
 nav button:hover{color:var(--teal);background:var(--lgray)}
 nav button.active{color:var(--navytx);border-bottom-color:var(--teal);font-weight:600}
 #btn-admin-toggle{margin-left:auto;font-size:11px;color:var(--dgray);padding:0 14px}
-#btn-lists{font-size:11px;color:var(--dgray);padding:0 14px}
+
+/* ═══ ADMIN TOOLS DROPDOWN ═══════════════════════════════════
+   Nests Lists / Terms / Lock Down under one nav entry instead of three
+   flat buttons. Visibility of the trigger and each row still follows
+   the existing .admin-only (PD+Admin) / .admin-strict (Admin only)
+   rules — this is purely a layout change, not a permissions change. */
+.nav-dd{position:relative;display:inline-block}
+#btn-admin-tools{font-size:11px;color:var(--dgray);padding:0 14px}
+.nav-dd-menu{display:none;position:fixed;min-width:170px;background:var(--surface);
+  border:1px solid var(--mgray);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.15);z-index:9999;
+  padding:4px;flex-direction:column}
+.nav-dd-menu.open{display:flex}
+.nav-dd-menu button{height:auto;padding:8px 10px;text-align:left;border-radius:4px;white-space:nowrap;
+  border-bottom:none;font-size:13px;color:var(--text)}
+.nav-dd-menu button:hover{background:var(--lgray);color:var(--teal)}
+.dd-locked-hint{display:none;padding:8px 10px;font-size:12px;color:var(--dgray);font-style:italic}
+
+/* ═══ LOCKDOWN BANNER ════════════════════════════════════════
+   Shown to every visitor — signed out, viewer, PD, admin — while the
+   apps are frozen. Writes are actually blocked at the RLS layer; this
+   is the explanation, not the enforcement. */
+#lockdown-banner{display:none;background:#7C2D12;color:#FEE2E2;padding:9px 16px;font-size:13px;
+  align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #991B1B;line-height:1.4}
+body.is-locked #lockdown-banner{display:flex}
+body.is-locked .admin-only:not(#btn-admin-tools),
+body.is-locked .admin-strict:not(#btn-lockdown){display:none!important}
+body.is-locked .dd-locked-hint{display:block}
+body.is-locked.is-full-admin .dd-locked-hint{display:none}
+#btn-lockdown{color:#B91C1C;font-weight:600}
 
 /* ═══ VIEWS ══════════════════════════════════════════════════ */
 main{flex:1;overflow:hidden;display:flex;flex-direction:column}
@@ -189,6 +218,9 @@ td{padding:7px 10px;vertical-align:middle}
    .has-notes on specificity rather than by ordering. */
 .secpill{display:inline-block;background:var(--lgray);border:1px solid var(--mgray);border-radius:4px;padding:0 6px;font-size:11px;font-weight:700;color:var(--navytx)}
 tr.sec-row td:first-child{padding-left:22px;color:var(--dgray);font-weight:400}
+.discpill{display:inline-block;background:var(--lgray);border:1px solid var(--mgray);border-radius:4px;padding:0 6px;font-size:10px;font-weight:700;letter-spacing:.02em;color:var(--dgray);vertical-align:middle}
+tbody tr.disc-row{opacity:.65}
+.schedDiscPill{display:inline-block;background:var(--mgray);color:#fff;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;letter-spacing:.02em;white-space:nowrap}
 .csec{display:inline-block;background:var(--lgray);border-radius:4px;padding:0 5px;font-size:11px;color:var(--navytx);margin-right:4px}
 a.clink{color:inherit;text-decoration:none;border-bottom:1px dotted var(--mgray);cursor:pointer}
 a.clink:hover{color:var(--teal);border-bottom-color:var(--teal)}
@@ -277,11 +309,31 @@ tbody tr.deeplink td:first-child{box-shadow:inset 3px 0 0 var(--teal)}
 /* ═══ TERM DRAFT BUILDER ════════════════════════════════════════ */
 .tdb-lbl{display:flex;flex-direction:column;gap:2px;font-size:11px;color:var(--dgray);font-weight:600}
 .tdb-lbl select{font-size:13px;font-weight:400;color:var(--text)}
+.rep-subnav{display:flex;gap:6px;padding:10px 20px;border-bottom:1px solid var(--mgray);background:var(--surface);flex:0 0 auto}
+.rep-sub-btn{border:1px solid var(--mgray);background:var(--lgray);color:var(--dgray);font-size:12px;padding:6px 14px;border-radius:6px;cursor:pointer}
+.rep-sub-btn.active{background:var(--navytx);color:#fff;border-color:var(--navytx)}
+.rep-sub{display:none;flex:1;overflow:hidden;flex-direction:column}
+.rep-sub.active{display:flex}
+
 .tdb-scroll{flex:1;overflow:auto;background:var(--lgray)}
 .tdb-wrap{max-width:1180px;margin:0 auto;padding:20px 20px 60px;display:flex;flex-direction:column;gap:18px}
 .tdb-card{background:var(--surface);border:1px solid var(--mgray);border-radius:8px;padding:18px 20px}
 .tdb-card h3{font-size:14px;color:var(--navytx);margin-bottom:4px}
 .tdb-sub{font-size:12px;color:var(--dgray);margin-bottom:14px;max-width:760px}
+
+/* ═══ ROADMAP ════════════════════════════════════════════════ */
+#view-roadmap{overflow:auto;background:var(--lgray)}
+.rm-wrap{max-width:820px;margin:0 auto;padding:24px 20px 60px;display:flex;flex-direction:column;gap:16px}
+.rm-card{background:var(--surface);border:1px solid var(--mgray);border-radius:8px;padding:18px 22px}
+.rm-intro h2{font-size:18px;color:var(--navytx);margin-bottom:6px}
+.rm-intro p{font-size:13px;color:var(--dgray);max-width:640px;line-height:1.5}
+.rm-card h3{font-size:14px;color:var(--navytx);margin-bottom:10px}
+.rm-list{list-style:none;display:flex;flex-direction:column;gap:10px}
+.rm-list li{font-size:13px;color:var(--text);line-height:1.5;padding-left:16px;position:relative}
+.rm-list li::before{content:'';position:absolute;left:0;top:7px;width:6px;height:6px;border-radius:50%;background:var(--teal)}
+.rm-list strong{color:var(--navytx)}
+.rm-foot{font-size:12px;color:var(--dgray);text-align:center;margin-top:4px}
+.rm-foot a{color:var(--teal)}
 
 .tdb-drop{border:1.5px dashed var(--mgray);border-radius:8px;padding:24px;text-align:center;color:var(--dgray);cursor:pointer}
 .tdb-drop.drag{border-color:var(--teal);background:var(--ltblue)}
@@ -377,11 +429,12 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
 </head>
 <body>
 
-<div id="ls"><div class="spin"></div><h2>SPH Course Scheduling</h2><p id="lm">Loading data…</p></div>
+<div id="ls"><div class="spin"></div><h2>ConvergeSPH</h2><p id="lm">Loading data…</p></div>
 
 <div id="app" style="display:none">
+  <div id="lockdown-banner"></div>
   <header>
-    <div><h1>SPH Course Scheduling</h1><div class="sub" id="hdr-sub">Academic Year 2026–27</div></div>
+    <div><h1>ConvergeSPH</h1><div class="sub" id="hdr-sub">Course Scheduling · Academic Year 2026–27</div></div>
     <select id="ay-sel" style="display:none;font-size:12px;padding:4px 8px;border-radius:4px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:white;margin-left:14px"></select>
     <div class="hsp"></div>
     <a href="faculty.html" style="color:#CBD5E1;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:4px;margin-right:6px" title="Faculty directory">👤 Faculty</a>
@@ -398,10 +451,18 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
     <button data-view="chtool"      id="nav-chtool"      class="auth-only">📋 CHTool</button>
     <button data-view="catalog"     id="nav-catalog">📚 Catalog</button>
     <button data-view="instructors" id="nav-instructors" class="auth-only">👤 Instructors</button>
-    <button data-view="termdraft"   id="nav-termdraft"   class="admin-only admin-strict" style="display:none">🗂 Term Draft</button>
+    <button data-view="reporting"   id="nav-reporting"   class="admin-only" style="display:none">🗂 Reporting</button>
+    <button data-view="roadmap"     id="nav-roadmap"     class="auth-only">🗺 Roadmap</button>
     <button id="btn-admin-toggle">🔐 Admin</button>
-    <button id="btn-lists" class="admin-only" style="display:none">⚙ Lists</button>
-    <button id="btn-terms" class="admin-only admin-strict" style="display:none">🗓 Terms</button>
+    <div class="nav-dd" id="admin-tools-dd">
+      <button id="btn-admin-tools" class="admin-only" style="display:none">🛠 Admin Tools ▾</button>
+      <div class="nav-dd-menu" id="admin-tools-menu">
+        <button id="btn-lists" class="admin-only" style="display:none">⚙ Lists</button>
+        <button id="btn-terms" class="admin-only admin-strict" style="display:none">🗓 Terms</button>
+        <button id="btn-lockdown" class="admin-strict" style="display:none">🔒 Lock Down</button>
+        <div class="dd-locked-hint">🔒 Locked — no admin actions available</div>
+      </div>
+    </div>
   </nav>
   <main>
 
@@ -428,7 +489,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
         <table id="sched-tbl">
           <thead><tr>
             <th data-col="term">Term</th><th data-col="prefix">Prefix</th><th data-col="fullName">Course</th>
-            <th data-col="section">Section</th><th data-col="instructor1">Instructor(s)</th><th data-col="days">Days</th><th data-col="time">Time</th>
+            <th data-col="section">Section</th><th style="text-align:center">Cr</th><th data-col="instructor1">Instructor(s)</th><th data-col="days">Days</th><th data-col="time">Time</th>
             <th data-col="modality">Modality</th><th style="text-align:center" title="Restrictions / Permission required to register / Night class (starts ≥ 4pm) / Online">Flags</th><th data-col="totalCap">Cap</th><th>Enroll</th>
             <th class="admin-only" style="display:none">Edit</th>
           </tr></thead>
@@ -470,6 +531,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
         <select id="cc-cr"><option value="">All Credits</option><option value="ranged">Ranged only (e.g. 1-4)</option><option value="fixed">Fixed only</option></select>
         <input type="search" id="cc-q" placeholder="Search…" style="width:200px">
         <label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap;cursor:pointer"><input type="checkbox" id="cc-sect"> Show all sections</label>
+        <label style="display:inline-flex;align-items:center;gap:6px;font-size:12.5px;white-space:nowrap;cursor:pointer"><input type="checkbox" id="cc-disc"> Show discontinued</label>
         <div class="tb-sep"></div>
         <button class="btn btn-p admin-only" id="btn-add-crs" style="display:none">+ Add Course</button>
         <button class="btn btn-p admin-only" id="btn-add-sec" style="display:none">+ Add Section</button>
@@ -506,8 +568,16 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       <div class="crs-scroll" id="crs-scroll"><div class="crs-wrap" id="crs-body"></div></div>
     </div>
 
+    <!-- REPORTING (Term Draft + Term Audit) -->
+    <div class="view" id="view-reporting">
+      <div class="rep-subnav">
+        <button class="rep-sub-btn active admin-strict" data-sub="termdraft" id="repsub-btn-termdraft" style="display:none">🗂 Term Draft</button>
+        <button class="rep-sub-btn admin-strict" data-sub="termaudit" id="repsub-btn-termaudit" style="display:none">🔍 Term Audit</button>
+        <button class="rep-sub-btn" data-sub="pubsched" id="repsub-btn-pubsched">🖨 Public Schedule</button>
+      </div>
+
     <!-- TERM DRAFT BUILDER -->
-    <div class="view" id="view-termdraft">
+    <div class="rep-sub active" id="repsub-termdraft">
       <div class="toolbar">
         <label class="tdb-lbl">Target term (being drafted)
           <select id="tdb-target-term"><option value="">— pick a term —</option></select>
@@ -581,6 +651,147 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
           </section>
 
         </div>
+      </div>
+    </div>
+
+    <!-- TERM AUDIT -->
+    <div class="rep-sub" id="repsub-termaudit">
+      <div class="toolbar">
+        <label class="tdb-lbl">Term being audited
+          <select id="ta-target-term"><option value="">— pick a term —</option></select>
+        </label>
+        <div class="tb-sp"></div>
+        <span class="tb-hint">Read-only — compares the report against the schedule, writes nothing</span>
+      </div>
+
+      <div class="tdb-scroll">
+        <div class="tdb-wrap">
+
+          <section class="tdb-card">
+            <h3>1 · Load the PSU Course List with Enrollments report</h3>
+            <p class="tdb-sub">The "1 Line Per CRN" tab of PSU's Cognos export, exactly as downloaded. Only HSMP, PE, PHE, PUBH and their SOPH crosslist rows are audited — everything else in the file is ignored.</p>
+            <div class="tdb-drop" id="ta-report-dropzone">
+              <strong>Drop the Course List .xlsx here, or click to browse</strong>
+              <span>Sheet name containing "1 Line Per CRN"</span>
+              <input type="file" id="ta-report-file-input" accept=".xlsx">
+            </div>
+            <div id="ta-report-file-info"></div>
+          </section>
+
+          <section id="ta-stats-row" class="tdb-stats" style="display:none"></section>
+
+          <section class="tdb-card" id="ta-diff-card" style="display:none">
+            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:16px">
+              <div>
+                <h3>2 · Discrepancies</h3>
+                <p class="tdb-sub">Matched by CRN against the schedule for the selected term. Only fields that actually differ are shown.</p>
+              </div>
+              <button class="btn btn-s btn-sm" id="ta-export-btn">⭳ Export CSV</button>
+            </div>
+            <div class="table-wrap tdb-pair-wrap">
+              <table id="ta-diff-tbl">
+                <thead><tr>
+                  <th>Course</th>
+                  <th>CRN</th>
+                  <th>Field</th>
+                  <th>Report says</th>
+                  <th>Schedule says</th>
+                </tr></thead>
+                <tbody id="ta-diff-tb"></tbody>
+              </table>
+            </div>
+          </section>
+
+          <section class="tdb-card" id="ta-unmatched-report-card" style="display:none">
+            <h3>3 · In the report, not in the schedule</h3>
+            <p class="tdb-sub">These CRNs didn't match any offering for this term — a new section, a changed CRN, or something to pair by hand.</p>
+            <div id="ta-unmatched-report-list"></div>
+          </section>
+
+          <section class="tdb-card" id="ta-unmatched-db-card" style="display:none">
+            <h3>4 · In the schedule, not in the report</h3>
+            <p class="tdb-sub">These offerings are in scope for this term but no matching CRN showed up in the report — cancelled, not yet built in Banner, or missing a CRN in the schedule.</p>
+            <div id="ta-unmatched-db-list"></div>
+          </section>
+
+          <section class="tdb-card" id="ta-unroomed-card" style="display:none">
+            <h3>5 · Unroomed offerings</h3>
+            <p class="tdb-sub">Matched sections where the report shows no room at all — not ARRNGD, not WEB, just blank. Called out separately since a missing room isn't a discrepancy against the schedule so much as something PSU still needs to assign.</p>
+            <div id="ta-unroomed-list"></div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+
+    <!-- PUBLIC SCHEDULE EXPORT -->
+    <div class="rep-sub" id="repsub-pubsched">
+      <div class="toolbar">
+        <label class="tdb-lbl">Term
+          <select id="ps-term"><option value="">— pick a term —</option></select>
+        </label>
+        <label class="tdb-lbl">Level
+          <select id="ps-level">
+            <option value="UG">Undergraduate</option>
+            <option value="GR">Graduate</option>
+          </select>
+        </label>
+        <div class="tb-sp"></div>
+        <span class="tb-hint">Read-only — builds a .xlsx from the current schedule, writes nothing</span>
+      </div>
+
+      <div class="tdb-scroll">
+        <div class="tdb-wrap">
+          <section class="tdb-card">
+            <h3>Generate the public posting sheet</h3>
+            <p class="tdb-sub">Builds the "Course Prefix / Course Number / Course Title / Cr. / Course Format / Days / Time / Restrictions" sheet in the same layout used for posting to the web, for the term and level selected above. Undergraduate and graduate/both-level courses with a dual course number are split or combined per the school's posting convention; courses with no offering in the selected term are omitted.</p>
+            <div style="margin-top:14px;">
+              <button class="btn btn-p" id="ps-generate-btn" disabled>Generate .xlsx</button>
+            </div>
+            <div id="ps-summary" style="margin-top:16px;"></div>
+          </section>
+        </div>
+      </div>
+    </div>
+
+    </div>
+
+    <!-- ROADMAP (signed-in visibility only, no admin gating) -->
+    <div class="view" id="view-roadmap">
+      <div class="rm-wrap">
+        <section class="rm-card rm-intro">
+          <h2>ConvergeSPH</h2>
+          <p>The OHSU-PSU School of Public Health's Academic Operations Platform. ConvergeSPH currently manages course scheduling and offerings across both institutions, plus a faculty directory with tiered access. Below is what's planned next.</p>
+        </section>
+
+        <section class="rm-card">
+          <h3>Faculty Operations</h3>
+          <ul class="rm-list">
+            <li><strong>Faculty Documents</strong> — Categorized document references (HR, promotion, wages, reviews) linked directly to their SharePoint location. Access follows existing SharePoint permissions.</li>
+            <li><strong>OHSU Annual Review</strong> — End-to-end tracking of the annual review process: faculty submissions, dossier and CV, Dean feedback, supervisor meetings and sign-off, and final signatures, visible on the faculty profile as it happens.</li>
+            <li><strong>Adjunct Tracking</strong> — Automatic flagging when PSU adjuncts cross credit-hour thresholds for contract eligibility or administrative review, tracked over their respective rolling periods. Flags filterable across the faculty directory.</li>
+            <li><strong>Committee Assignment & Tracking</strong> — Rules-based staffing for SPH committees, each with configurable membership requirements. Surfaces expiring terms, unplaced new faculty, member requests, and understaffed committees.</li>
+          </ul>
+        </section>
+
+        <section class="rm-card">
+          <h3>Curriculum</h3>
+          <ul class="rm-list">
+            <li><strong>Course Objectives</strong> — Objectives and syllabi added directly to course detail pages, with future mapping of specific objectives to specific assessments.</li>
+            <li><strong>Course History</strong> — A running record of curricular changes over time, including in-progress changes and access to their submission documents.</li>
+          </ul>
+        </section>
+
+        <section class="rm-card">
+          <h3>Programs & Competencies</h3>
+          <ul class="rm-list">
+            <li><strong>Program Module</strong> — Introduces Programs as a structure above courses, with courses tagged as required, selective, or elective.</li>
+            <li><strong>CEPH Competencies</strong> — Filter and map courses (and specific assessments) to CEPH accreditation competencies, at both the program and course level.</li>
+            <li><strong>SPH Competencies</strong> — The same competency-mapping structure, built for SPH-specific learning objectives.</li>
+          </ul>
+        </section>
+
+        <p class="rm-foot">Questions or feature requests? Contact <a href="mailto:whitetim@pdx.edu">whitetim@pdx.edu</a>.</p>
       </div>
     </div>
 
@@ -716,6 +927,8 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       <div><label>GR / UG / B</label><select id="cm-grugb"><option>GR</option><option>UG</option><option>B</option></select></div>
       <div><label>FTE Exempt</label><select id="cm-fte"><option value="No">No</option><option value="Yes">Yes</option></select></div>
       <div><label>Max Cap</label><input id="cm-cap" type="number" placeholder="10"><div class="fhint">Defaults to 10 if left blank.</div></div>
+      <div class="s2"><label style="display:inline-flex;align-items:center;gap:6px;cursor:pointer"><input type="checkbox" id="cm-disc" style="width:auto"> Discontinued</label>
+        <div class="fhint">Hidden from the default Catalog view (still shown on Schedule, with a badge). Sections follow this course's status automatically.</div></div>
       <div class="s2"><label>Course Description</label><textarea id="cm-desc" rows="4"></textarea>
         <div class="fhint">Shown on the course page, and as the hover text for this course on the public Schedule.</div></div>
       <div class="s2"><label>Catalog URL (PSU)</label><input id="cm-cat-psu">
@@ -820,6 +1033,28 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       <button class="btn btn-s" id="btn-ld-default" style="margin-right:auto">↺ Restore defaults</button>
       <button class="btn btn-s" data-close="mo-lists">Cancel</button>
       <button class="btn btn-p" id="btn-ld-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- LOCK DOWN MODAL — Scheduling-Admin only. Freezes writes on BOTH apps
+     (RLS-enforced; this UI is just the trigger + status). -->
+<div class="mo" id="mo-lockdown">
+  <div class="modal med">
+    <div class="mhd"><h3>Lock Down</h3><button class="mx" data-close="mo-lockdown">×</button></div>
+    <div class="mb"><div class="fg">
+      <div class="full" id="ld2-status" style="font-size:13px;line-height:1.5"></div>
+      <div class="full">
+        <label>Message shown to users <span style="font-weight:400;color:var(--dgray)">(optional)</span></label>
+        <textarea id="ld2-msg" rows="3" placeholder="e.g. Migrating data, back by 3pm"></textarea>
+        <div class="fhint">Shown on the banner both apps display while locked. Leave blank for a generic message.</div>
+      </div>
+    </div></div>
+    <div class="mft">
+      <span id="ld2-msg-status" style="margin-right:auto;font-size:12px;line-height:1.4"></span>
+      <button class="btn btn-s" data-close="mo-lockdown">Close</button>
+      <button class="btn btn-p" id="btn-ld2-lock" style="background:var(--red);border-color:var(--red)">🔒 Lock Down Both Apps</button>
+      <button class="btn btn-p" id="btn-ld2-unlock" style="display:none">🔓 Unlock</button>
     </div>
   </div>
 </div>
@@ -931,6 +1166,9 @@ function initSupabase(){
 let TERM_ROWS=[];        // raw rows from `terms`, all AYs the user may see
 let AYS=[];              // distinct academic years, newest last
 let activeAY='';         // the AY currently displayed
+let CURRENT_AY='';       // admin-designated "current" AY (app_lists key 'currentAY'),
+                          // e.g. what "Teaching this year" means to the faculty app.
+                          // Falls back to newest-in-AYS when unset or stale.
 let TERMS=[];            // term codes in activeAY, chronological
 let TL={};               // code → label
 let TO={};               // code → sort index
@@ -967,6 +1205,11 @@ const GCOLS=['#2E75B6','#375623','#C55A11','#7B2C8C','#C00000','#1F6B75','#7F4F2
 /* ─── STATE ────────────────────────────────────────────────── */
 let DB={courses:[],instructors:[],offerings:[]};
 let isAdmin=false;
+/* LOCKDOWN. Read from the anon-readable app_lockdown singleton row on every
+   load/sync. The actual write block lives in RLS (is_locked(), see
+   add_lockdown_v1.sql) — LOCKED here only drives the banner and hides
+   write-triggering UI so people aren't left guessing why a save failed. */
+let LOCKED=false, LOCK_MSG='', LOCK_BY='', LOCK_AT=null;
 /* Four states now: signed-out < viewer < pd < admin.
    isAdmin  → full rights, including term management and Reset.
    isPD     → edits offerings in PD-editable terms, plus courses/instructors.
@@ -986,7 +1229,7 @@ function applyAuthVis(){
   // them staring at a view whose nav button no longer exists.
   if(!signedIn){
     const cur=document.querySelector('.view.active');
-    if(cur&&(cur.id==='view-chtool'||cur.id==='view-instructors'))switchView('schedule');
+    if(cur&&(cur.id==='view-chtool'||cur.id==='view-instructors'||cur.id==='view-roadmap'))switchView('schedule');
   }
 }
 let currentUserEmail=null;          // set on auth; stamped onto change_log rows
@@ -1074,15 +1317,23 @@ async function loadData(){
     return {data:all,error:null};
   };
 
-  const [cR,oR,mR,dR,lR]=await Promise.all([
+  const [cR,oR,mR,dR,lR,kR]=await Promise.all([
     fetchAll('courses'),
     fetchAll('offerings'),
     fetchAll('instructor_meta'),
     fetchAll('faculty_directory'),
-    fetchAll('app_lists')
+    fetchAll('app_lists'),
+    sb.from('app_lockdown').select('*').eq('id',1).maybeSingle()
   ]);
   for(const r of [cR,oR,mR,dR,lR]){
     if(r.error){setLM('');setSS('⚠ Load failed: '+r.error.message);throw r.error;}
+  }
+  // Lockdown state is best-effort: a fetch hiccup here shouldn't block the
+  // whole app from loading, it just means the banner may lag a refresh.
+  if(!kR.error&&kR.data){
+    LOCKED=!!kR.data.locked; LOCK_MSG=kR.data.message||''; LOCK_BY=kR.data.locked_by||''; LOCK_AT=kR.data.locked_at||null;
+  }else if(!kR.error){
+    LOCKED=false;
   }
   // Editable lists (Days, Program prefixes) — overrides keyed by list_key.
   const lists={};
@@ -1134,6 +1385,7 @@ async function loadData(){
     fteExempt:c.fte_exempt?'Yes':'No',
     maxCap:(c.max_cap??'')+'',
     description:c.description||'',
+    discontinued:!!c.discontinued,
     catUrlPsu:c.catalog_url_psu||'', catUrlOhsu:c.catalog_url_ohsu||''
   }));
   const courseByUuid={}; courses.forEach(c=>{courseByUuid[c._uuid]=c;});
@@ -1143,7 +1395,7 @@ async function loadData(){
   // stored copies still matter — faculty.html reads courses.full_name straight
   // from the table — and saveCrs() writes them through on a base save.
   const CRS_INHERIT=['prefix','number','number2','title','credits','pnp','permission',
-    'grugb','fteExempt','maxCap','description','catUrlPsu','catUrlOhsu'];
+    'grugb','fteExempt','maxCap','description','catUrlPsu','catUrlOhsu','discontinued'];
   courses.forEach(c=>{
     if(!c.parentUuid)return;
     const p=courseByUuid[c.parentUuid];
@@ -1182,7 +1434,79 @@ async function loadData(){
   });
 
   DB={courses,instructors,offerings,lists};
+  renderLockBanner();
+  applyLockUI();
   setLM('');
+}
+
+/* ─── LOCKDOWN UI ───────────────────────────────────────────── */
+function renderLockBanner(){
+  const el=$('lockdown-banner');if(!el)return;
+  if(!LOCKED){el.innerHTML='';return;}
+  const who=LOCK_BY?esc(LOCK_BY):'an admin';
+  const when=LOCK_AT?new Date(LOCK_AT).toLocaleString():'';
+  const note=LOCK_MSG?': "'+esc(LOCK_MSG)+'"':'.';
+  el.innerHTML=`🔒 <b>Locked</b> — editing is paused by ${who}${when?' ('+when+')':''}${note} `+
+    `You can still view everything; saving will resume once it's lifted.`;
+}
+// Purely visual/UX layer — document.body.classList drives the CSS rules that
+// hide write-triggering controls while locked. Real enforcement is RLS.
+function applyLockUI(){
+  document.body.classList.toggle('is-locked',LOCKED);
+}
+function openLockdown(){
+  const st=$('ld2-status');
+  if(LOCKED){
+    const who=LOCK_BY?esc(LOCK_BY):'an admin';
+    const when=LOCK_AT?new Date(LOCK_AT).toLocaleString():'';
+    st.innerHTML=`Currently <b style="color:var(--red)">LOCKED</b> by ${who}${when?' at '+when:''}.`;
+    setv('ld2-msg',LOCK_MSG);
+    $('btn-ld2-lock').style.display='none';
+    $('btn-ld2-unlock').style.display='';
+  }else{
+    st.innerHTML='Currently <b style="color:var(--green,#16A34A)">unlocked</b> — both apps are editable per normal access rules.';
+    setv('ld2-msg','');
+    $('btn-ld2-lock').style.display='';
+    $('btn-ld2-unlock').style.display='none';
+  }
+  $('ld2-msg-status').textContent='';
+  openM('mo-lockdown');
+}
+async function setLockdown(locked){
+  const msg=val('ld2-msg').trim();
+  const payload={id:1,locked,message:msg||null,
+    locked_by:locked?(currentUserEmail||'admin'):LOCK_BY,
+    locked_at:locked?new Date().toISOString():LOCK_AT};
+  $('ld2-msg-status').textContent=locked?'Locking…':'Unlocking…';
+  const {error}=await sb.from('app_lockdown').upsert(payload);
+  if(error){$('ld2-msg-status').textContent='⚠ '+(error.message||'Failed');return;}
+  LOCKED=locked; LOCK_MSG=msg; LOCK_BY=payload.locked_by; LOCK_AT=payload.locked_at;
+  renderLockBanner(); applyLockUI();
+  closeM('mo-lockdown');
+  setSS(locked?'● Locked down':'● Unlocked');
+  renderAll(); renderActive();
+}
+
+// Polls app_lockdown so OTHER open tabs pick up a lock/unlock without a
+// manual sync — the person who actually clicks Lock/Unlock updates their own
+// view immediately via setLockdown() above; this is for everyone else.
+// Message-only edits (still locked, note changed) refresh the banner text.
+// A flip of the locked boolean also re-renders tables, since canEdit() is
+// lock-aware and row-level Edit buttons need to appear/disappear.
+let lockPollTimer=null;
+function startLockPolling(){
+  if(lockPollTimer)return;
+  lockPollTimer=setInterval(async()=>{
+    if(!sb)return;
+    try{
+      const {data,error}=await sb.from('app_lockdown').select('*').eq('id',1).maybeSingle();
+      if(error||!data)return;
+      const wasLocked=LOCKED;
+      LOCKED=!!data.locked; LOCK_MSG=data.message||''; LOCK_BY=data.locked_by||''; LOCK_AT=data.locked_at||null;
+      renderLockBanner(); applyLockUI();
+      if(wasLocked!==LOCKED){renderAll();renderActive();}
+    }catch(e){/* skip this cycle, try again on the next tick */}
+  },45000);
 }
 
 const setSS=msg=>{const e=$('save-status');if(e)e.textContent=msg;};
@@ -1243,6 +1567,9 @@ function enableAdmin(pdOnly){
   document.querySelectorAll('.admin-only').forEach(e=>e.style.display='');
   document.querySelectorAll('thead th.admin-only').forEach(e=>e.style.display='');
   document.querySelectorAll('.admin-strict').forEach(e=>e.style.display=pdOnly?'none':'');
+  // Drives the lockdown CSS exemption — only a full Scheduling Admin keeps
+  // Admin Tools / Lock Down reachable while everything else is frozen.
+  document.body.classList.toggle('is-full-admin',!pdOnly);
   updateUndoBtn();
   setSS(pdOnly?'PD mode':'Admin mode');
 }
@@ -1251,6 +1578,7 @@ function disableAdmin(){
   $('admin-badge').classList.remove('on');
   document.querySelectorAll('.admin-only').forEach(e=>e.style.display='none');
   document.querySelectorAll('.admin-strict').forEach(e=>e.style.display='none');
+  document.body.classList.remove('is-full-admin');
   setSS('Read-only');
 }
 
@@ -1258,10 +1586,12 @@ function disableAdmin(){
 function switchView(name){
   // Hard guard, not just a hidden nav button: CHTool and Instructors are
   // unreachable while signed out, however the call arrives.
-  if(!signedIn&&(name==='chtool'||name==='instructors'))name='schedule';
-  // Term Draft is admin-only. `isAdmin` is false for PDs and viewers alike, so
-  // this covers both — the hidden nav button is presentation, this is the gate.
-  if(name==='termdraft'&&!(signedIn&&isAdmin))name='schedule';
+  if(!signedIn&&(name==='chtool'||name==='instructors'||name==='roadmap'))name='schedule';
+  // Reporting is open to PDs now too, but only for Public Schedule — Term
+  // Draft and Term Audit stay admin-only, enforced again below in
+  // switchReportingSub/renderReporting since the sub-nav buttons are only a
+  // presentation-layer hide, not the real gate.
+  if(name==='reporting'&&!(signedIn&&(isAdmin||isPD)))name='schedule';
   // Leaving a course page by clicking a tab: strip the param so a refresh
   // doesn't drop the person back onto the course they just left.
   const _u=new URL(window.location);
@@ -1276,7 +1606,7 @@ function switchView(name){
   if(name==='chtool')      renderCht();
   if(name==='catalog')     renderCat();
   if(name==='instructors') renderInst();
-  if(name==='termdraft')   renderTdb();
+  if(name==='reporting')   renderReporting();
 }
 
 /* ─── SCHEDULE ──────────────────────────────────────────────── */
@@ -1344,14 +1674,29 @@ function handleOfferingDeepLink(){
    is_pd_visible, admins get everything. So an unpublished term is absent from
    the payload, not merely hidden — the app never has to filter it out itself. */
 async function loadTerms(){
-  const {data,error}=await sb.from('terms')
-    .select('code,academic_year,label,sort_order,is_public,is_pd_visible,is_pd_editable')
-    .order('academic_year').order('sort_order');
+  const [{data,error},cur]=await Promise.all([
+    sb.from('terms')
+      .select('code,academic_year,label,sort_order,is_public,is_pd_visible,is_pd_editable,start_date,end_date')
+      .order('academic_year').order('sort_order'),
+    sb.from('app_lists').select('items').eq('list_key','currentAY').maybeSingle()
+  ]);
   if(error)throw error;
   TERM_ROWS=data||[];
   AYS=[...new Set(TERM_ROWS.map(t=>t.academic_year))].sort();
-  if(!AYS.includes(activeAY))activeAY=AYS[AYS.length-1]||'';   // default: newest AY
+  // cur.error is swallowed (best-effort): an unreadable/missing override row
+  // just means "no designation yet", not a load failure.
+  const override=(!cur.error&&cur.data&&Array.isArray(cur.data.items))?cur.data.items[0]:'';
+  CURRENT_AY=(override&&AYS.includes(override))?override:(AYS[AYS.length-1]||'');
+  if(!AYS.includes(activeAY))activeAY=CURRENT_AY||AYS[AYS.length-1]||'';   // default: designated current AY, else newest
   applyAY();
+}
+async function saveCurrentAY(ay){
+  if(!AYS.includes(ay))return;
+  const ok=await sbSave(
+    sb.from('app_lists').upsert({list_key:'currentAY',items:[ay],updated_at:new Date().toISOString()}),
+    `● Current AY set to ${ay}`
+  );
+  if(ok){CURRENT_AY=ay;renderTermRows();}
 }
 function applyAY(){
   const rows=TERM_ROWS.filter(t=>t.academic_year===activeAY)
@@ -1364,7 +1709,7 @@ function termRow(code){return TERM_ROWS.find(t=>t.code===code)||null;}
 /* Mirrors can_edit_term() in the database. The DB is the authority — this only
    decides whether to SHOW an edit control, so a stale answer here is a cosmetic
    bug, never a security hole. */
-const canEdit=()=>isAdmin||isPD;
+const canEdit=()=>(isAdmin||isPD)&&!LOCKED;
 function canEditTerm(code){
   if(isAdmin)return true;
   if(!isPD)return false;
@@ -1376,11 +1721,11 @@ function rebuildTermUI(){
   // Academic-year picker (only meaningful once a second AY exists)
   const ay=$('ay-sel');
   if(ay){
-    ay.innerHTML=AYS.map(a=>`<option value="${esc(a)}"${a===activeAY?' selected':''}>${esc(a)}</option>`).join('');
+    ay.innerHTML=AYS.slice().reverse().map(a=>`<option value="${esc(a)}"${a===activeAY?' selected':''}>${esc(a)}</option>`).join('');
     ay.style.display=AYS.length>1?'':'none';
   }
   const sub=$('hdr-sub');
-  if(sub)sub.textContent='Academic Year '+(activeAY||'—');
+  if(sub)sub.textContent='Course Scheduling · Academic Year '+(activeAY||'—');
 
   // Schedule term filter
   const ft=$('f-term'),keepF=ft?ft.value:'';
@@ -1452,10 +1797,14 @@ function renderTermRows(){
   ays.forEach(ay=>{
     const rows=byAY[ay].sort((a,b)=>a.sort_order-b.sort_order);
     const offs=DB.offerings.filter(o=>rows.some(r=>r.code===o.term)).length;
+    const isCur=ay===CURRENT_AY;
     h+=`<div style="margin-bottom:18px">
       <div style="display:flex;align-items:center;gap:10px;margin-bottom:6px">
         <strong style="color:var(--navytx);font-size:14px">${esc(ay)}</strong>
         <span style="font-size:12px;color:var(--dgray)">${offs} offering${offs===1?'':'s'}</span>
+        ${isCur
+          ?`<span style="background:var(--ltblue);color:var(--navytx);font-size:11px;padding:2px 8px;border-radius:10px" title="This is what the faculty app's 'Teaching this year' filter uses">★ Current AY</span>`
+          :`<button class="btn btn-s ay-cur" data-ay="${esc(ay)}" style="font-size:11px" title="Designate this as the current AY (used by the faculty app's 'Teaching this year' filter)">Set as Current</button>`}
         <button class="btn btn-s ay-del" data-ay="${esc(ay)}" style="margin-left:auto;font-size:11px;color:var(--red);border-color:var(--red)">Delete year</button>
       </div>
       <table style="width:100%;border-collapse:collapse;font-size:13px">
@@ -1464,6 +1813,8 @@ function renderTermRows(){
           <th style="padding:6px 8px;background:var(--ltblue);color:var(--navytx);font-size:11px" title="Anonymous visitors can see this term">Public</th>
           <th style="padding:6px 8px;background:var(--ltblue);color:var(--navytx);font-size:11px" title="Program Directors can see this term">PD sees</th>
           <th style="padding:6px 8px;background:var(--ltblue);color:var(--navytx);font-size:11px" title="Program Directors can edit offerings in this term">PD edits</th>
+          <th style="padding:6px 8px;background:var(--ltblue);color:var(--navytx);font-size:11px" title="PSU's term dates — OHSU runs a different academic year (Fall–Summer vs. PSU's Summer–Spring), so these are PSU-specific, not a joint SPH calendar.">Start date (PSU)</th>
+          <th style="padding:6px 8px;background:var(--ltblue);color:var(--navytx);font-size:11px" title="PSU's term dates — OHSU runs a different academic year (Fall–Summer vs. PSU's Summer–Spring), so these are PSU-specific, not a joint SPH calendar.">End date (PSU)</th>
         </tr></thead><tbody>`;
     rows.forEach(t=>{
       h+=`<tr>
@@ -1471,6 +1822,8 @@ function renderTermRows(){
         <td style="text-align:center;padding:6px 8px;border-bottom:1px solid var(--rowline)"><input type="checkbox" class="tf" data-code="${esc(t.code)}" data-f="is_public"${t.is_public?' checked':''}></td>
         <td style="text-align:center;padding:6px 8px;border-bottom:1px solid var(--rowline)"><input type="checkbox" class="tf" data-code="${esc(t.code)}" data-f="is_pd_visible"${t.is_pd_visible?' checked':''}></td>
         <td style="text-align:center;padding:6px 8px;border-bottom:1px solid var(--rowline)"><input type="checkbox" class="tf" data-code="${esc(t.code)}" data-f="is_pd_editable"${t.is_pd_editable?' checked':''}></td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--rowline)"><input type="date" class="tf-date" data-code="${esc(t.code)}" data-f="start_date" value="${esc(t.start_date||'')}" style="font-size:12px;width:100%"></td>
+        <td style="padding:6px 8px;border-bottom:1px solid var(--rowline)"><input type="date" class="tf-date" data-code="${esc(t.code)}" data-f="end_date" value="${esc(t.end_date||'')}" style="font-size:12px;width:100%"></td>
       </tr>`;
     });
     h+=`</tbody></table></div>`;
@@ -1494,6 +1847,9 @@ function renderTermRows(){
   document.querySelectorAll('#tm-body .ay-del').forEach(b=>{
     b.addEventListener('click',()=>delAY(b.dataset.ay));
   });
+  document.querySelectorAll('#tm-body .ay-cur').forEach(b=>{
+    b.addEventListener('click',()=>saveCurrentAY(b.dataset.ay));
+  });
 }
 
 async function saveTermFlags(){
@@ -1503,11 +1859,16 @@ async function saveTermFlags(){
     document.querySelectorAll('#tm-body .tf').forEach(cb=>{
       (byCode[cb.dataset.code]=byCode[cb.dataset.code]||{})[cb.dataset.f]=cb.checked;
     });
+    document.querySelectorAll('#tm-body .tf-date').forEach(inp=>{
+      (byCode[inp.dataset.code]=byCode[inp.dataset.code]||{})[inp.dataset.f]=inp.value||null;
+    });
     setTM('Saving…');
     let changed=0;
     for(const [code,flags] of Object.entries(byCode)){
       const cur=termRow(code);
-      if(cur&&['is_public','is_pd_visible','is_pd_editable'].every(f=>!!cur[f]===!!flags[f]))continue;
+      const boolSame=cur?['is_public','is_pd_visible','is_pd_editable'].every(f=>!(f in flags)||!!cur[f]===!!flags[f]):false;
+      const dateSame=cur?['start_date','end_date'].every(f=>!(f in flags)||(cur[f]||null)===(flags[f]||null)):false;
+      if(cur&&boolSame&&dateSame)continue;
       const {error}=await sb.from('terms').update(flags).eq('code',code);
       if(error){setTM(error.message,true);return;}
       changed++;
@@ -1537,7 +1898,7 @@ function deriveTerms(ay){
 function renderNewAY(){
   const cs=$('ny-copy');
   cs.innerHTML='<option value="">Blank year (no offerings)</option>'+
-    AYS.map(a=>`<option value="${esc(a)}">Copy offerings from ${esc(a)}</option>`).join('');
+    AYS.slice().reverse().map(a=>`<option value="${esc(a)}">Copy offerings from ${esc(a)}</option>`).join('');
   $('ny-terms').innerHTML='';
   $('ny-note').textContent='';
   $('ny-ay').oninput=refreshNYTerms;
@@ -1657,11 +2018,11 @@ function renderSched(){
     th.classList.remove('sa','sd');
     if(th.dataset.col===sortCol)th.classList.add(sortDir===1?'sa':'sd');
   });
-  if(!rows.length){$('sched-tb').innerHTML=`<tr><td colspan="12" class="nores">No offerings match filters.</td></tr>`;return;}
+  if(!rows.length){$('sched-tb').innerHTML=`<tr><td colspan="13" class="nores">No offerings match filters.</td></tr>`;return;}
   let h='',lt=null,lp=null;
   rows.forEach(o=>{
-    if(o.term!==lt){h+=`<tr class="gt"><td colspan="12">${esc(TL[o.term]??o.term)}</td></tr>`;lt=o.term;lp=null;}
-    if(o.prefix!==lp){h+=`<tr class="gp"><td colspan="12">${esc(o.prefix)}</td></tr>`;lp=o.prefix;}
+    if(o.term!==lt){h+=`<tr class="gt"><td colspan="13">${esc(TL[o.term]??o.term)}</td></tr>`;lt=o.term;lp=null;}
+    if(o.prefix!==lp){h+=`<tr class="gp"><td colspan="13">${esc(o.prefix)}</td></tr>`;lp=o.prefix;}
     const i2=o.instructor2?` &amp; ${facLink(o.instructor2)}`:'';
     // Per-term, not per-user: a PD may edit Spring while Fall is frozen.
     const canT=canEditTerm(o.term);
@@ -1689,6 +2050,7 @@ function renderSched(){
     const noteInd=hasNotes?' <span style="color:var(--teal);font-size:11px" title="Has notes">ℹ</span>':'';
     const potBadge=(/^Summer/i.test(o.term)&&o.pot)?` <span style="background:var(--ltgold);color:#92400E;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap">POT ${esc(o.pot)}</span>`:'';
     const noPrint=(o.printStatus==='No Print')?' <span title="No Print — excluded from the public schedule" style="font-size:11px">🚫</span>':'';
+    const discBadge=(_crsT&&_crsT.discontinued)?' <span class="schedDiscPill" title="This course has been marked discontinued">Discontinued</span>':'';
     const _crs=_crsT;
     const permReq=(_crs&&_crs.permission==='Yes')?'<span title="Requires instructor/department permission to register" style="font-size:11px">🔑</span>':'';
     const _rParts=[]; const _ro=String(o.restrictOhsu||'').trim(), _rp=String(o.restrictPsu||'').trim();
@@ -1699,8 +2061,9 @@ function renderSched(){
     const flags=restr+permReq+(isNight(o)?'<span title="Night class (starts ≥ 4pm)">🌙</span>':'')+(isOnline(o)?'<span title="Online">🖥️</span>':'');
     h+=`<tr${incomplete?' class="incomplete"':''} data-uuid="${esc(o._uuid||'')}">
       <td>${termBadge(o.term)}</td><td><strong>${esc(o.prefix)}</strong></td>
-      <td style="max-width:260px">${nameOpen}${esc(o.fullName)}${nameClose}${warnMark}${noPrint}${noteInd}${potBadge}</td>
+      <td style="max-width:260px">${nameOpen}${esc(o.fullName)}${nameClose}${warnMark}${noPrint}${noteInd}${potBadge}${discBadge}</td>
       <td style="text-align:center">${o.section?`<span class="secpill">${esc(o.section)}</span>`:''}</td>
+      <td style="text-align:center">${esc(_crsT&&_crsT.credits||'')}</td>
       <td>${facLink(o.instructor1)}${i2}</td>
       <td>${esc(o.days)}</td><td style="white-space:nowrap">${esc(o.time)}</td>
       <td>${modPill(o.modality,o.lms)}</td><td style="text-align:center;white-space:nowrap;font-size:13px">${flags}</td><td style="text-align:center">${esc(o.totalCap)}</td>
@@ -1983,6 +2346,241 @@ function generateOnCampusReport(){
   else setSS('● On-Campus report opened');
 }
 
+/* ─── PUBLIC SCHEDULE EXPORT ────────────────────────────────────
+   Builds the "posting to web" .xlsx — Course Prefix / Number / Title /
+   Cr. / Course Format / Days / Time / Restrictions — grouped under
+   bold green prefix headers, matching the school's existing UG/GR
+   posting workbooks. Pure read: nothing here writes to the database.
+
+   Level-split rules (courses table `grugb`, confirmed with Tim):
+   - grugb 'UG' + number2 set  → TWO rows, one per number, UG sheet only
+   - grugb 'GR' + number2 set  → ONE row "number / number2", GR sheet only
+   - grugb 'B'                 → one row each side: number on UG,
+                                  number2 (else number) on GR
+   - no number2                → one row, on whichever sheet(s) grugb covers
+   Sections (child course rows) are separate course records that print
+   under the same course number: original (blank section) first, then
+   sections alphabetically — each with all of its own offerings, in the
+   order they load from Supabase. */
+const PS={termsPopulated:false};
+function psPopulateTerms(){
+  if(PS.termsPopulated||!TERM_ROWS||!TERM_ROWS.length)return;
+  const opts=TERM_ROWS.slice().reverse()
+    .map(t=>`<option value="${esc(t.code)}">${esc(t.label||t.code)}</option>`).join('');
+  $('ps-term').insertAdjacentHTML('beforeend',opts);
+  PS.termsPopulated=true;
+}
+function renderPubSched(){
+  psPopulateTerms();
+  $('ps-generate-btn').disabled=!val('ps-term');
+}
+const PS_MODALITY={
+  'In-Person':'In-Person','Hybrid':'Hybrid',
+  'Online (async)':'Online, Asynchronous','Online (sync)':'Online, Synchronous',
+  'Dept Arranged':'Dept. Arranged','By Arrangement':'Dept. Arranged'
+};
+const psModalityText=m=>PS_MODALITY[String(m||'').trim()]||String(m||'').trim();
+const psNumSort=s=>{const m=String(s||'').match(/\d+/);return m?parseInt(m[0],10):999999;};
+/* 'YYYY-MM-DD' (Postgres date) → "9/28/26" — no leading zeros, 2-digit year.
+   Parsed as local calendar date, not UTC, so a bare date column never
+   shifts a day depending on the browser's timezone. */
+function psFmtDate(d){
+  if(!d)return '';
+  const m=String(d).match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if(!m)return '';
+  const [,y,mo,da]=m;
+  return `${parseInt(mo,10)}/${parseInt(da,10)}/${y.slice(2)}`;
+}
+function psFmtDateRange(start,end){
+  const s=psFmtDate(start), e=psFmtDate(end);
+  return (s&&e)?`${s} - ${e}`:(s||e||'');
+}
+function psRestrictionText(course,off){
+  // Confirmed order: restrictPsu first, then "Instructor Permission
+  // Required" — restrictOhsu, psuText and adminNotes are never printed.
+  const parts=[];
+  const rp=String(off.restrictPsu||'').trim();
+  if(rp)parts.push(rp);
+  if(String(course.permission||'').trim()==='Yes')parts.push('Instructor Permission Required');
+  return parts.join('\n');
+}
+function psDisplayNumbers(course,level){
+  const g=course.grugb||'GR', n2=String(course.number2||'').trim();
+  if(level==='UG'){
+    if(g==='UG')return n2?[course.number,n2]:[course.number];
+    if(g==='B')return [course.number];
+    return [];
+  }else{
+    if(g==='GR')return [n2?(course.number+' / '+n2):course.number];
+    if(g==='B')return [n2||course.number];
+    return [];
+  }
+}
+/* → {prefix: [{prefix,displayNum,numSort,course,offering}, ...]} sorted
+     numerically within each prefix, prefixes to be sorted by caller. */
+function psBuildRows(term,level){
+  const byBase=new Map();
+  DB.courses.filter(c=>!(c.discontinued===true||c.discontinued==='Yes')).forEach(c=>{
+    const baseId=c.parentId||c.id;
+    if(!byBase.has(baseId))byBase.set(baseId,[]);
+    byBase.get(baseId).push(c);
+  });
+  const out={};
+  byBase.forEach(courses=>{
+    courses.sort((a,b)=>cmpSection(a.section,b.section));   // original, then sections A→Z
+    courses.forEach(course=>{
+      const nums=psDisplayNumbers(course,level);
+      if(!nums.length)return;
+      const offerings=DB.offerings.filter(o=>o.courseId===course.id&&o.term===term);
+      if(!offerings.length)return;
+      nums.forEach(displayNum=>{
+        offerings.forEach(off=>{
+          (out[course.prefix]=out[course.prefix]||[]).push(
+            {prefix:course.prefix,displayNum,numSort:psNumSort(displayNum),course,offering:off});
+        });
+      });
+    });
+  });
+  Object.keys(out).forEach(pfx=>{
+    out[pfx].sort((a,b)=>a.numSort-b.numSort||
+      String(a.displayNum).localeCompare(String(b.displayNum),undefined,{numeric:true,sensitivity:'base'}));
+  });
+  return out;
+}
+
+const PS_LEGEND={
+  UG:{title:'Undergraduate',
+    defs:[
+      'ONLINE, ASYNCHRONOUS: Online class with no scheduled meeting times (asynchronous format)',
+      'ONLINE, SYNC:  Online class that meets remotely via Zoom or Webex during the scheduled meeting times listed',
+      'IN-PERSON:  Class meets in person, on campus, during the scheduled meeting time(s)',
+      'HYBRID:  Class meets in person, on campus, during the scheduled meeting time(s), with additional online requirements',
+      'DEPARTMENT ARRANGED:  Meeting times to be agreed upon by student and instructor/department'],
+    abbr:['M = Monday    T = Tuesday    W = Wednesday    R = Thursday    F = Friday   S = Saturday    U = Sunday',
+      'Asynch = Asynchronous    Synch = Synchronous    TBD = to be determined     NA= not applicable']},
+  GR:{title:'Graduate',
+    defs:[
+      'ONLINE, ASYNCHRONOUS: Online class with no scheduled meeting times (asynchronous format)',
+      'ONLINE, SYNCHRONOUS: Online class that meets remotely via Zoom or Webex during the scheduled meeting times listed',
+      'IN‐PERSON: Class meets in person, on campus, during the scheduled meeting time(s)',
+      'HYBRID: Class meets in person, on campus, during the scheduled meeting time(s), with additional online requirements',
+      'DEPARTMENT ARRANGED: Meeting times to be agreed upon by student and instructor/department',
+      'RESTRICTED: Registration is restricted to the populations indicated for the entire registration period'],
+    abbr:['M = Monday T = Tuesday W = Wednesday R = Thursday F = Friday',
+      'Asynch = Asynchronous Synch = Synchronous TBA = to be arranged TBD = to be determined NA= not applicable']}
+};
+
+async function psGenerate(){
+  const term=val('ps-term'), level=val('ps-level');
+  if(!term){alert('Pick a term first.');return;}
+  const termLabel=TL[term]||term;
+  const grouped=psBuildRows(term,level);
+  const prefixes=Object.keys(grouped).sort();
+  const totalRows=prefixes.reduce((n,p)=>n+grouped[p].length,0);
+  if(!totalRows){$('ps-summary').innerHTML=`<div class="fhint">No ${level==='UG'?'undergraduate':'graduate'} offerings found for ${esc(termLabel)}.</div>`;return;}
+
+  const wb=new ExcelJS.Workbook();
+  const ws=wb.addWorksheet((level==='UG'?'UG ':'GR ')+termLabel,{views:[{state:'frozen',ySplit:0}]}); // ySplit set below once header row is known
+  ws.columns=[{width:7.14},{width:8.57},{width:33.43},{width:5.86},{width:8},{width:10},{width:15.57},{width:26}];
+
+  const FONT='Lato';
+  const green={type:'pattern',pattern:'solid',fgColor:{argb:'FF00845E'}};
+  const thin={style:'thin'};
+  const box={top:thin,bottom:thin,left:thin,right:thin};
+  const centerWrap={horizontal:'center',vertical:'center',wrapText:true};
+
+  let r=1;
+  ws.mergeCells(r,1,r,8);
+  ws.getCell(r,1).value=`School of Public Health ${esc0(termLabel)} ${level==='UG'?'Undergraduate':'Graduate'} Course Schedule`;
+  ws.getCell(r,1).font={name:FONT,size:12,bold:true};
+  ws.getCell(r,1).alignment={horizontal:'center',vertical:'center'};
+  ws.getRow(r).height=22; r++;
+
+  const tRow=termRow(term);
+  const tDates=psFmtDateRange(tRow&&tRow.start_date,tRow&&tRow.end_date);
+  if(tDates){
+    ws.mergeCells(r,1,r,8);
+    ws.getCell(r,1).value=`Term Dates: ${tDates}`;
+    ws.getCell(r,1).font={name:FONT,size:9,bold:true};
+    ws.getCell(r,1).alignment={horizontal:'center',vertical:'center'}; r++;
+  }
+
+  ws.mergeCells(r,1,r,8);
+  ws.getCell(r,1).value=`Last modified: ${new Date().toLocaleDateString('en-US')}`;
+  ws.getCell(r,1).font={name:FONT,size:9,bold:true};
+  ws.getCell(r,1).alignment={horizontal:'center',vertical:'center'}; r++;
+
+  const legend=PS_LEGEND[level]||PS_LEGEND.GR;
+  ws.getCell(r,1).value='DEFINITIONS';ws.getCell(r,1).font={name:FONT,size:10,bold:true};r++;
+  legend.defs.forEach(line=>{ws.getCell(r,1).value=line;ws.getCell(r,1).font={name:FONT,size:9};r++;});
+  ws.getCell(r,1).value='ABBREVIATIONS';ws.getCell(r,1).font={name:FONT,size:10,bold:true};r++;
+  legend.abbr.forEach(line=>{ws.getCell(r,1).value=line;ws.getCell(r,1).font={name:FONT,size:9};r++;});
+
+  const headerRow=r;
+  const headers=['Course Prefix','Course Number','Course Title','Cr.','Course Format','Days','Time','Restrictions/ Notes'];
+  headers.forEach((h,i)=>{
+    const c=ws.getCell(r,i+1);
+    c.value=h;c.font={name:FONT,size:8,bold:true};c.alignment=centerWrap;c.border=box;
+  });
+  ws.getRow(r).height=23.25; r++;
+  ws.views=[{state:'frozen',ySplit:headerRow}];
+
+  prefixes.forEach(pfx=>{
+    for(let col=1;col<=8;col++){
+      const c=ws.getCell(r,col);
+      c.fill=green;c.font={name:FONT,size:8,bold:true};c.border=box;
+    }
+    ws.getCell(r,1).value=`${pfx} Prefix Classes:`; r++;
+
+    grouped[pfx].forEach(row=>{
+      const {course,offering}=row;
+      const format=psModalityText(offering.modality);
+      const hasMeeting=!!(String(offering.days||'').trim()||String(offering.time||'').trim());
+      const restr=psRestrictionText(course,offering);
+
+      ws.getCell(r,1).value=course.prefix;
+      ws.getCell(r,2).value=/^\d+$/.test(String(row.displayNum).trim())?parseInt(row.displayNum,10):row.displayNum;
+      ws.getCell(r,3).value=course.title;
+      ws.getCell(r,4).value=course.credits;
+      if(hasMeeting){
+        ws.getCell(r,5).value=format;
+        ws.getCell(r,6).value=String(offering.days||'').trim();
+        ws.getCell(r,7).value=String(offering.time||'').trim();
+      }else{
+        ws.mergeCells(r,5,r,7);
+        ws.getCell(r,5).value=format;
+      }
+      ws.getCell(r,8).value=restr;
+
+      const ALIGN={
+        1:{wrapText:true,vertical:'center'},                       // Prefix
+        2:{horizontal:'center',wrapText:true,vertical:'center'},   // Number
+        3:{horizontal:'left',wrapText:true,vertical:'top'},        // Title
+        4:{horizontal:'center',wrapText:true,vertical:'center'},   // Cr.
+        5:{horizontal:'center',vertical:'center'},                 // Format
+        6:{horizontal:'center',wrapText:true,vertical:'center'},   // Days
+        7:{horizontal:'center',wrapText:true,vertical:'center'},   // Time
+        8:{wrapText:true,vertical:'center'}                        // Restrictions/Notes
+      };
+      for(let col=1;col<=8;col++){
+        const c=ws.getCell(r,col);
+        c.font={name:FONT,size:8};c.border=box;c.alignment=ALIGN[col];
+      }
+      r++;
+    });
+  });
+
+  const buf=await wb.xlsx.writeBuffer();
+  const blob=new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'});
+  const url=URL.createObjectURL(blob);
+  const fname=`SPH_${level}_${term}_Public_Schedule.xlsx`;
+  const a=document.createElement('a');a.href=url;a.download=fname;a.click();
+  URL.revokeObjectURL(url);
+  $('ps-summary').innerHTML=`<div class="fhint">● ${totalRows} row${totalRows===1?'':'s'} across ${prefixes.length} prefix${prefixes.length===1?'':'es'} — ${esc(fname)} downloaded.</div>`;
+  setSS('● Public schedule generated');
+}
+const esc0=s=>String(s??'');
+
 /* ─── CHTOOL ────────────────────────────────────────────────── */
 function renderCht(){
   const catF=val('c-cat'),q=val('c-q').toLowerCase();
@@ -2089,8 +2687,10 @@ function renderCat(){
   const pfx=val('cc-pfx'),q=val('cc-q').toLowerCase(),
         lvl=val('cc-lvl'),crf=val('cc-cr');
   const showSec=chk('cc-sect');
+  const showDisc=chk('cc-disc');
   let courses=DB.courses.filter(c=>{
     if(!showSec&&c.parentId)return false;
+    if(!showDisc&&c.discontinued)return false;
     if(pfx&&c.prefix!==pfx)return false;
     if(lvl){
       const g=c.grugb||'';
@@ -2114,12 +2714,13 @@ function renderCat(){
     const noOff=!DB.offerings.some(o=>o.courseId===c.id);
     // Sections have no page of their own — the title links to the base course.
     const pageId=c.parentId||c.id;
-    const cls=[noOff?'no-off':'',c.parentId?'sec-row':''].filter(Boolean).join(' ');
+    const cls=[noOff?'no-off':'',c.parentId?'sec-row':'',c.discontinued?'disc-row':''].filter(Boolean).join(' ');
+    const discBadge=c.discontinued?' <span class="discpill" title="Discontinued — hidden from the default Catalog view">Discontinued</span>':'';
     h+=`<tr${cls?` class="${cls}"`:''}${noOff?' title="No offerings scheduled in any term"':''}>
       <td><strong>${esc(c.prefix)}</strong></td>
       <td>${esc(c.number)}${c.number2?'/'+esc(c.number2):''}</td>
       <td style="text-align:center">${c.section?`<span class="secpill">${esc(c.section)}</span>`:''}</td>
-      <td style="max-width:240px"><a class="clink" href="?course=${esc(encodeURIComponent(pageId))}" data-course="${esc(pageId)}" title="View course page">${esc(c.title)}</a></td>
+      <td style="max-width:240px"><a class="clink" href="?course=${esc(encodeURIComponent(pageId))}" data-course="${esc(pageId)}" title="View course page">${esc(c.title)}</a>${discBadge}</td>
       <td style="text-align:center">${esc(c.credits)}</td>
       <td style="text-align:center">${esc(c.pnp)}</td>
       <td class="col-internal" style="text-align:center">${c.permission==='Yes'?'✓':''}</td>
@@ -2214,7 +2815,7 @@ function renderCourse(code){
   let h=`<button class="cback" id="crs-back">← Back</button>`;
 
   h+=`<div class="chead">
-    <h2>${esc(c.title||c.fullName||'Untitled course')}</h2>
+    <h2>${esc(c.title||c.fullName||'Untitled course')}${c.discontinued?' <span class="schedDiscPill" title="This course has been marked discontinued">Discontinued</span>':''}</h2>
     <div class="csub">${esc(c.prefix)} ${esc(c.number)}${c.number2?' / '+esc(c.number2):''} · ${lvlTxt}</div>
     <div class="cfacts">
       <div class="cfact"><b>Credits</b>${esc(c.credits)||'—'}</div>
@@ -2346,7 +2947,7 @@ function renderInst(){
     // isAdmin, not canEdit(): the roster is admin territory. A PD reads it and
     // assigns from it, but adding or reclassifying an instructor is a hiring
     // fact that admin establishes first. Matched by RLS on instructor_meta.
-    const eb=isAdmin?`<td><button class="btn btn-s btn-sm ei" data-id="${esc(i.id)}">Edit</button></td>`:'';
+    const eb=(isAdmin&&!LOCKED)?`<td><button class="btn btn-s btn-sm ei" data-id="${esc(i.id)}">Edit</button></td>`:'';
     const notUsed=!i.isPlaceholder&&!isTBD(i.displayName)&&!assigned.has(i.displayName);
     const flag=notUsed?' <span class="flag-warn" title="Not assigned to any offering on the Schedule">⚠</span>':'';
     h+=`<tr><td><strong>${esc(i.displayName)}</strong>${flag}</td><td>${esc(i.lastName)}</td><td>${esc(i.firstName)}</td>
@@ -2640,12 +3241,14 @@ function openCM(id){
     ensureOpt('cm-pfx',c.prefix);setv('cm-pfx',c.prefix);setv('cm-num',c.number);setv('cm-num2',c.number2);setv('cm-cr',c.credits);
     setv('cm-ttl',c.title);setv('cm-pnp',c.pnp);setv('cm-perm',c.permission);setv('cm-grugb',c.grugb);
     setv('cm-fte',c.fteExempt);setv('cm-cap',c.maxCap);
+    setc('cm-disc',c.discontinued===true||c.discontinued==='Yes');
     setv('cm-desc',c.description||'');
     setv('cm-cat-psu',c.catUrlPsu||'');setv('cm-cat-ohsu',c.catUrlOhsu||'');
     TERMS.forEach(t=>setc('cm-t-'+t,DB.offerings.some(o=>o.courseId===id&&o.term===t)));
   }else{
     ['cm-num','cm-num2','cm-cr','cm-ttl','cm-desc','cm-cat-psu','cm-cat-ohsu'].forEach(f=>setv(f,''));
     setv('cm-cap','10');            // new courses start at the house default
+    setc('cm-disc',false);
     TERMS.forEach(t=>setc('cm-t-'+t,false));
   }
   // Blank means "use the app default", so show that default AS the placeholder
@@ -2664,7 +3267,8 @@ function crsRow(d){
     level:T(d.grugb), permission_required:B(d.permission), fte_exempt:B(d.fteExempt),
     max_cap:I(d.maxCap),
     description:T(d.description),
-    catalog_url_psu:T(d.catUrlPsu), catalog_url_ohsu:T(d.catUrlOhsu)};
+    catalog_url_psu:T(d.catUrlPsu), catalog_url_ohsu:T(d.catUrlOhsu),
+    discontinued:d.discontinued===true||d.discontinued==='Yes'};
 }
 async function saveCrs(){
   const pfx=val('cm-pfx'),num=val('cm-num').trim();
@@ -2684,6 +3288,7 @@ async function saveCrs(){
     credits:val('cm-cr'),pnp:val('cm-pnp'),permission:val('cm-perm'),grugb:val('cm-grugb'),fteExempt:val('cm-fte'),
     maxCap:val('cm-cap').trim()||'10',   // blank → 10, including on edit of an older course
     description:val('cm-desc').trim(),
+    discontinued:chk('cm-disc'),
     catUrlPsu:val('cm-cat-psu').trim(),catUrlOhsu:val('cm-cat-ohsu').trim()};
   const row=crsRow(data);
 
@@ -2719,7 +3324,7 @@ async function saveCrs(){
         title:data.title,credits:data.credits,pnp:data.pnp,permission:data.permission,
         grugb:data.grugb,fteExempt:data.fteExempt,maxCap:data.maxCap,
         description:data.description,catUrlPsu:data.catUrlPsu,
-        catUrlOhsu:data.catUrlOhsu,fullName:fn,parentId:data.id});
+        catUrlOhsu:data.catUrlOhsu,discontinued:data.discontinued,fullName:fn,parentId:data.id});
       const {error:se}=await sb.from('courses')
         .update(Object.assign({},inh,{full_name:fn})).eq('id',s._uuid);
       if(se)setSS('⚠ Section sync failed: '+se.message);
@@ -3345,10 +3950,38 @@ function wireEvents(){
     if(canEdit())showCfm('Sign out?','Sign out and return to read-only view?',()=>signOut());
     else{const e=$('ab-email');if(e){e.focus();setSS('Sign in with the box in the header to enable admin');}}
   });
+  // Admin Tools dropdown (Lists / Terms / Lock Down). Positioned as `fixed`,
+  // computed from the button's own rect on each open — `nav` sets
+  // overflow-x:auto, which per spec forces overflow-y:auto too, so a plain
+  // position:absolute child gets vertically clipped by nav's box. Fixed
+  // positioning escapes that entirely.
+  $('btn-admin-tools').addEventListener('click',e=>{
+    e.stopPropagation();
+    const menu=$('admin-tools-menu');
+    const willOpen=!menu.classList.contains('open');
+    if(willOpen){
+      const r=$('btn-admin-tools').getBoundingClientRect();
+      menu.style.top=r.bottom+'px';
+      menu.style.left=r.left+'px';
+    }
+    menu.classList.toggle('open',willOpen);
+  });
+  $('admin-tools-menu').addEventListener('click',e=>{
+    if(e.target.tagName==='BUTTON')$('admin-tools-menu').classList.remove('open');
+  });
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('#admin-tools-dd'))$('admin-tools-menu').classList.remove('open');
+  });
   $('btn-lists').addEventListener('click',openLists);
   $('ld-key').addEventListener('change',e=>loadListIntoEditor(e.target.value));
   $('btn-ld-save').addEventListener('click',saveListEdits);
   $('btn-ld-default').addEventListener('click',restoreListDefaults);
+  // Lock Down — Scheduling-Admin only trigger; freezes writes on both apps.
+  $('btn-lockdown').addEventListener('click',openLockdown);
+  $('btn-ld2-lock').addEventListener('click',()=>{
+    showCfm('Lock down both apps?','This blocks ALL writes — including yours — on both the scheduling and faculty apps until someone with Scheduling Admin access unlocks it. Continue?',()=>setLockdown(true));
+  });
+  $('btn-ld2-unlock').addEventListener('click',()=>setLockdown(false));
   // Schedule
   ['f-term','f-pfx','f-mod','f-level'].forEach(id=>$(id).addEventListener('change',renderSched));
   $('f-q').addEventListener('input',renderSched);
@@ -3395,6 +4028,8 @@ function wireEvents(){
   $('g-level').addEventListener('change',renderGantt);
   $('gantt-wrap').addEventListener('click',e=>{const b=e.target.closest('.gbar');if(b&&canEdit())openOM(b.dataset.id);});
   $('btn-oc-report').addEventListener('click',generateOnCampusReport);
+  $('ps-term').addEventListener('change',()=>{$('ps-generate-btn').disabled=!val('ps-term');});
+  $('ps-generate-btn').addEventListener('click',psGenerate);
   // CHTool
   $('c-cat').addEventListener('change',renderCht);
   $('c-q').addEventListener('input',renderCht);
@@ -3405,6 +4040,7 @@ function wireEvents(){
   $('cc-cr').addEventListener('change',renderCat);
   $('cc-q').addEventListener('input',renderCat);
   $('cc-sect').addEventListener('change',renderCat);
+  $('cc-disc').addEventListener('change',renderCat);
   $('btn-add-crs').addEventListener('click',()=>openCM(null));
   $('btn-add-sec').addEventListener('click',()=>openSecM(null));
   $('cat-tb').addEventListener('click',e=>{
@@ -3881,10 +4517,11 @@ function tdbParseFullName(fullName,fallbackPrefix,fallbackNumber){
   if(sect&&/^[A-Za-z]+$/.test(sect)&&TDB_SECT_SUFFIX.has(sect.toUpperCase())){secMark=sect.toUpperCase();sect='';}
   return {prefix:pre,number:num+(suf||''),number2:num2?num2+(suf2||''):'',secMark,sectIdx:sect||''};
 }
-function tdbTargetOfferings(){
-  if(!DB||!DB.offerings||!TDB.targetTerm)return [];
+function tdbTargetOfferings(term){
+  term=term||TDB.targetTerm;
+  if(!DB||!DB.offerings||!term)return [];
   const byId={}; (DB.courses||[]).forEach(c=>{byId[c.id]=c;});
-  return DB.offerings.filter(o=>o.term===TDB.targetTerm).map(o=>{
+  return DB.offerings.filter(o=>o.term===term).map(o=>{
     const c=byId[o.courseId]||{};
     const parsed=tdbParseFullName(o.fullName,o.prefix,o.courseNumber);
     return Object.assign({},o,{
@@ -4893,6 +5530,29 @@ function tdbSuggestAll(offerings){
     else if(tdbCandidates(g,offerings).length===0)TDB.pairings[g.key]='DELETE';
   });
 }
+/* ── Reporting shell (Term Draft + Term Audit sub-tabs) ──────── */
+let repActiveSub='termdraft';
+function switchReportingSub(name){
+  // Real gate, not just the hidden button: Term Draft/Audit are admin-only.
+  if(!isAdmin&&(name==='termdraft'||name==='termaudit'))name='pubsched';
+  repActiveSub=name;
+  document.querySelectorAll('.rep-sub').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.rep-sub-btn').forEach(b=>b.classList.remove('active'));
+  $('repsub-'+name).classList.add('active');
+  $('repsub-btn-'+name).classList.add('active');
+  renderReporting();
+}
+function renderReporting(){
+  if(!isAdmin&&(repActiveSub==='termdraft'||repActiveSub==='termaudit')){switchReportingSub('pubsched');return;}
+  if(repActiveSub==='termaudit')renderTermAudit();
+  else if(repActiveSub==='pubsched')renderPubSched();
+  else renderTdb();
+}
+function wireReportingEvents(){
+  document.querySelectorAll('.rep-sub-btn').forEach(b=>
+    b.addEventListener('click',()=>switchReportingSub(b.dataset.sub)));
+}
+
 function renderTdb(){
   tdbPopulateTerms();
   if(TDB.draftFile)tdbRecompute(); else tdbRenderAll();
@@ -4947,11 +5607,431 @@ function wireTdbEvents(){
   $('tdb-generate-btn').addEventListener('click',tdbGenerateDraft);
 }
 
+/* ═══ TERM AUDIT ═══════════════════════════════════════════════
+   Compares PSU's live "Course List with Enrollments" Cognos export
+   against the schedule for a term. Unlike the Draft template, this
+   report carries real CRNs, so matching is exact (crn_psu / crn_ohsu)
+   rather than the fuzzy course-number/cap-total guessing TDB needs for
+   the rolled-forward Draft. Purely read-only — never writes anything.
+   Scope is fixed to the PSU term-audit subjects; not user-configurable
+   like TDB's scope card, since the audit is always the same four
+   subjects plus their SOPH crosslist shells. */
+const TA_PSU_SUBJECTS=new Set(['HSMP','PE','PHE','PUBH']);
+const TA = {
+  targetTerm:'',
+  reportFile:null,     // {rows, name, sheetName}
+  results:null,
+  termsPopulated:false
+};
+
+const TA_REQUIRED_HEADERS=['Term','Subject','Course','Sec','CRN','Title','Sched Type',
+  'Primary Instructor Last Name','Primary Instructor First Name',
+  'Instructor 2 Last Name','Instructor 2 First Name','Crosslist ID',
+  'Min Credits','Max Credits','Auth Size',
+  'Start Date 1','End Date 1','Time 1','Location 1','Instruct Method 1','Instruct Method Desc 1'];
+
+/* ── parsing ─────────────────────────────────────────────────── */
+function taFindHeaderRow(ws,range){
+  const top=Math.min(range.s.r+6,range.e.r);
+  for(let r=range.s.r;r<=top;r++){
+    const labels=new Set();
+    for(let c=range.s.c;c<=range.e.c;c++){
+      const cell=ws[XLSX.utils.encode_cell({r,c})];
+      const v=cell?String(cell.v||'').trim():'';
+      if(v)labels.add(v);
+    }
+    if(labels.has('CRN')&&labels.has('Subject')&&labels.has('Term'))return r;
+  }
+  return -1;
+}
+function taParseReport(file){
+  return new Promise((resolve,reject)=>{
+    const reader=new FileReader();
+    reader.onload=e=>{
+      try{
+        const wb=XLSX.read(e.target.result,{type:'array',cellDates:true});
+        const sheetName=wb.SheetNames.find(n=>/1\s*line\s*per\s*crn/i.test(n))||wb.SheetNames[0];
+        const ws=wb.Sheets[sheetName];
+        if(!ws||!ws['!ref']){reject(new Error('That sheet appears to be empty.'));return;}
+        const range=XLSX.utils.decode_range(ws['!ref']);
+        const hr=taFindHeaderRow(ws,range);
+        if(hr<0){reject(new Error(`Couldn't find a header row with Term/Subject/CRN columns in "${sheetName}".`));return;}
+        const colIdx={};
+        for(let c=range.s.c;c<=range.e.c;c++){
+          const cell=ws[XLSX.utils.encode_cell({r:hr,c})];
+          const v=cell?String(cell.v||'').trim():'';
+          if(v&&!(v in colIdx))colIdx[v]=c;
+        }
+        const missing=TA_REQUIRED_HEADERS.filter(h=>!(h in colIdx));
+        if(missing.length){reject(new Error(`This file is missing expected columns: ${missing.join(', ')}`));return;}
+        const get=(r,name)=>{
+          const c=colIdx[name]; if(c===undefined)return null;
+          const cell=ws[XLSX.utils.encode_cell({r,c})];
+          return cell?cell.v:null;
+        };
+        const rows=[];
+        for(let r=hr+1;r<=range.e.r;r++){
+          const crn=tdbNorm(get(r,'CRN'));
+          const subj=tdbNorm(get(r,'Subject')).toUpperCase();
+          if(!crn&&!subj)continue;   // blank row
+          const meetings=[];
+          for(let m=1;m<=10;m++){
+            const loc=tdbNorm(get(r,`Location ${m}`)), tm=tdbNorm(get(r,`Time ${m}`)),
+                  meth=tdbNorm(get(r,`Instruct Method ${m}`)), methDesc=tdbNorm(get(r,`Instruct Method Desc ${m}`));
+            if(!loc&&!tm&&!meth)continue;
+            meetings.push({time:tm,location:loc,method:meth,methodDesc:methDesc});
+          }
+          rows.push({
+            term:tdbNorm(get(r,'Term')), subj, crse:tdbNorm(get(r,'Course')), sect:tdbNorm(get(r,'Sec')),
+            crn, title:tdbNorm(get(r,'Title')), schedType:tdbNorm(get(r,'Sched Type')),
+            i1Last:tdbNorm(get(r,'Primary Instructor Last Name')), i1First:tdbNorm(get(r,'Primary Instructor First Name')),
+            i2Last:tdbNorm(get(r,'Instructor 2 Last Name')), i2First:tdbNorm(get(r,'Instructor 2 First Name')),
+            xlst:tdbNorm(get(r,'Crosslist ID')),
+            minCredits:tdbNum(get(r,'Min Credits')), maxCredits:tdbNum(get(r,'Max Credits')),
+            authSize:tdbNum(get(r,'Auth Size')), crosslistMax:tdbNum(get(r,'Crosslist Max')),
+            meet1:meetings[0]||null, extraMeetings:meetings.slice(1)
+          });
+        }
+        resolve({rows,name:file.name,sheetName});
+      }catch(err){reject(err);}
+    };
+    reader.onerror=()=>reject(new Error('Could not read the file.'));
+    reader.readAsArrayBuffer(file);
+  });
+}
+
+/* ── matching ────────────────────────────────────────────────── */
+/* crn_psu / crn_ohsu can hold more than one CRN (e.g. "10359, 10360"), so a
+   report CRN counts as a match anywhere it appears in the field — not just
+   as the field's whole value. Tokenized on non-alphanumeric separators so
+   "123" can't accidentally match inside "51230". */
+function taCrnTokens(field){
+  return tdbNorm(field).split(/[^0-9A-Za-z]+/).filter(Boolean);
+}
+function taBuildOfferingIndex(offerings){
+  const psuTokens=new Map();
+  offerings.forEach(o=>{
+    taCrnTokens(o.crnPsu).forEach(tok=>{ if(!psuTokens.has(tok))psuTokens.set(tok,o); });
+  });
+  return {psuTokens};
+}
+function taRowRef(row){
+  if(row.subj==='SOPH')return tdbTitleRef(row.title);
+  return {prefix:row.subj,number:row.crse};
+}
+function taFallbackMatch(row,offerings){
+  const ref=taRowRef(row);
+  if(!ref)return null;
+  const cands=offerings.filter(o=>(o.prefix||'').toUpperCase()===ref.prefix&&
+    (tdbNormKeyPart(o.courseNumber)===tdbNormKeyPart(ref.number)||
+     tdbNormKeyPart(o.number2||'')===tdbNormKeyPart(ref.number)));
+  return cands.length===1?cands[0]:null;
+}
+/* CRN match first; only fall back to course-number matching (and only when
+   it resolves to exactly one candidate) so a stale/mistyped CRN in either
+   system doesn't hide a real pairing. */
+function taMatchRow(row,offerings,idx){
+  const exact=idx.psuTokens.get(row.crn);
+  if(exact)return {offering:exact,crnMismatch:false};
+  const fb=taFallbackMatch(row,offerings);
+  return fb?{offering:fb,crnMismatch:true}:{offering:null,crnMismatch:false};
+}
+
+/* ── field comparisons ──────────────────────────────────────── */
+function taInstrDiff(reportLast,reportFirst,dbDisplayName){
+  const rLast=tdbNorm(reportLast), rFirst=tdbNorm(reportFirst);
+  const has=rLast||rFirst;
+  const dbName=tdbNorm(dbDisplayName);
+  if(!has&&!dbName)return null;
+  if(!has&&isTBD(dbName))return null;   // report blank ≡ a TBD placeholder (TBD P., TBD O., …)
+  const reportStr=has?`${rLast}, ${rFirst}`.replace(/^, /,'').replace(/, $/,''):'—';
+  if(!has||!dbName)return {report:reportStr,db:dbName||'—'};
+  const parts=tdbSplitDisplayName(dbName);
+  const match=parts&&parts.last.toLowerCase()===rLast.toLowerCase()&&
+    parts.initial&&rFirst&&parts.initial[0].toLowerCase()===rFirst[0].toLowerCase();
+  return match?null:{report:reportStr,db:dbName};
+}
+const TA_MEET_RE=/^([A-Za-z]{1,2})\s+(\d{1,4})\s*-\s*(\d{1,4})\s*$/;
+function taParseMeetingTime(str){
+  const m=tdbNorm(str).match(TA_MEET_RE);
+  if(!m)return null;
+  const day=TDB_DAY_TOKENS[m[1].toUpperCase()];
+  if(!day)return null;
+  const pad=x=>x.padStart(4,'0');
+  return {day,range:`${pad(m[2])}-${pad(m[3])}`};
+}
+function taMeetingSummary(row){
+  const all=[row.meet1,...row.extraMeetings].filter(Boolean);
+  if(!all.length)return {str:''};
+  const parsed=all.map(m=>taParseMeetingTime(m.time)).filter(Boolean);
+  if(parsed.length!==all.length)return {irregular:true};
+  const ranges=new Set(parsed.map(p=>p.range));
+  if(ranges.size>1)return {irregular:true};
+  const days=[...new Set(parsed.map(p=>p.day))].sort((a,b)=>tdbDayOrder.indexOf(a)-tdbDayOrder.indexOf(b)).join('');
+  return {str:`${days} ${[...ranges][0]}`};
+}
+/* Auth Size only has to land on one of a few plausible schedule fields —
+   not a single computed "correct" value. SOPH rows are the OHSU side of a
+   crosslist, so they're checked against OHSU Cap 1/2; everything else is
+   checked against Total Cap or PSU Cap 1/2. */
+function taCapCandidates(row,offering){
+  return row.subj==='SOPH'
+    ? [{label:'OHSU Cap 1',val:offering.ohsuCap1},{label:'OHSU Cap 2',val:offering.ohsuCap2}]
+    : [{label:'Total Cap',val:offering.totalCap},{label:'PSU Cap 1',val:offering.psuCap1},{label:'PSU Cap 2',val:offering.psuCap2}];
+}
+
+/* ── per-row diff ────────────────────────────────────────────── */
+function taRowDiffs(row,offering){
+  const diffs=[];
+  const push=(field,report,db)=>diffs.push({field,report,db});
+
+  if(tdbNorm(row.sect)&&tdbNorm(offering.section)&&
+     tdbNormKeyPart(row.sect)!==tdbNormKeyPart(offering.section))
+    push('Section',row.sect,offering.section);
+
+  if(row.minCredits!=null&&row.maxCredits!=null){
+    const range=tdbCreditRange(offering.creditsRaw);
+    const reportStr=row.minCredits===row.maxCredits?String(row.minCredits):`${row.minCredits}-${row.maxCredits}`;
+    if(range){
+      if(row.minCredits<range[0]||row.maxCredits>range[range.length-1]||row.minCredits>row.maxCredits)
+        push('Credits',reportStr,offering.creditsRaw);
+    }else{
+      const fixed=Number(offering.creditsRaw);
+      if(!isNaN(fixed)&&fixed!==''&&(row.minCredits!==fixed||row.maxCredits!==fixed))
+        push('Credits',reportStr,String(offering.creditsRaw));
+    }
+  }
+
+  const d1=taInstrDiff(row.i1Last,row.i1First,offering.instructor1);
+  if(d1)push('Instructor 1',d1.report,d1.db);
+  const d2=taInstrDiff(row.i2Last,row.i2First,offering.instructor2);
+  if(d2)push('Instructor 2',d2.report,d2.db);
+
+  const expMod=tdbMapModality(offering.modality);
+  const repMeth=row.meet1?row.meet1.methodDesc:'';
+  if((expMod||repMeth)&&tdbIMKey(expMod)!==tdbIMKey(repMeth))
+    push('Modality',repMeth||'—',expMod||'—');
+
+  const meetSum=taMeetingSummary(row);
+  if(!meetSum.irregular){
+    const expMeet=tdbMeetingString(offering);
+    if((meetSum.str||expMeet)&&meetSum.str!==expMeet&&!(!meetSum.str&&tdbIsArranged(offering)))
+      push('Meeting time',meetSum.str||'—',expMeet||'—');
+  }
+
+  // A room counts as matched if the report's location shows up anywhere in
+  // the schedule's room field — the field can carry more than one room —
+  // ARRNGD (PSU's "no fixed room" code) is treated as equivalent to the
+  // schedule recording no room at all, and WEB is treated as equivalent to
+  // any of the schedule's online-room spellings. A blank report room isn't
+  // compared here at all — those are surfaced separately as Unroomed
+  // Offerings, not as a Room discrepancy.
+  const repRoom=row.meet1?row.meet1.location:'';
+  if(repRoom){
+    const dbRoom=[offering.roomed,offering.roomNumber].filter(Boolean).join(' ');
+    const dbNoRoom=!dbRoom.trim()||/^no\s*room$/i.test(dbRoom.trim());
+    const repArranged=/^ARRNGD$/i.test(repRoom.trim());
+    const dbOnline=/^(psu\s*online|ohsu\s*online|online)$/i.test(dbRoom.trim());
+    const repWeb=/^WEB$/i.test(repRoom.trim());
+    const roomOk=(repArranged&&dbNoRoom)||(repWeb&&dbOnline)||
+      (dbRoom&&dbRoom.toUpperCase().includes(repRoom.toUpperCase()));
+    if(!roomOk)push('Room',repRoom,dbRoom||'—');
+  }
+
+  if(row.authSize!=null&&row.authSize!==0){
+    const present=taCapCandidates(row,offering).filter(c=>tdbNorm(c.val)!=='');
+    if(present.length&&!present.some(c=>tdbCap(c.val)===row.authSize)){
+      const dbStr=present.map(c=>`${c.label} ${tdbCap(c.val)}`).join(', ');
+      push('Section cap',String(row.authSize),dbStr);
+    }
+  }
+
+  return diffs;
+}
+
+/* ── group-level (crosslist) check ──────────────────────────── */
+function taGroupRows(rows){
+  const byXlst=new Map(), singles=[];
+  rows.forEach(row=>{
+    if(row.xlst){
+      if(!byXlst.has(row.xlst))byXlst.set(row.xlst,{key:row.xlst,rows:[]});
+      byXlst.get(row.xlst).rows.push(row);
+    }else singles.push({key:'crn:'+row.crn,rows:[row]});
+  });
+  return [...byXlst.values(),...singles];
+}
+
+/* Offerings that share the same crn_psu text are the same real-world
+   section recorded twice (or a dual listing entered as separate rows) —
+   merge them into one display line rather than one per row. Offerings
+   with no CRN at all stay on their own line; there's nothing to group by. */
+function taCollapseByCrn(offerings){
+  const groups=new Map();
+  offerings.forEach(o=>{
+    const key=tdbNorm(o.crnPsu)||('_uuid:'+o._uuid);
+    if(!groups.has(key))groups.set(key,[]);
+    groups.get(key).push(o);
+  });
+  return [...groups.values()].map(list=>({
+    label:list.map(o=>`${o.prefix} ${o.courseNumber}${o.section?'-'+o.section:''}`).join(' / '),
+    instr:[...new Set(list.flatMap(o=>[o.instructor1,o.instructor2].filter(Boolean)))].join(' / ')||'TBD',
+    crn:list[0].crnPsu||'—'
+  }));
+}
+
+/* ── main compute ────────────────────────────────────────────── */
+function taRecompute(){
+  if(!TA.reportFile||!TA.targetTerm){TA.results=null;taRenderAll();return;}
+  const offerings=tdbTargetOfferings(TA.targetTerm);
+  const idx=taBuildOfferingIndex(offerings);
+  const rows=TA.reportFile.rows.filter(r=>TA_PSU_SUBJECTS.has(r.subj)||r.subj==='SOPH');
+  const groups=taGroupRows(rows);
+
+  const diffRows=[];       // {courseLabel, crn, field, report, db}
+  const unmatchedReport=[];
+  const unroomed=[];
+  const matchedOfferingIds=new Set();
+
+  groups.forEach(group=>{
+    group.rows.forEach(row=>{
+      const {offering,crnMismatch}=taMatchRow(row,offerings,idx);
+      const num=row.crse+(row.sect?`-${row.sect}`:'');
+      const label=`${row.subj} ${num}`;
+      if(!offering){
+        // A SOPH row belongs here as long as its title actually names an
+        // in-scope course — administrative placeholders like "SOPH NETWORK
+        // SERVICES" don't reference any course at all and stay excluded.
+        const inScope=TA_PSU_SUBJECTS.has(row.subj)||
+          (row.subj==='SOPH'&&TA_PSU_SUBJECTS.has((taRowRef(row)||{}).prefix));
+        if(inScope)
+          unmatchedReport.push({label,crn:row.crn,title:row.title,instr:`${row.i1Last}, ${row.i1First}`.replace(/^, |, $/,'')});
+        return;
+      }
+      matchedOfferingIds.add(offering._uuid);
+      const courseLabel=`${offering.prefix} ${offering.courseNumber}${offering.section?'-'+offering.section:''}`;
+      if(!tdbNorm(row.meet1?row.meet1.location:''))
+        unroomed.push({courseLabel,crn:row.crn,instr:[offering.instructor1,offering.instructor2].filter(Boolean).join(' / ')||'TBD'});
+      if(crnMismatch){
+        const expected=offering.crnPsu;
+        diffRows.push({courseLabel,crn:row.crn,field:'CRN',report:row.crn,db:expected||'—'});
+      }
+      taRowDiffs(row,offering).forEach(d=>
+        diffRows.push({courseLabel,crn:row.crn,field:d.field,report:d.report,db:d.db}));
+    });
+  });
+
+  const unmatchedDb=offerings.filter(o=>
+    TA_PSU_SUBJECTS.has((o.prefix||'').toUpperCase())&&!matchedOfferingIds.has(o._uuid));
+
+  TA.results={diffRows,unmatchedReport,unmatchedDb:taCollapseByCrn(unmatchedDb),unroomed,
+    groupCount:groups.length,rowCount:rows.length,offeringCount:offerings.length};
+  taRenderAll();
+}
+
+/* ── rendering ───────────────────────────────────────────────── */
+function taPopulateTerms(){
+  if(TA.termsPopulated||!TERM_ROWS||!TERM_ROWS.length)return;
+  const opts=TERM_ROWS.map(t=>`<option value="${esc(t.code)}">${esc(t.label||t.code)}</option>`).join('');
+  $('ta-target-term').insertAdjacentHTML('beforeend',opts);
+  TA.termsPopulated=true;
+}
+function taRenderAll(){
+  const stats=$('ta-stats-row'), diffCard=$('ta-diff-card'), urCard=$('ta-unmatched-report-card'),
+    udCard=$('ta-unmatched-db-card'), unrCard=$('ta-unroomed-card');
+  if(!TA.results){
+    [stats,diffCard,urCard,udCard,unrCard].forEach(el=>el.style.display='none');
+    return;
+  }
+  const {diffRows,unmatchedReport,unmatchedDb,unroomed,rowCount,offeringCount}=TA.results;
+  const affected=new Set(diffRows.map(d=>d.courseLabel+'|'+d.crn)).size;
+
+  stats.style.display='';
+  stats.innerHTML=`
+    <div class="tdb-stat ${rowCount?'':'warn'}"><div class="n">${rowCount}</div><div class="l">Report rows in scope</div></div>
+    <div class="tdb-stat"><div class="n">${offeringCount}</div><div class="l">Schedule offerings in scope</div></div>
+    <div class="tdb-stat ${diffRows.length?'warn':''}"><div class="n">${diffRows.length}</div><div class="l">Discrepancies (${affected} sections)</div></div>
+    <div class="tdb-stat ${unmatchedReport.length?'warn':''}"><div class="n">${unmatchedReport.length}</div><div class="l">Report rows unmatched</div></div>
+    <div class="tdb-stat ${unmatchedDb.length?'warn':''}"><div class="n">${unmatchedDb.length}</div><div class="l">Offerings unmatched</div></div>
+    <div class="tdb-stat ${unroomed.length?'warn':''}"><div class="n">${unroomed.length}</div><div class="l">Unroomed offerings</div></div>`;
+
+  diffCard.style.display='';
+  $('ta-diff-tb').innerHTML=diffRows.length
+    ? diffRows.map(d=>`<tr><td>${esc(d.courseLabel)}</td><td>${esc(d.crn)}</td><td>${esc(d.field)}</td>`+
+        `<td>${esc(d.report)}</td><td>${esc(d.db)}</td></tr>`).join('')
+    : `<tr><td colspan="5" class="empty-note">No discrepancies on the matched sections.</td></tr>`;
+
+  urCard.style.display=unmatchedReport.length?'':'none';
+  $('ta-unmatched-report-list').innerHTML=unmatchedReport.map(u=>
+    `<div class="tdb-chip"><span class="badge">${esc(u.label)}</span><span>CRN ${esc(u.crn)} — ${esc(u.title)}</span><span class="meta">${esc(u.instr)}</span></div>`
+  ).join('')||'';
+
+  udCard.style.display=unmatchedDb.length?'':'none';
+  $('ta-unmatched-db-list').innerHTML=unmatchedDb.map(o=>
+    `<div class="tdb-chip"><span class="badge">${esc(o.label)}</span>`+
+    `<span>${esc(o.instr)}</span>`+
+    `<span class="meta">CRN ${esc(o.crn)}</span></div>`
+  ).join('')||'';
+
+  unrCard.style.display=unroomed.length?'':'none';
+  $('ta-unroomed-list').innerHTML=unroomed.map(u=>
+    `<div class="tdb-chip"><span class="badge">${esc(u.courseLabel)}</span><span>CRN ${esc(u.crn)}</span><span class="meta">${esc(u.instr)}</span></div>`
+  ).join('')||'';
+}
+function renderTermAudit(){
+  taPopulateTerms();
+  taRenderAll();
+}
+function taExportCsv(){
+  if(!TA.results||!TA.results.diffRows.length)return;
+  const rows=[['Course','CRN','Field','Report says','Schedule says'],
+    ...TA.results.diffRows.map(d=>[d.courseLabel,d.crn,d.field,d.report,d.db])];
+  dlCSV(rows,`Term_Audit_${TA.targetTerm||'term'}.csv`);
+}
+function wireTaEvents(){
+  $('ta-target-term').addEventListener('change',e=>{
+    TA.targetTerm=e.target.value;
+    taRecompute();
+  });
+  $('ta-export-btn').addEventListener('click',taExportCsv);
+
+  const dz=$('ta-report-dropzone'), fi=$('ta-report-file-input');
+  dz.addEventListener('click',()=>fi.click());
+  const handleFile=async file=>{
+    if(!file||!/\.xlsx$/i.test(file.name))return;
+    const info=$('ta-report-file-info');
+    info.innerHTML=`<span class="empty-note">Reading ${esc(file.name)}…</span>`;
+    try{
+      TA.reportFile=await taParseReport(file);
+      info.innerHTML=`<div class="tdb-chip"><span class="badge">REPORT</span><span>${esc(file.name)}</span><span class="meta">${TA.reportFile.rows.length} rows</span></div>`;
+      // Convenience: auto-pick the term if the report names one we know and
+      // nothing has been chosen yet — the person can still change it.
+      if(!TA.targetTerm&&TA.reportFile.rows.length){
+        const reportTerm=TA.reportFile.rows[0].term;
+        if(reportTerm&&TERM_ROWS.some(t=>t.code===reportTerm)){
+          TA.targetTerm=reportTerm;
+          $('ta-target-term').value=reportTerm;
+        }
+      }
+      taRecompute();
+    }catch(err){
+      TA.reportFile=null;
+      info.innerHTML=`<div class="tdb-sum-review">${esc(err.message)}</div>`;
+      TA.results=null; taRenderAll();
+    }
+  };
+  fi.addEventListener('change',e=>handleFile(e.target.files[0]));
+  ['dragenter','dragover'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.add('drag');}));
+  ['dragleave','drop'].forEach(ev=>dz.addEventListener(ev,e=>{e.preventDefault();dz.classList.remove('drag');}));
+  dz.addEventListener('drop',e=>handleFile(e.dataTransfer.files[0]));
+}
+
 /* ─── BOOTSTRAP ─────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded',async()=>{
   console.log('%c[SPH scheduling] build 2026-08-03a — term draft builder: template-only diff','color:#0a7');
   wireEvents();
   wireTdbEvents();
+  wireReportingEvents();
+  wireTaEvents();
   // Install the handler before the first client is built; initSupabase() now
   // owns (re)registration, so this survives every subsequent rebuild.
   onAuthChange=(_evt,_session)=>{refreshAdmin();};
@@ -4974,6 +6054,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   rebuildTermUI();
   renderAll();
   maybeShowEnrBanner();
+  startLockPolling();
   setLM('');
   if(!/^https:\/\/[a-z0-9-]+\.supabase\.co$/.test(SUPABASE_URL)||SUPABASE_ANON_KEY.startsWith('YOUR-')){
     setSS('⚠ Set SUPABASE_URL and SUPABASE_ANON_KEY at the top of the file');

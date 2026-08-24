@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>SPH Faculty Directory</title>
+<title>ConvergeSPH — Faculty Directory</title>
 <!-- Theme: applied before first paint so there is no white flash on load.
      Explicit choice wins; otherwise follow the OS setting. Shares the
      'sph-theme' key with index.html, so the two apps stay in step. -->
@@ -68,6 +68,37 @@ header a.xlink:hover{background:rgba(255,255,255,.1);color:white}
 #auth-slot input::placeholder{color:var(--muted)}
 #auth-slot .who{font-size:12px;color:#CBD5E1}
 
+/* ═══ ADMIN TOOLS DROPDOWN ═══════════════════════════════════
+   Mirrors index.html's dropdown exactly: position:fixed, computed from the
+   trigger's own getBoundingClientRect() on each open. faculty.html has no
+   <nav> bar (unlike the scheduling app), so this sits directly in the
+   header — but the mechanics are identical, and this is where any future
+   admin-only faculty-app tool should get nested rather than added as a
+   loose header button. */
+.nav-dd{position:relative;display:inline-block}
+#btn-admin-tools{font-size:11px;color:var(--muted);padding:0 10px;background:none;border:none;cursor:pointer;display:inline-flex;align-items:center;gap:4px;font-family:inherit}
+#btn-admin-tools:hover{color:white}
+.nav-dd-menu{display:none;position:fixed;min-width:190px;background:var(--surface);
+  border:1px solid var(--mgray);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.15);z-index:9999;
+  padding:4px;flex-direction:column}
+.nav-dd-menu.open{display:flex}
+.nav-dd-menu button{height:auto;padding:8px 10px;text-align:left;border-radius:4px;white-space:nowrap;
+  border:none;background:none;font-size:13px;color:var(--text);cursor:pointer;
+  display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:inherit}
+.nav-dd-menu button:hover{background:var(--lgray);color:var(--teal)}
+
+/* Pending faculty_edit_requests signal. Two spots show the same count: the
+   dropdown row (so it's visible once opened) and a standalone header badge
+   (so an admin doesn't have to open the dropdown to know something's
+   waiting). Both are pure UI reflections of a query result, refreshed on
+   load and by reqPollTimer — see startReqPolling(). */
+.req-badge{display:none;background:var(--red);color:white;font-size:10px;font-weight:700;
+  padding:1px 6px;border-radius:9px;line-height:1.5;margin-left:8px}
+.req-badge.on{display:inline-block}
+#req-signal{display:none;background:var(--red);color:white;font-size:10px;font-weight:700;
+  padding:3px 8px;border-radius:10px;letter-spacing:.3px;cursor:pointer;border:none;font-family:inherit}
+#req-signal.on{display:inline-block}
+
 /* ═══ TOOLBAR ═══════════════════════════════════════════════ */
 .tb{background:var(--surface);border-bottom:1px solid var(--mgray);padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex-shrink:0}
 .tb input,.tb select{font-size:13px;padding:6px 10px;border:1px solid var(--mgray);border-radius:5px;font-family:inherit;background:var(--surface);color:var(--text)}
@@ -88,6 +119,15 @@ body.is-admin .admin-only{display:inline-flex!important}
    (anon / unprovisioned) view — parallels admin-only, inverted. */
 body.is-public .signed-only{display:none!important}
 
+/* LOCKDOWN — set from the scheduling app's Admin Tools ▾ Lock Down control;
+   this app only reads app_lockdown and reflects it. Must come after the
+   body.is-admin rule above so it wins even for an admin viewer (equal
+   specificity, later wins) — matches "everyone blocked" including admins. */
+body.is-locked .admin-only{display:none!important}
+#lockdown-banner{display:none;background:#7C2D12;color:#FEE2E2;padding:9px 16px;font-size:13px;
+  align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #991B1B;line-height:1.4}
+body.is-locked #lockdown-banner{display:flex}
+
 /* ═══ MAIN / VIEWS ══════════════════════════════════════════ */
 main{flex:1;overflow:auto;display:flex;flex-direction:column}
 .view{display:none;flex:1;flex-direction:column}
@@ -105,6 +145,7 @@ tbody tr.clickable{cursor:pointer}
 .chip{display:inline-block;background:var(--ltblue);color:var(--navytx);font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px;margin:1px 3px 1px 0;white-space:nowrap}
 .chip.warn{background:var(--ltgold);color:var(--txgold)}
 .chip.role{background:var(--navytx);color:var(--surface)}
+.chip.review{background:var(--ltred);color:var(--red)}
 .rolechk{display:flex;align-items:center;gap:8px;font-weight:600;color:var(--navytx);cursor:pointer}
 .rolechk input{cursor:pointer;margin:0}
 .roledet{margin-top:6px}
@@ -219,6 +260,18 @@ tbody tr.rowflash td{animation:rowflash 1.4s ease-out}
 .mb{padding:18px 20px;max-height:65vh;overflow:auto}
 .mf{padding:12px 20px;border-top:1px solid var(--mgray);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 .mf .lft{margin-right:auto}
+
+/* ═══ ROADMAP ════════════════════════════════════════════════ */
+.rm-wrap{display:flex;flex-direction:column;gap:14px}
+.rm-card{background:var(--lgray);border:1px solid var(--mgray);border-radius:8px;padding:16px 18px}
+.rm-intro p{font-size:13px;color:var(--dgray);line-height:1.5}
+.rm-card h3{font-size:13px;color:var(--navytx);margin-bottom:10px}
+.rm-list{list-style:none;display:flex;flex-direction:column;gap:10px}
+.rm-list li{font-size:13px;color:var(--text);line-height:1.5;padding-left:16px;position:relative}
+.rm-list li::before{content:'';position:absolute;left:0;top:7px;width:6px;height:6px;border-radius:50%;background:var(--teal)}
+.rm-list strong{color:var(--navytx)}
+.rm-foot{font-size:12px;color:var(--dgray);text-align:center}
+.rm-foot a{color:var(--teal)}
 .fg{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
 .fg .full{grid-column:1/-1}
 .f label{display:block;font-size:11px;font-weight:600;color:var(--dgray);margin-bottom:3px}
@@ -253,16 +306,25 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
 </head>
 <body>
 
-<div id="ls"><div class="spin"></div><h2>SPH Faculty</h2><p id="lm">Loading…</p></div>
+<div id="ls"><div class="spin"></div><h2>ConvergeSPH</h2><p id="lm">Loading…</p></div>
 
 <div id="app" style="display:none">
+  <div id="lockdown-banner"></div>
   <header>
-    <div><h1>SPH Faculty Directory</h1><div class="sub">OHSU-PSU School of Public Health</div></div>
+    <div><h1>ConvergeSPH</h1><div class="sub">Faculty Directory · OHSU-PSU School of Public Health</div></div>
     <div class="hsp"></div>
     <a class="xlink" href="index.html">📅 Scheduling</a>
+    <button id="btn-roadmap" class="signed-only" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#CBD5E1;border-radius:4px;cursor:pointer;font-size:12px;padding:4px 10px;font-family:inherit;margin-right:6px" title="What's coming to ConvergeSPH">🗺 Roadmap</button>
     <span id="auth-slot"></span>
     <button id="btn-theme" title="Switch to dark mode" aria-label="Switch to dark mode">🌙</button>
     <span id="tier-badge">ADMIN</span>
+    <button id="req-signal" class="admin-only" style="display:none" title="Pending faculty edit requests — click to review"></button>
+    <div class="nav-dd admin-only" id="admin-tools-dd" style="display:none">
+      <button id="btn-admin-tools">🛠 Admin Tools ▾</button>
+      <div class="nav-dd-menu" id="admin-tools-menu">
+        <button id="btn-req-queue" title="Reviewing does not apply the change — you still make the edit yourself">📝 Edit Requests <span class="req-badge" id="req-badge-dd"></span></button>
+      </div>
+    </div>
     <span id="save-status">Ready</span>
   </header>
 
@@ -287,7 +349,11 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
         <label id="f-inact-wrap" style="font-size:12px;color:var(--dgray);display:none;align-items:center;gap:5px">
           <input type="checkbox" id="f-inact"> Show inactive
         </label>
+        <label class="signed-only" style="font-size:12px;color:var(--dgray);display:flex;align-items:center;gap:5px">
+          <input type="checkbox" id="f-review"> Needs review
+        </label>
         <button class="btn btn-s" id="btn-clear">Clear filters</button>
+        <button class="btn btn-s signed-only" id="btn-exp-dir">⬇ CSV</button>
         <button class="btn btn-p btn-s admin-only" id="btn-add">+ Add Faculty</button>
         <button class="btn btn-s admin-only" id="btn-log">📄 Change Log</button>
         <span class="ceph-legend"><sup>1</sup> CEPH Primary &middot; <sup>2</sup> CEPH Non-Primary</span>
@@ -443,6 +509,86 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
   </div>
 </div>
 
+<!-- ── REQUEST AN EDIT (viewer tier, own record only) ───────────── -->
+<div class="mo" id="mo-req">
+  <div class="mc sm">
+    <div class="mh"><h3 id="req-title">Request an Edit</h3><button class="x" data-close="mo-req">×</button></div>
+    <div class="mb f"><div class="fg">
+      <div class="full"><label>Current value</label><textarea id="req-current" readonly style="background:var(--surface-2);color:var(--dgray)"></textarea></div>
+      <div class="full"><label>What would you like this changed to?</label><textarea id="req-value" placeholder="Describe the change you'd like…"></textarea></div>
+      <div class="full"><label>Note (optional)</label><textarea id="req-note" placeholder="Any context for whoever reviews this"></textarea></div>
+      <div class="full"><div class="fhint">This submits a request — a faculty administrator reviews it and makes the change; it isn't applied automatically.</div></div>
+    </div></div>
+    <div class="mf">
+      <button class="btn" data-close="mo-req">Cancel</button>
+      <button class="btn btn-p" id="btn-req-submit">Submit Request</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ROADMAP (signed-in visibility only, no admin gating) ─────── -->
+<div class="mo" id="mo-roadmap">
+  <div class="mc">
+    <div class="mh"><h3>ConvergeSPH Roadmap</h3><button class="x" data-close="mo-roadmap">×</button></div>
+    <div class="mb">
+      <div class="rm-wrap">
+        <section class="rm-card rm-intro">
+          <p>The OHSU-PSU School of Public Health's Academic Operations Platform. ConvergeSPH currently manages course scheduling and offerings across both institutions, plus this faculty directory with tiered access. Below is what's planned next.</p>
+        </section>
+
+        <section class="rm-card">
+          <h3>Faculty Operations</h3>
+          <ul class="rm-list">
+            <li><strong>Faculty Documents</strong> — Categorized document references (HR, promotion, wages, reviews) linked directly to their SharePoint location. Access follows existing SharePoint permissions.</li>
+            <li><strong>OHSU Annual Review</strong> — End-to-end tracking of the annual review process: faculty submissions, dossier and CV, Dean feedback, supervisor meetings and sign-off, and final signatures, visible on the faculty profile as it happens.</li>
+            <li><strong>Adjunct Tracking</strong> — Automatic flagging when PSU adjuncts cross credit-hour thresholds for contract eligibility or administrative review, tracked over their respective rolling periods. Flags filterable across the faculty directory.</li>
+            <li><strong>Committee Assignment & Tracking</strong> — Rules-based staffing for SPH committees, each with configurable membership requirements. Surfaces expiring terms, unplaced new faculty, member requests, and understaffed committees.</li>
+          </ul>
+        </section>
+
+        <section class="rm-card">
+          <h3>Curriculum</h3>
+          <ul class="rm-list">
+            <li><strong>Course Objectives</strong> — Objectives and syllabi added directly to course detail pages, with future mapping of specific objectives to specific assessments.</li>
+            <li><strong>Course History</strong> — A running record of curricular changes over time, including in-progress changes and access to their submission documents.</li>
+          </ul>
+        </section>
+
+        <section class="rm-card">
+          <h3>Programs & Competencies</h3>
+          <ul class="rm-list">
+            <li><strong>Program Module</strong> — Introduces Programs as a structure above courses, with courses tagged as required, selective, or elective.</li>
+            <li><strong>CEPH Competencies</strong> — Filter and map courses (and specific assessments) to CEPH accreditation competencies, at both the program and course level.</li>
+            <li><strong>SPH Competencies</strong> — The same competency-mapping structure, built for SPH-specific learning objectives.</li>
+          </ul>
+        </section>
+
+        <p class="rm-foot">Questions or feature requests? Contact <a href="mailto:whitetim@pdx.edu">whitetim@pdx.edu</a>.</p>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn" data-close="mo-roadmap">Close</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── EDIT REQUESTS QUEUE (admin) ──────────────────────────────── -->
+<div class="mo" id="mo-reqq">
+  <div class="mc">
+    <div class="mh"><h3>Faculty Edit Requests</h3><button class="x" data-close="mo-reqq">×</button></div>
+    <div class="mb">
+      <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dgray);margin-bottom:8px;cursor:pointer">
+        <input type="checkbox" id="reqq-showresolved" style="width:auto;flex:none"> Show resolved
+      </label>
+      <div class="fhint" style="margin-bottom:12px">⚠ Make the actual change in the faculty record or profile first — "Mark Applied" only closes out the request, it doesn't write anything itself.</div>
+      <div id="reqq-list"></div>
+    </div>
+    <div class="mf">
+      <button class="btn" data-close="mo-reqq">Close</button>
+    </div>
+  </div>
+</div>
+
 <script>
 /* ════════════════════════════════════════════════════════════════════
    SPH Faculty Directory — v1
@@ -500,6 +646,9 @@ function initSupabase(){
    so it cannot leak into a public profile. */
 let TERM_MAP={};      // code → {label, academic_year, sort_order}
 let AY_ORDER=[];      // academic years, newest FIRST (current year on top)
+let CURRENT_AY='';    // admin-designated "current" AY, set from the scheduling app's
+                       // Terms & Academic Years tool (app_lists key 'currentAY').
+                       // Falls back to AY_ORDER[0] (newest) when unset or stale.
 // The nine category sheets from the master workbook. Data-driven at render time,
 // but this seeds the edit modal so a new category can't be created by typo.
 const CATEGORIES=['Primary','NonPaidSecondary','NonPaidAffiliate','Courtesy',
@@ -517,6 +666,20 @@ let RES={};                         // faculty id → [research row, …] ordere
 let AWD={};                         // faculty id → [award row, …] ordered
 let CEPH={};                        // faculty id → ceph_flag  (ALL tiers, incl. anon)
 let currentUserEmail=null;
+// Self-service — "view your own file, request edits to it." SELF_ID is the
+// faculty row (if any) whose email matches the signed-in session; MY_REQUESTS
+// is that person's own faculty_edit_requests history (viewer tier only —
+// admins already have direct edit access and don't need the request flow).
+// PENDING_REQ_COUNT drives the admin-facing badge; REQQ is the full queue,
+// fetched on demand when an admin opens it, not on every load.
+let SELF_ID=null;
+let MY_REQUESTS=[];
+let PENDING_REQ_COUNT=0;
+let REQQ=[];
+let reqCtx=null;                    // {section, targetTable} for the open Request modal
+// Lockdown — read from app_lockdown on load; see loadData() and
+// renderLockBanner(). Set by the scheduling app's Lock Down control only.
+let LOCKED=false, LOCK_MSG='', LOCK_BY='', LOCK_AT=null;
 let lastViewedId=null;              // set on profile view; restores list position
 let eid=null;                       // faculty id being edited
 let pmId=null;                      // faculty id whose web profile is being edited
@@ -595,7 +758,7 @@ async function loadData(){
   // there comes along. The base tables still carry no anon grant — an
   // unpublished biography never reaches an anonymous browser.
   const pfx=TIER==='public'?'_public':'';
-  const [fR,cR,oR,catR,tR,wpR,edR,rsR,awR,cphR]=await Promise.all([
+  const [fR,cR,oR,catR,tR,wpR,edR,rsR,awR,cphR,curAyR]=await Promise.all([
     paginate(()=> TIER==='admin'
       ? sb.from('faculty').select('*').eq('is_placeholder',false)
       : sb.from(src).select('*')),
@@ -615,7 +778,12 @@ async function loadData(){
     // ticking Published. This narrow two-column view is the only path that
     // carries it for an unpublished profile — cephOf() prefers the full
     // web-profile row when one is present and falls back to here.
-    paginate(()=> sb.from('faculty_ceph_public').select('faculty_id,ceph_flag'))
+    paginate(()=> sb.from('faculty_ceph_public').select('faculty_id,ceph_flag')),
+    // Admin-designated "current" AY, set from the scheduling app's Terms &
+    // Academic Years tool. Best-effort: an unreadable/missing row just means
+    // no designation yet, not a load failure, so its error isn't in the
+    // throw-check below.
+    sb.from('app_lists').select('items').eq('list_key','currentAY').maybeSingle()
   ]);
   for(const r of [fR,cR,oR,catR,tR,wpR,edR,rsR,awR,cphR]){
     if(r.error){setLM('');throw r.error;}
@@ -624,6 +792,10 @@ async function loadData(){
   TERM_MAP={};
   (tR.data||[]).forEach(t=>{TERM_MAP[t.code]=t;});
   AY_ORDER=[...new Set((tR.data||[]).map(t=>t.academic_year))].sort().reverse();
+  {
+    const override=(!curAyR.error&&curAyR.data&&Array.isArray(curAyR.data.items))?curAyR.data.items[0]:'';
+    CURRENT_AY=(override&&AY_ORDER.includes(override))?override:(AY_ORDER[0]||'');
+  }
 
   FAC=(fR.data||[]);
   if(TIER==='admin'){
@@ -634,6 +806,51 @@ async function loadData(){
   FAC.forEach(f=>{if(!Array.isArray(f.categories))f.categories=f.categories?[].concat(f.categories):[];});
   FAC.sort((a,b)=>String(a.last_name||'').localeCompare(String(b.last_name||''))
                 ||String(a.first_name||'').localeCompare(String(b.first_name||'')));
+
+  // Self-service. Identify which row (if any) belongs to the signed-in
+  // person by email match. Viewer tier only sees faculty_profile columns by
+  // default, so — for their own row only — pull the admin-only columns via
+  // the faculty_self_read RLS policy (faculty_self_read_v1.sql) and merge
+  // them onto that FAC entry. Admin tier already has every column from the
+  // main fetch above, so this only runs for viewer.
+  SELF_ID=null;
+  if(currentUserEmail){
+    const mine=FAC.find(f=>f.email&&String(f.email).toLowerCase()===String(currentUserEmail).toLowerCase());
+    if(mine)SELF_ID=mine.id;
+  }
+  if(TIER==='viewer'&&SELF_ID){
+    try{
+      const{data,error}=await sb.from('faculty')
+        .select('next_review_type,next_review_year,last_review_type,last_review_year,'+
+          'previous_promotion_date,promotion_eligible_year,promotion_target,appt_expiration_date,'+
+          'primary_id,ohsu_id,psu_id,source_updated')
+        .eq('id',SELF_ID).maybeSingle();
+      if(!error&&data){
+        const mine=FAC.find(f=>String(f.id)===String(SELF_ID));
+        if(mine)Object.assign(mine,data);
+      }
+    }catch(e){/* self-view admin fields are a bonus, not required for the page to work */}
+  }
+
+  // Edit-request state. A viewer sees their own submission history (so a
+  // request doesn't feel like it vanished); an admin only needs the pending
+  // count here — the full queue is fetched on demand when they open it.
+  MY_REQUESTS=[];
+  if(TIER==='viewer'&&SELF_ID){
+    try{
+      const{data,error}=await sb.from('faculty_edit_requests').select('*')
+        .eq('faculty_id',SELF_ID).order('created_at',{ascending:false}).limit(20);
+      if(!error)MY_REQUESTS=data||[];
+    }catch(e){}
+  }
+  PENDING_REQ_COUNT=0;
+  if(TIER==='admin'){
+    try{
+      const{count,error}=await sb.from('faculty_edit_requests')
+        .select('id',{count:'exact',head:true}).eq('status','pending');
+      if(!error)PENDING_REQ_COUNT=count||0;
+    }catch(e){}
+  }
 
   COURSES={};(cR.data||[]).forEach(c=>{COURSES[c.id]=c;});
   OFFERINGS=(oR.data||[]);
@@ -662,6 +879,75 @@ async function loadData(){
     return t?`${t.academic_year}|${String(t.sort_order).padStart(3,'0')}`:'~';
   };
   Object.values(TEACHING).forEach(list=>list.sort((a,b)=>rank(a).localeCompare(rank(b))));
+
+  // Lockdown — read-only here; the trigger lives in the scheduling app's
+  // Admin Tools ▾ Lock Down control (Scheduling-Admin only), and blocks both
+  // apps' writes via RLS. This just reflects that state on the banner and
+  // hides write UI. Best-effort: a fetch hiccup shouldn't block the load.
+  try{
+    const {data,error}=await sb.from('app_lockdown').select('*').eq('id',1).maybeSingle();
+    if(!error&&data){LOCKED=!!data.locked;LOCK_MSG=data.message||'';LOCK_BY=data.locked_by||'';LOCK_AT=data.locked_at||null;}
+    else if(!error){LOCKED=false;}
+  }catch(e){/* leave prior LOCKED state rather than fail the whole load */}
+  renderLockBanner();
+  document.body.classList.toggle('is-locked',LOCKED);
+}
+
+function renderLockBanner(){
+  const el=$('lockdown-banner');if(!el)return;
+  if(!LOCKED){el.innerHTML='';return;}
+  const who=LOCK_BY?esc(LOCK_BY):'an admin';
+  const when=LOCK_AT?new Date(LOCK_AT).toLocaleString():'';
+  const note=LOCK_MSG?': "'+esc(LOCK_MSG)+'"':'.';
+  el.innerHTML=`🔒 <b>Locked</b> — editing is paused by ${who}${when?' ('+when+')':''}${note} `+
+    `You can still view everything; saving will resume once it's lifted.`;
+}
+
+// Polls app_lockdown so this tab picks up a lock/unlock triggered from the
+// scheduling app (the only place it can be triggered from) without a manual
+// reload. Purely a banner + body-class update — every write control here is
+// already CSS-gated off body.is-locked, so no re-render is needed.
+let lockPollTimer=null;
+function startLockPolling(){
+  if(lockPollTimer)return;
+  lockPollTimer=setInterval(async()=>{
+    if(!sb)return;
+    try{
+      const {data,error}=await sb.from('app_lockdown').select('*').eq('id',1).maybeSingle();
+      if(error||!data)return;
+      LOCKED=!!data.locked; LOCK_MSG=data.message||''; LOCK_BY=data.locked_by||''; LOCK_AT=data.locked_at||null;
+      renderLockBanner();
+      document.body.classList.toggle('is-locked',LOCKED);
+    }catch(e){/* skip this cycle, try again on the next tick */}
+  },45000);
+}
+
+/* ─── EDIT REQUEST BADGE ───────────────────────────────────────
+   Reflects PENDING_REQ_COUNT onto both the header signal and the dropdown
+   row. Called after loadData/reload, after resolving a request, and on
+   every reqPollTimer tick. */
+function renderReqBadge(){
+  const n=PENDING_REQ_COUNT;
+  const sig=$('req-signal');
+  if(sig){sig.textContent=n?`📝 ${n} pending`:'';sig.classList.toggle('on',n>0);}
+  const dd=$('req-badge-dd');
+  if(dd){dd.textContent=n?String(n):'';dd.classList.toggle('on',n>0);}
+}
+
+// Polls the pending count so an admin sees a new request without a manual
+// sync — same 45s cadence as the scheduling app's lockdown poll. Only
+// meaningful (and only started) for admin tier.
+let reqPollTimer=null;
+function startReqPolling(){
+  if(reqPollTimer||TIER!=='admin')return;
+  reqPollTimer=setInterval(async()=>{
+    if(!sb)return;
+    try{
+      const{count,error}=await sb.from('faculty_edit_requests')
+        .select('id',{count:'exact',head:true}).eq('status','pending');
+      if(!error){PENDING_REQ_COUNT=count||0;renderReqBadge();}
+    }catch(e){/* skip this cycle, try again on the next tick */}
+  },45000);
 }
 
 /* ─── FILTERS ──────────────────────────────────────────────── */
@@ -685,6 +971,19 @@ function fillFilters(){
    so this toggle only ever matters to signed-in users. */
 const isInactive=f=>(f.categories||[]).includes('Inactive');
 
+// "Needs Review": the record is teaching this AY, but its ONLY category
+// membership is Inactive and/or Emeriti — i.e. the roster status says they're
+// not active faculty, yet the schedule has them assigned. Any other category
+// present (Primary, Courtesy, etc.) means the Inactive/Emeriti tag is
+// deliberate alongside a real role, so no flag. Uncategorized (no rows at
+// all) is a different problem and isn't flagged here either.
+function needsReview(f){
+  const cats=f.categories||[];
+  if(!cats.length)return false;
+  if(cats.some(c=>c!=='Inactive'&&c!=='Emeriti'))return false;
+  return (TEACHING[f.id]||[]).some(o=>{const t=TERM_MAP[o.term];return t&&t.academic_year===CURRENT_AY;});
+}
+
 // Employer bucket: OHSU/PSU are exact (case/whitespace-insensitive) matches;
 // "Other" is any non-blank value that isn't OHSU or PSU; blank matches neither.
 function employerBucket(f){
@@ -698,19 +997,22 @@ function filtered(){
   const q=val('f-q').toLowerCase().trim(),
         cat=val('f-cat'), unit=val('f-unit'), ceph=val('f-ceph'), employer=val('f-employer'),
         teachOnly=$('f-teach').checked,
-        showInact=$('f-inact').checked, pub=val('f-pub');
+        showInact=$('f-inact').checked, reviewOnly=$('f-review').checked, pub=val('f-pub');
   return FAC.filter(f=>{
     // Public view lists only faculty with a PUBLISHED web profile. For the anon
     // tier WEBPROF is sourced from faculty_web_profile_public, which already
     // filters is_published=true — so mere presence of a row means published,
     // regardless of whether that view exposes the is_published column itself.
     if(TIER==='public'&&!WEBPROF[f.id])return false;
-    // Explicitly filtering TO the Inactive category overrides the hide-by-default.
-    if(!showInact&&cat!=='Inactive'&&isInactive(f))return false;
+    // Explicitly filtering TO the Inactive category, or to Needs Review
+    // (which by definition means Inactive and/or Emeriti), overrides the
+    // hide-by-default.
+    if(!showInact&&!reviewOnly&&cat!=='Inactive'&&isInactive(f))return false;
+    if(reviewOnly&&!needsReview(f))return false;
     if(cat&&!(f.categories||[]).includes(cat))return false;
     if(unit&&f.sph_unit!==unit)return false;
     if(employer&&employerBucket(f)!==employer)return false;
-    if(teachOnly&&!(TEACHING[f.id]||[]).length)return false;
+    if(teachOnly&&!(TEACHING[f.id]||[]).some(o=>{const t=TERM_MAP[o.term];return t&&t.academic_year===CURRENT_AY;}))return false;
     if(pub==='pub'  &&!(WEBPROF[f.id]&&WEBPROF[f.id].is_published))return false;
     if(pub==='draft'&& (WEBPROF[f.id]&&WEBPROF[f.id].is_published))return false;
     if(ceph&&(cephOf(f)||'none')!==ceph)return false;
@@ -743,7 +1045,7 @@ function renderDir(){
   $('dir-tb').innerHTML=rows.map(f=>{
     const n=(TEACHING[f.id]||[]).length;
     return `<tr class="clickable" data-id="${esc(f.id)}">
-      <td><span class="nm">${esc(f.last_name||'')}${f.first_name?', '+esc(f.first_name):''}</span>${cephSup(f)}${(WEBPROF[f.id]&&WEBPROF[f.id].is_published)?` <span class="pubdot" title="Published profile">●</span>`:''}${f.is_program_director?` <span class="chip role" title="Program Director${f.program_director_detail?': '+esc(f.program_director_detail):''}">PD</span>`:''}${f.is_administrator?` <span class="chip role" title="Administrator${f.administrator_detail?': '+esc(f.administrator_detail):''}">Admin</span>`:''}</td>
+      <td><span class="nm">${esc(f.last_name||'')}${f.first_name?', '+esc(f.first_name):''}</span>${cephSup(f)}${(WEBPROF[f.id]&&WEBPROF[f.id].is_published)?` <span class="pubdot" title="Published profile">●</span>`:''}${f.is_program_director?` <span class="chip role" title="Program Director${f.program_director_detail?': '+esc(f.program_director_detail):''}">PD</span>`:''}${f.is_administrator?` <span class="chip role" title="Administrator${f.administrator_detail?': '+esc(f.administrator_detail):''}">Admin</span>`:''}${(TIER!=='public'&&needsReview(f))?` <span class="chip review" title="Teaching this AY but categorized only as Inactive and/or Emeriti">Needs Review</span>`:''}</td>
       <td>${esc(f.sph_unit||'')||'<span class="muted">—</span>'}</td>
       ${TIER!=='public'?`<td>${esc(f.rank||'')||'<span class="muted">—</span>'}</td>
       <td>${(f.categories||[]).map(c=>`<span class="chip">${esc(c)}</span>`).join('')||'<span class="muted">—</span>'}</td>
@@ -751,6 +1053,35 @@ function renderDir(){
       <td>${n?`<span class="chip warn">${n} course${n>1?'s':''}</span>`:'<span class="muted">—</span>'}</td>
     </tr>`;
   }).join('');
+}
+
+/* ─── CSV EXPORT ──────────────────────────────────────────────
+   Mirrors the scheduling app's CSV export: exports exactly the rows
+   currently visible under the active filters (search, category, unit,
+   employer, publish state, CEPH, teaching, inactive toggle), with the
+   same tier-based column set as the on-screen table — plus Email
+   (already loaded for signed-in tiers) and a Teaching Courses list,
+   which is more useful in a CSV than the on-screen course count. */
+function expDir(){
+  const cols=['Last Name','First Name','SPH Unit'];
+  if(TIER!=='public')cols.push('Rank','Categories','Employer','Email');
+  cols.push('Teaching Courses');
+  const rows=[cols];
+  filtered().forEach(f=>{
+    const courses=[...new Set((TEACHING[f.id]||[])
+      .map(o=>COURSES[o.course_id]&&COURSES[o.course_id].full_name).filter(Boolean))];
+    const row=[f.last_name||'',f.first_name||'',f.sph_unit||''];
+    if(TIER!=='public')row.push(f.rank||'',(f.categories||[]).join('; '),f.employer||'',f.email||'');
+    row.push(courses.join('; '));
+    rows.push(row);
+  });
+  dlCSV(rows,`SPH_Faculty_Directory_${new Date().toISOString().slice(0,10)}.csv`);
+}
+function dlCSV(rows,fn){
+  const csv=rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
+  const a=document.createElement('a');
+  a.href=URL.createObjectURL(new Blob(['\uFEFF'+csv],{type:'text/csv;charset=utf-8'}));
+  a.download=fn;a.click();
 }
 
 /* ─── PROFILE RENDER ───────────────────────────────────────── */
@@ -771,6 +1102,23 @@ const fmtDate=d=>{
   const dt=new Date(d+(String(d).length===10?'T00:00:00':''));
   return isNaN(dt)?esc(d):dt.toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
 };
+
+/* ─── EDIT REQUEST HELPERS ─────────────────────────────────────
+   Plain-text snapshots of the requestable sections, used to prefill the
+   "Current value" field on the Request an Edit form so an admin reviewing
+   the queue has context without having to look the record up separately. */
+const SECTION_LABELS={contact:'Contact & Appointment',web_profile:'Biography',
+  education:'Education',research:'Research',award:'Awards'};
+const sectionLabel=s=>SECTION_LABELS[s]||s;
+function contactSummary(f){
+  return [['Email',f.email],['Secondary Email',f.secondary_email],['SPH Association',f.sph_association],
+    ['Appointment Type',f.appointment_type],['Employer',f.employer],
+    ['OHSU Employment Org',f.ohsu_employment_org],['Role When Active',f.role_when_active],
+    ['FTE in SPH',f.fte_in_sph],['Start Date',f.start_date?fmtDate(f.start_date):'']]
+    .filter(([,v])=>N(v)).map(([k,v])=>`${k}: ${v}`).join('\n');
+}
+const eduSummary=eds=>(eds||[]).map(e=>[e.degree,e.institution,e.field,e.year_text].filter(N).join(', ')).join('\n');
+const itemSummary=rows=>(rows||[]).map(r=>r.item).filter(N).join('\n');
 
 /* ─── WEB-PROFILE HELPERS ────────────────────── */
 // Website program labels, defaulted from the member's raw sph_unit but always
@@ -858,6 +1206,12 @@ function renderProf(id){
     $('pb').onclick=goBack;
     return;
   }
+  // Viewer tier, looking at their own record — the only case that gets the
+  // extra admin-visible fields and the Request an Edit controls. Admin tier
+  // already has full access via the direct Edit buttons, so isSelf never
+  // applies there.
+  const isSelf=TIER==='viewer'&&SELF_ID&&String(f.id)===String(SELF_ID);
+
   let h=`<button class="pback" id="pb">← Back to directory</button>`;
 
   /* header — resembles the public website profile: photo, name, category /
@@ -879,7 +1233,7 @@ function renderProf(id){
       ${photo?`<img class="pphoto" id="prof-photo" src="${esc(wp.photo_url)}" alt="${esc(full(f))}">`:''}
     </div>
     <div>
-      <h2>${esc(full(f))}${N(f.pronouns)?`<span class="pron">(${esc(f.pronouns)})</span>`:''}</h2>
+      <h2>${esc(full(f))}${N(f.pronouns)?`<span class="pron">(${esc(f.pronouns)})</span>`:''}${(TIER!=='public'&&needsReview(f))?` <span class="chip review" title="Teaching this AY but categorized only as Inactive and/or Emeriti">Needs Review</span>`:''}</h2>
       <div class="prole">${esc(roleLine)}</div>
       <div class="pcats">${(f.categories||[]).map(c=>`<span class="chip">${esc(c)}</span>`).join('')}</div>
       ${roleBadges(f)}
@@ -890,6 +1244,23 @@ function renderProf(id){
       <button class="btn btn-s admin-only" id="btn-edit-prof">✎ Edit profile</button>
     </div>
   </div>`;
+
+  /* self-view: submission history for this person's own edit requests, so a
+     request doesn't feel like it disappeared into a void. Newest first,
+     capped at 20 by the fetch in loadData(). */
+  if(isSelf&&MY_REQUESTS.length){
+    h+=`<div class="card"><h3>Your Edit Requests</h3><div class="longtext">`+
+      MY_REQUESTS.map(r=>{
+        const when=new Date(r.created_at).toLocaleDateString();
+        const status=r.status==='resolved'?(r.resolution==='applied'?'Applied':'Declined'):'Pending';
+        const cls=status==='Applied'?'pub':(status==='Declined'?'draft':'draft');
+        return `<div style="padding:7px 0;border-bottom:1px solid var(--rowline)">
+          <span class="pill ${cls}">${esc(status)}</span>
+          <b>${esc(sectionLabel(r.section))}</b> — ${esc(r.requested_value)}
+          <div class="hint">Submitted ${when}${r.resolution_note?' · '+esc(r.resolution_note):''}</div>
+        </div>`;
+      }).join('')+`</div></div>`;
+  }
 
   /* website profile — Biography / Education / Research / Awards, now rendered
      at every tier. What differs is the SOURCE, not the markup: signed-in tiers
@@ -903,15 +1274,22 @@ function renderProf(id){
   {
     const anon=TIER==='public';
 
+    // Self-view gets a "Request edit" button per section. data-cur carries a
+    // plain-text snapshot of the section as it stands, prefilled into the
+    // request form's read-only "Current value" field.
+    const reqBtn=(section,table,cur)=>isSelf
+      ?` <button type="button" class="btn btn-s" data-req="${section}" data-table="${table}" data-cur="${esc(cur)}" style="float:right;font-size:11px;padding:2px 9px">Request edit</button>`
+      :'';
+
     const bioMd=wp&&N(wp.biography_md);
-    if(bioMd||!anon)
-      h+=`<div class="card"><h3>Biography</h3>`+
+    if(bioMd||!anon||isSelf)
+      h+=`<div class="card"><h3>Biography${reqBtn('web_profile','faculty_web_profile',bioMd||'')}</h3>`+
          (bioMd?`<div class="bio">${mdToHtml(wp.biography_md)}</div>`
                :`<div class="gate">No biography yet.</div>`)+`</div>`;
 
     const eds=EDU[f.id]||[];
-    if(eds.length||!anon)
-      h+=`<div class="card"><h3>Education, Fellowships, and Residencies</h3>`+
+    if(eds.length||!anon||isSelf)
+      h+=`<div class="card"><h3>Education, Fellowships, and Residencies${reqBtn('education','faculty_education',eduSummary(eds))}</h3>`+
          (eds.length?`<div class="edulist">`+eds.map(ed=>{
             const main=[ed.degree,ed.institution,ed.field].map(N).filter(Boolean).join(', ');
             const yr=N(ed.year_text);
@@ -921,14 +1299,14 @@ function renderProf(id){
          :`<div class="gate">No education entries yet.</div>`)+`</div>`;
 
     const rs=RES[f.id]||[];
-    if(rs.length||!anon)
-      h+=`<div class="card"><h3>Research and Publications</h3>`+
+    if(rs.length||!anon||isSelf)
+      h+=`<div class="card"><h3>Research and Publications${reqBtn('research','faculty_research',itemSummary(rs))}</h3>`+
          (rs.length?itemListHTML('reslist',rs)
          :`<div class="gate">No research or publications yet.</div>`)+`</div>`;
 
     const aw=AWD[f.id]||[];
-    if(aw.length||!anon)
-      h+=`<div class="card"><h3>Awards and Honors</h3>`+
+    if(aw.length||!anon||isSelf)
+      h+=`<div class="card"><h3>Awards and Honors${reqBtn('award','faculty_award',itemSummary(aw))}</h3>`+
          (aw.length?itemListHTML('awdlist',aw)
          :`<div class="gate">No awards or honors yet.</div>`)+`</div>`;
   }
@@ -937,7 +1315,7 @@ function renderProf(id){
      even a sign-in prompt: the public profile is web profile plus courses, and
      a placeholder does nothing but advertise what is being withheld. */
   if(TIER!=='public'){
-    h+=`<div class="card"><h3>Contact &amp; Appointment</h3><div class="grid">
+    h+=`<div class="card"><h3>Contact &amp; Appointment${isSelf?` <button type="button" class="btn btn-s" data-req="contact" data-table="" data-cur="${esc(contactSummary(f))}" style="float:right;font-size:11px;padding:2px 9px">Request edit</button>`:''}</h3><div class="grid">
       ${fld('Email',f.email,v=>`<a href="mailto:${esc(v)}" style="color:var(--teal)">${esc(v)}</a>`)}
       ${fld('Secondary Email',f.secondary_email,v=>`<a href="mailto:${esc(v)}" style="color:var(--teal)">${esc(v)}</a>`)}
       ${fld('SPH Association',f.sph_association)}
@@ -950,7 +1328,7 @@ function renderProf(id){
     </div></div>`;
   }
 
-  /* teaching — AY 26-27, live from the scheduling app */
+  /* teaching — live from the scheduling app, all years shown (grouped) */
   h+=`<div class="card"><h3>Teaching</h3>${teachHTML(f.id)}</div>`;
 
   /* admin-only sections */
@@ -980,8 +1358,31 @@ function renderProf(id){
       h+=`</div>`;
     }
   }else if(TIER==='viewer'){
-    h+=`<div class="card"><h3>Review &amp; Promotion</h3>
-      <div class="gate">Review, promotion, and identifier fields are visible to <b>faculty administrators</b> only.</div></div>`;
+    if(isSelf){
+      // Same fields as the admin block above, minus Notes/Special Notes —
+      // those stay admin-only even on your own record. No Request-edit
+      // control here: these are record fields, not profile/contact fields,
+      // and are out of scope for the request flow per the current design.
+      h+=`<div class="card"><h3>Review &amp; Promotion</h3><div class="grid">
+        ${fld('Next Review Type',f.next_review_type)}
+        ${fld('Next Review Year',f.next_review_year)}
+        ${fld('Last Review Type',f.last_review_type)}
+        ${fld('Last Review Year',f.last_review_year)}
+        ${fld('Previous Promotion',f.previous_promotion_date)}
+        ${fld('Promotion Eligible',f.promotion_eligible_year)}
+        ${fld('Promotion Target',f.promotion_target)}
+        ${fld('Appt Expiration',f.appt_expiration_date,fmtDate)}
+      </div></div>`;
+      h+=`<div class="card"><h3>Identifiers</h3><div class="grid">
+        ${fld('Primary ID',f.primary_id)}
+        ${fld('OHSU ID',f.ohsu_id)}
+        ${fld('PSU ID',f.psu_id)}
+        ${fld('Source Updated',f.source_updated)}
+      </div></div>`;
+    }else{
+      h+=`<div class="card"><h3>Review &amp; Promotion</h3>
+        <div class="gate">Review, promotion, and identifier fields are visible to <b>faculty administrators</b> only.</div></div>`;
+    }
   }
 
   $('prof-body').innerHTML=h;
@@ -1507,6 +1908,101 @@ function buildFacReportText(rows,from,to,actor,exSelfEmail){
   return {text:L.concat(body).join('\n'),count:shown};
 }
 
+/* ─── EDIT REQUESTS ────────────────────────────────────────────
+   Self-service half: a viewer opens this from a Request-edit button on
+   their own profile. Nothing here writes to faculty / faculty_web_profile /
+   etc. — it only inserts into faculty_edit_requests (faculty_edit_requests_v1.sql,
+   RLS-gated to your own faculty_id). The admin half below reviews the queue
+   and applies the real change by hand through the existing Edit modals,
+   exactly as before this feature existed. */
+function openReq(section,targetTable,currentValue){
+  if(!SELF_ID)return;
+  reqCtx={section,targetTable:targetTable||null};
+  $('req-title').textContent='Request an Edit — '+sectionLabel(section);
+  setv('req-current',currentValue||'(nothing on file)');
+  setv('req-value','');
+  setv('req-note','');
+  openM('mo-req');
+}
+async function submitReq(){
+  if(!reqCtx||!SELF_ID)return;
+  const value=N(val('req-value'));
+  if(!value){setSS('⚠ Describe what you\'d like changed');return;}
+  setSS('Submitting…');
+  const ok=await sbSave(sb.from('faculty_edit_requests').insert({
+    faculty_id:SELF_ID, requested_by:currentUserEmail, section:reqCtx.section,
+    target_table:reqCtx.targetTable, current_value:N(val('req-current')),
+    requested_value:value, note:N(val('req-note'))
+  }),'● Request submitted');
+  if(!ok)return;
+  closeM('mo-req');
+  try{
+    const{data,error}=await sb.from('faculty_edit_requests').select('*')
+      .eq('faculty_id',SELF_ID).order('created_at',{ascending:false}).limit(20);
+    if(!error)MY_REQUESTS=data||[];
+  }catch(e){}
+  renderProf(SELF_ID);   // refresh so "Your Edit Requests" shows the new one
+}
+
+/* Admin half — the queue. Fetched on demand (not on every page load) since
+   an admin only needs it when they open Admin Tools ▾ Edit Requests. */
+async function openReqQueue(){
+  $('reqq-showresolved').checked=false;
+  await loadReqQueue();
+  openM('mo-reqq');
+}
+async function loadReqQueue(){
+  const showResolved=$('reqq-showresolved').checked;
+  let q=sb.from('faculty_edit_requests').select('*').order('created_at',{ascending:false});
+  if(!showResolved)q=q.eq('status','pending');
+  const{data,error}=await q;
+  if(error){setSS('⚠ '+error.message);return;}
+  REQQ=data||[];
+  renderReqQueue();
+}
+function renderReqQueue(){
+  const el=$('reqq-list');
+  if(!REQQ.length){el.innerHTML='<div class="gate">Nothing here.</div>';return;}
+  el.innerHTML=REQQ.map(r=>{
+    const f=FAC.find(x=>String(x.id)===String(r.faculty_id));
+    const name=f?full(f):'(faculty record not found)';
+    const when=new Date(r.created_at).toLocaleString();
+    const resolved=r.status==='resolved';
+    return `<div class="card" style="margin-bottom:10px">
+      <h3>${esc(name)} — ${esc(sectionLabel(r.section))}`+
+        (resolved?`<span class="pill ${r.resolution==='applied'?'pub':'draft'}" style="float:right">${esc(r.resolution||'resolved')}</span>`:'')+
+      `</h3>
+      <div class="longtext">
+        <div><b>Current:</b> ${esc(r.current_value||'—')}</div>
+        <div style="margin-top:6px"><b>Requested:</b> ${esc(r.requested_value)}</div>
+        ${r.note?`<div style="margin-top:6px"><b>Note:</b> ${esc(r.note)}</div>`:''}
+        <div class="hint" style="margin-top:8px">Submitted by ${esc(r.requested_by)} on ${when}</div>
+        ${resolved?`<div class="hint">Resolved by ${esc(r.resolved_by||'')}${r.resolution_note?': '+esc(r.resolution_note):''}</div>`:''}
+      </div>`+
+      (resolved?'':`<div class="mf" style="border-top:1px solid var(--mgray)">
+        <input class="reqq-note" data-id="${r.id}" placeholder="Resolution note (optional)" style="flex:1;font-size:12px;padding:6px 10px;border:1px solid var(--mgray);border-radius:5px;background:var(--surface);color:var(--text)">
+        <button class="btn btn-s" data-decline="${r.id}">Decline</button>
+        <button class="btn btn-p btn-s" data-apply="${r.id}">Mark Applied</button>
+      </div>`)+
+    `</div>`;
+  }).join('');
+}
+async function resolveReq(id,resolution){
+  const noteEl=document.querySelector(`.reqq-note[data-id="${id}"]`);
+  const note=noteEl?N(noteEl.value):null;
+  const ok=await sbSave(sb.from('faculty_edit_requests').update({
+    status:'resolved', resolution, resolution_note:note,
+    resolved_by:currentUserEmail, resolved_at:new Date().toISOString()
+  }).eq('id',id),'● Updated');
+  if(!ok)return;
+  await loadReqQueue();
+  try{
+    const{count,error}=await sb.from('faculty_edit_requests')
+      .select('id',{count:'exact',head:true}).eq('status','pending');
+    if(!error){PENDING_REQ_COUNT=count||0;renderReqBadge();}
+  }catch(e){}
+}
+
 /* ─── MODAL PLUMBING ───────────────────────────────────────── */
 function openM(id){$(id).classList.add('open');}
 function closeM(id){$(id).classList.remove('open');if(id==='mo-cfm')cfmCb=null;}
@@ -1541,6 +2037,7 @@ function updateAuthBar(){
   }
   $('tier-badge').classList.toggle('on',isAdmin());
   document.body.classList.toggle('is-admin',isAdmin());
+  renderReqBadge();
   // Drives .signed-only — hides category / CEPH / teaching filters from anon.
   document.body.classList.toggle('is-public',TIER==='public');
   // Anon never has inactive/uncategorized rows to reveal, so the toggle would
@@ -1552,11 +2049,12 @@ function updateAuthBar(){
 async function reload(){
   await loadData();
   fillFilters();
+  renderReqBadge();
 }
 
 /* ─── WIRING ───────────────────────────────────────────────── */
 function wire(){
-  ['f-q','f-cat','f-unit','f-employer','f-pub','f-ceph','f-teach','f-inact'].forEach(id=>{
+  ['f-q','f-cat','f-unit','f-employer','f-pub','f-ceph','f-teach','f-inact','f-review'].forEach(id=>{
     const e=$(id);if(!e)return;
     e.addEventListener(id==='f-q'?'input':'change',renderDir);
   });
@@ -1568,9 +2066,10 @@ function wire(){
      checkboxes — 'Show inactive' returns to hidden, matching a fresh load. */
   $('btn-clear').onclick=()=>{
     ['f-q','f-cat','f-unit','f-employer','f-pub','f-ceph'].forEach(id=>{const e=$(id);if(e)e.value='';});
-    ['f-teach','f-inact'].forEach(id=>{const e=$(id);if(e)e.checked=false;});
+    ['f-teach','f-inact','f-review'].forEach(id=>{const e=$(id);if(e)e.checked=false;});
     renderDir();
   };
+  $('btn-exp-dir').onclick=expDir;
   $('btn-add').onclick=()=>openFM(null);
   $('btn-log').onclick=openLog;
   $('btn-rp-gen').onclick=genFacReport;
@@ -1583,6 +2082,40 @@ function wire(){
   ['pm-edu','pm-res','pm-awd'].forEach(cid=>$(cid).addEventListener('click',e=>{
     const rm=e.target.closest('.rrm'); if(rm)rm.closest('.repeat-row').remove();
   }));
+  // Admin Tools dropdown — same fixed-position mechanics as index.html's,
+  // since nav sits inside header here rather than a separate <nav> bar.
+  $('btn-admin-tools').addEventListener('click',e=>{
+    e.stopPropagation();
+    const menu=$('admin-tools-menu');
+    const willOpen=!menu.classList.contains('open');
+    if(willOpen){
+      const r=$('btn-admin-tools').getBoundingClientRect();
+      menu.style.top=r.bottom+'px'; menu.style.left=r.left+'px';
+    }
+    menu.classList.toggle('open',willOpen);
+  });
+  $('admin-tools-menu').addEventListener('click',e=>{
+    if(e.target.closest('button'))$('admin-tools-menu').classList.remove('open');
+  });
+  document.addEventListener('click',e=>{
+    if(!e.target.closest('#admin-tools-dd'))$('admin-tools-menu').classList.remove('open');
+  });
+  $('btn-req-queue').onclick=openReqQueue;
+  $('btn-roadmap').onclick=()=>openM('mo-roadmap');
+  $('req-signal').onclick=openReqQueue;
+  $('reqq-showresolved').addEventListener('change',loadReqQueue);
+  $('reqq-list').addEventListener('click',e=>{
+    const ap=e.target.closest('[data-apply]'); if(ap){resolveReq(ap.dataset.apply,'applied');return;}
+    const de=e.target.closest('[data-decline]'); if(de)resolveReq(de.dataset.decline,'declined');
+  });
+  $('btn-req-submit').onclick=submitReq;
+  // Request-edit buttons live inside prof-body's innerHTML, which gets
+  // replaced on every renderProf() call — delegate on the container (which
+  // itself persists) rather than rewiring on each render.
+  $('prof-body').addEventListener('click',e=>{
+    const rb=e.target.closest('[data-req]');
+    if(rb)openReq(rb.dataset.req,rb.dataset.table,rb.dataset.cur);
+  });
   $('cfm-ok').onclick=()=>{const cb=cfmCb;closeM('mo-cfm');if(cb)cb();};
   document.querySelectorAll('[data-close]').forEach(b=>{
     b.onclick=()=>closeM(b.dataset.close);
@@ -1624,6 +2157,8 @@ function wire(){
        :TIER==='viewer'?'Ready · signed in'
        :currentUserEmail?'Public view only · for greater access contact whitetim@pdx.edu'
        :'Ready · public view');
+  startLockPolling();
+  startReqPolling();
 })();
 
 /* ── THEME TOGGLE ─────────────────────────────────────────────
