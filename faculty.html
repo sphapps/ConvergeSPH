@@ -224,9 +224,15 @@ tbody tr.clickable{cursor:pointer}
 .repeat-row{display:flex;gap:6px;align-items:center}
 .repeat-row input{flex:1;min-width:0}
 .edu-row .rd{flex:0 0 84px}.edu-row .ry{flex:0 0 92px}
-.doc-row .fm-doc-cat{flex:0 0 130px}
+.doc-row{flex-wrap:wrap}
+.doc-row .fm-doc-cat{flex:0 0 120px}
+.doc-row .fm-doc-sub{flex:1 1 140px;min-width:110px}
+.doc-row .fm-doc-desc{flex:2 1 220px;min-width:160px}
+.doc-row .fm-doc-date{flex:0 0 170px}
+.doc-row .fm-doc-url{flex:2 1 220px;min-width:160px}
 .doc-badge{display:inline-block;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.03em;
   color:var(--teal);background:var(--ltteal,rgba(20,150,150,.12));border-radius:3px;padding:2px 6px;margin-right:8px;vertical-align:middle}
+.doc-sub{font-size:11px;font-weight:600;color:var(--dgray);vertical-align:middle}
 .rrm{flex:0 0 auto;width:28px;height:32px;border:1px solid var(--mgray);background:var(--surface);color:var(--dgray);border-radius:5px;cursor:pointer;font-size:15px;line-height:1}
 .rrm:hover{background:var(--ltred);color:var(--red);border-color:var(--red)}
 .pubdot{color:var(--txgrn);font-size:9px;vertical-align:middle}
@@ -1156,6 +1162,22 @@ const fmtDate=d=>{
   const dt=new Date(d+(String(d).length===10?'T00:00:00':''));
   return isNaN(dt)?esc(d):dt.toLocaleDateString('en-US',{year:'numeric',month:'short',day:'numeric'});
 };
+// Faculty Documents' date accepts three precisions — year, year-month, or a
+// full date — since a source document (e.g. an old HR letter) often only
+// has a year to go on. Validated client-side against this same pattern
+// before save; faculty_documents_doc_date_format enforces it again in the DB.
+const DOC_DATE_RE=/^(\d{4}|\d{4}-(0[1-9]|1[0-2])|\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01]))$/;
+function fmtDocDate(v){
+  if(!v)return '';
+  const s=String(v);
+  if(/^\d{4}$/.test(s))return s;
+  if(/^\d{4}-\d{2}$/.test(s)){
+    const dt=new Date(s+'-01T00:00:00');
+    return isNaN(dt)?esc(s):dt.toLocaleDateString('en-US',{year:'numeric',month:'short'});
+  }
+  if(/^\d{4}-\d{2}-\d{2}$/.test(s))return fmtDate(s);
+  return esc(s);
+}
 
 /* ─── EDIT REQUEST HELPERS ─────────────────────────────────────
    Plain-text snapshots of the requestable sections, used to prefill the
@@ -1264,7 +1286,10 @@ function docsCardHTML(fid,locked){
   const lockSpan=locked?' <span class="lock">🔒 faculty admin</span>':'';
   return `<div class="card"><h3>Documents${lockSpan}</h3>`+docs.map(d=>{
     const url=safeUrl(d.sp_url);
-    return `<div class="longtext"><span class="doc-badge">${esc(d.category||'')}</span>${esc(d.description||'')}`+
+    const sub=N(d.subcategory)?` <span class="doc-sub">${esc(d.subcategory)}</span>`:'';
+    const date=fmtDocDate(d.doc_date);
+    return `<div class="longtext"><span class="doc-badge">${esc(d.category||'')}</span>${sub} ${esc(d.description||'')}`+
+      (date?` <span class="hintr">(${date})</span>`:'')+
       (url?` — <a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--teal)">Open in SharePoint ↗</a>`:'')+
       `</div>`;
   }).join('')+`</div>`;
@@ -1589,16 +1614,19 @@ const NUMCOLS=new Set(['fte_in_sph']);
 const DATECOLS=new Set(['start_date','appt_expiration_date']);
 
 // Faculty Documents row — category (from the admin-editable list), a
-// description, and a SharePoint link. No file is ever stored here; whoever
-// already has SharePoint access to the folder has access to the document
-// itself, same as always.
+// free-text sub-category/detail, a description, an optional document date
+// (year, year-month, or full date), and a SharePoint link. No file is ever
+// stored here; whoever already has SharePoint access to the folder has
+// access to the document itself, same as always.
 function docRowHTML(d){d=d||{};
   const cats=getList('facultyDocCategories');
   const cur=d.category||'';
   const opts=cats.map(c=>`<option value="${esc(c)}"${c===cur?' selected':''}>${esc(c)}</option>`).join('');
   return `<div class="repeat-row doc-row">`+
     `<select class="fm-doc-cat">${opts}</select>`+
+    `<input class="fm-doc-sub" placeholder="Sub-category / detail" value="${esc(d.subcategory||'')}">`+
     `<input class="fm-doc-desc" placeholder="Description" value="${esc(d.description||'')}">`+
+    `<input class="fm-doc-date" placeholder="Date: YYYY, YYYY-MM, or YYYY-MM-DD" value="${esc(d.doc_date||'')}">`+
     `<input class="fm-doc-url" placeholder="SharePoint link (https://…)" value="${esc(d.sp_url||'')}">`+
     `<button type="button" class="rrm" title="Remove">×</button></div>`;
 }
@@ -1661,10 +1689,14 @@ async function saveFac(){
   const before=eid?snap(FAC.find(x=>String(x.id)===String(eid))):null;
   const docRows=readRepeat('fm-docs',r=>({
     category:r.querySelector('.fm-doc-cat').value,
+    subcategory:N(r.querySelector('.fm-doc-sub').value),
     description:N(r.querySelector('.fm-doc-desc').value),
+    doc_date:N(r.querySelector('.fm-doc-date').value),
     sp_url:N(r.querySelector('.fm-doc-url').value),
     created_by:currentUserEmail
   })).filter(d=>d.description&&d.sp_url);
+  const badDate=docRows.find(d=>d.doc_date&&!DOC_DATE_RE.test(d.doc_date));
+  if(badDate){setSS('⚠ Document date must be YYYY, YYYY-MM, or YYYY-MM-DD');return;}
 
   if(eid){
     setSS('Saving…');
@@ -1850,7 +1882,7 @@ function snap(f){
   o.is_program_director=!!f.is_program_director;
   o.is_administrator=!!f.is_administrator;
   o.categories=(f.categories||[]).slice();
-  o.documents=(DOCS[f.id]||[]).map(d=>({category:d.category,description:d.description,sp_url:d.sp_url}));
+  o.documents=(DOCS[f.id]||[]).map(d=>({category:d.category,subcategory:d.subcategory,description:d.description,doc_date:d.doc_date,sp_url:d.sp_url}));
   return o;
 }
 async function logChange(action,fid,name,before,after,entity){
