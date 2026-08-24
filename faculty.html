@@ -236,8 +236,10 @@ tbody tr.clickable{cursor:pointer}
 .doc-cat summary::before{content:'▸ '}
 .doc-cat[open] summary::before{content:'▾ '}
 .doc-count{font-size:11px;font-weight:400;color:var(--dgray);margin-left:4px}
-.doc-item{padding:3px 0 3px 16px}
-.doc-sub{font-size:11px;font-weight:600;color:var(--dgray);vertical-align:middle}
+.doc-subgroup{margin:2px 0 10px 14px;padding-left:10px;border-left:2px solid var(--mgray)}
+.doc-subgroup:last-child{margin-bottom:2px}
+.doc-subhead{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--teal);margin:2px 0 3px}
+.doc-item{padding:2px 0}
 .rrm{flex:0 0 auto;width:28px;height:32px;border:1px solid var(--mgray);background:var(--surface);color:var(--dgray);border-radius:5px;cursor:pointer;font-size:15px;line-height:1}
 .rrm:hover{background:var(--ltred);color:var(--red);border-color:var(--red)}
 .pubdot{color:var(--txgrn);font-size:9px;vertical-align:middle}
@@ -1326,24 +1328,40 @@ function docDateSortKey(v){
   if(/^\d{4}-\d{2}$/.test(s))return s+'-31';
   return s;
 }
+// Splits an already-sorted (by sortDocs) item list into consecutive runs
+// sharing the same sub-category, so each run can get its own sub-header
+// rather than repeating the sub-category name inline on every row.
+function subcatGroups(items){
+  const groups=[];
+  let cur=null;
+  items.forEach(d=>{
+    const key=N(d.subcategory)||'';
+    if(!cur||cur.key!==key){cur={key,label:N(d.subcategory),items:[]};groups.push(cur);}
+    cur.items.push(d);
+  });
+  return groups;
+}
+function docItemHTML(d){
+  const url=safeUrl(d.sp_url);
+  const date=fmtDocDate(d.doc_date);
+  return `<div class="longtext doc-item">${esc(d.description||'')}`+
+    (date?` <span class="hintr">(${date})</span>`:'')+
+    (url?` — <a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--teal)">Open in SharePoint ↗</a>`:'')+
+    `</div>`;
+}
 function docsCardHTML(fid,locked){
   const docs=DOCS[fid]||[];
   if(!docs.length)return '';
   const lockSpan=locked?' <span class="lock">🔒 faculty admin</span>':'';
   const body=groupDocsByCategory(docs).map(g=>{
-    const rows=g.items.map(d=>{
-      const url=safeUrl(d.sp_url);
-      const sub=N(d.subcategory)?`<span class="doc-sub">${esc(d.subcategory)}</span> `:'';
-      const date=fmtDocDate(d.doc_date);
-      return `<div class="longtext doc-item">${sub}${esc(d.description||'')}`+
-        (date?` <span class="hintr">(${date})</span>`:'')+
-        (url?` — <a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--teal)">Open in SharePoint ↗</a>`:'')+
-        `</div>`;
-    }).join('');
     const docCount=g.items.length;
     const typeCount=new Set(g.items.map(d=>N(d.subcategory)||'')).size;
     const countLabel=`${docCount} document${docCount===1?'':'s'}, ${typeCount} type${typeCount===1?'':'s'}`;
-    return `<details class="doc-cat" open><summary>${esc(g.category)} <span class="doc-count">${countLabel}</span></summary>${rows}</details>`;
+    const subBody=subcatGroups(g.items).map(sg=>{
+      const head=sg.label?`<div class="doc-subhead">${esc(sg.label)}</div>`:'';
+      return `<div class="doc-subgroup">${head}${sg.items.map(docItemHTML).join('')}</div>`;
+    }).join('');
+    return `<details class="doc-cat" open><summary>${esc(g.category)} <span class="doc-count">${countLabel}</span></summary>${subBody}</details>`;
   }).join('');
   return `<div class="card"><h3>Documents${lockSpan}</h3>${body}</div>`;
 }
