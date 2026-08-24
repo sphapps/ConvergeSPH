@@ -224,18 +224,28 @@ tbody tr.clickable{cursor:pointer}
 .repeat-row{display:flex;gap:6px;align-items:center}
 .repeat-row input{flex:1;min-width:0}
 .edu-row .rd{flex:0 0 84px}.edu-row .ry{flex:0 0 92px}
-.doc-row{flex-wrap:wrap}
-.doc-row .dm-doc-cat{flex:0 0 120px}
-.doc-row .dm-doc-sub{flex:1 1 140px;min-width:110px}
-.doc-row .dm-doc-desc{flex:2 1 220px;min-width:160px}
-.doc-row .dm-doc-date{flex:0 0 170px}
-.doc-row .dm-doc-url{flex:2 1 220px;min-width:160px}
+.mc.lg{max-width:1040px}
+.dm-toolbar{display:flex;gap:8px;align-items:center;margin:10px 0}
+.dm-toolbar #dm-search{flex:1;min-width:0}
+.dm-col-head,.doc-row{display:grid;grid-template-columns:100px 130px minmax(160px,1fr) 130px minmax(160px,1fr) 28px;gap:8px;align-items:center}
+.dm-col-head{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.03em;color:var(--dgray);padding:0 0 4px;border-bottom:1px solid var(--mgray);margin-bottom:2px}
+.doc-row{padding:4px 0}
+.doc-row input,.doc-row select{font-size:12px;padding:5px 6px}
+.doc-cat-edit{border:1px solid var(--mgray);border-radius:6px;margin-bottom:8px;overflow:hidden}
+.doc-cat-edit summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--navytx);padding:8px 10px;list-style:none;
+  display:flex;align-items:center;gap:8px;background:var(--bg2,rgba(0,0,0,.02))}
+.doc-cat-edit summary::-webkit-details-marker{display:none}
+.doc-cat-edit summary::before{content:'▸';font-size:11px}
+.doc-cat-edit[open] summary::before{content:'▾'}
+.doc-cat-edit summary .dm-cat-add{margin-left:auto}
+.doc-cat-edit .dm-rows{padding:6px 10px 10px}
+.doc-cat-edit .dm-rows:empty::after{content:'No documents yet in this category.';display:block;font-size:11px;color:var(--dgray);padding:4px 0}
+.doc-count{font-size:11px;font-weight:400;color:var(--dgray)}
 .doc-cat{margin:0 0 6px}
 .doc-cat summary{cursor:pointer;font-weight:600;font-size:13px;color:var(--navytx);padding:4px 0;list-style:none}
 .doc-cat summary::-webkit-details-marker{display:none}
 .doc-cat summary::before{content:'▸ '}
 .doc-cat[open] summary::before{content:'▾ '}
-.doc-count{font-size:11px;font-weight:400;color:var(--dgray);margin-left:4px}
 .doc-subgroup{margin:2px 0 10px 14px;padding-left:10px;border-left:2px solid var(--mgray)}
 .doc-subgroup:last-child{margin-bottom:2px}
 .doc-subhead{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--teal);margin:2px 0 3px}
@@ -498,14 +508,19 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
 
 <!-- ── DOCUMENTS MODAL ──────────────────────────────────────── -->
 <div class="mo" id="mo-docs">
-  <div class="mc">
+  <div class="mc lg">
     <div class="mh"><h3 id="dm-title">Documents</h3><button class="x" data-close="mo-docs">×</button></div>
-    <div class="mb f">
-      <div class="fg">
-        <div class="sect">Documents <span class="hintr">Metadata only — no files stored here</span><button type="button" class="addrow" id="dm-docs-add">+ Add</button></div>
-        <div class="full hint">Anyone with existing SharePoint access to a linked folder can already open the document — this just points to it.</div>
-        <div class="full repeat" id="dm-docs"></div>
+    <div class="mb">
+      <div class="hint">Anyone with existing SharePoint access to a linked folder can already open the document — this just points to it. Grouped by category; click a category to expand it.</div>
+      <div class="dm-toolbar">
+        <input type="search" id="dm-search" placeholder="Filter by category, sub-category, or description…">
+        <button type="button" class="btn btn-s" id="dm-expand-all">Expand all</button>
+        <button type="button" class="btn btn-s" id="dm-collapse-all">Collapse all</button>
       </div>
+      <div class="dm-col-head">
+        <span>Category</span><span>Sub-category</span><span>Description</span><span>Date</span><span>Link</span><span></span>
+      </div>
+      <div id="dm-docs"></div>
     </div>
     <div class="mf">
       <button class="btn" data-close="mo-docs">Cancel</button>
@@ -1708,13 +1723,19 @@ const DATECOLS=new Set(['start_date','appt_expiration_date']);
 function docRowHTML(d){d=d||{};
   const cats=getList('facultyDocCategories');
   const cur=d.category||'';
-  const opts=cats.map(c=>`<option value="${esc(c)}"${c===cur?' selected':''}>${esc(c)}</option>`).join('');
+  // A category value can outlive its list entry (someone edited the list
+  // after this document was filed) — keep it selectable rather than
+  // silently swapping it to whatever option happens to render first.
+  const list=(cur&&!cats.includes(cur))?[...cats,cur]:cats;
+  const opts=list.map(c=>
+    `<option value="${esc(c)}"${c===cur?' selected':''}>${esc(c)}${(c===cur&&!cats.includes(c))?' (removed from list)':''}</option>`
+  ).join('');
   return `<div class="repeat-row doc-row">`+
     `<select class="dm-doc-cat">${opts}</select>`+
-    `<input class="dm-doc-sub" placeholder="Sub-category / detail" value="${esc(d.subcategory||'')}">`+
+    `<input class="dm-doc-sub" placeholder="e.g. Annual" value="${esc(d.subcategory||'')}">`+
     `<input class="dm-doc-desc" placeholder="Description" value="${esc(d.description||'')}">`+
-    `<input class="dm-doc-date" placeholder="Date: YYYY, YYYY-MM, or YYYY-MM-DD" value="${esc(d.doc_date||'')}">`+
-    `<input class="dm-doc-url" placeholder="SharePoint link (https://…)" value="${esc(d.sp_url||'')}">`+
+    `<input class="dm-doc-date" placeholder="YYYY[-MM[-DD]]" value="${esc(d.doc_date||'')}">`+
+    `<input class="dm-doc-url" placeholder="https://…" value="${esc(d.sp_url||'')}">`+
     `<button type="button" class="rrm" title="Remove">×</button></div>`;
 }
 
@@ -1747,6 +1768,57 @@ function openFM(id){
   roleDetailSync('fm-pd','fm-pd-detail');
   roleDetailSync('fm-admin','fm-admin-detail');
   openM('mo-fac');
+}
+/* ─── DOCUMENTS MODAL ──────────────────────────────────────── */
+let dmId=null;   // faculty id whose documents are being edited
+function openDM(fid){
+  dmId=fid;
+  const f=FAC.find(x=>String(x.id)===String(fid));
+  $('dm-title').textContent='Documents — '+(f?full(f):'');
+  renderDocEditor(DOCS[fid]||[]);
+  $('dm-search').value='';
+  openM('mo-docs');
+}
+// One collapsible group per category, in the same admin-configured order
+// used for display — including categories the faculty member has zero
+// documents in yet, so there's always somewhere to add a first one. Groups
+// start collapsed; the point of grouping at all is to make a long list
+// (dozens, a hundred+ documents) navigable without one giant scroll.
+function renderDocEditor(docs){
+  const order=getList('facultyDocCategories');
+  const groups={};
+  docs.forEach(d=>{
+    const cat=d.category||'Uncategorized';
+    (groups[cat]=groups[cat]||[]).push(d);
+  });
+  const extra=Object.keys(groups).filter(c=>!order.includes(c)).sort((a,b)=>a.localeCompare(b));
+  $('dm-docs').innerHTML=[...order,...extra].map(cat=>{
+    const items=sortDocs(groups[cat]||[]);
+    return `<details class="doc-cat-edit" data-cat="${esc(cat)}">`+
+      `<summary>${esc(cat)} <span class="doc-count">${items.length}</span>`+
+      `<button type="button" class="btn btn-s dm-cat-add" data-cat="${esc(cat)}">+ Add</button></summary>`+
+      `<div class="dm-rows">${items.map(d=>docRowHTML(d)).join('')}</div>`+
+      `</details>`;
+  }).join('');
+}
+// Filters by category/sub-category/description across every group at once;
+// a group with no surviving matches hides entirely, and any group that does
+// match forces itself open so the hit isn't buried behind a collapsed header.
+function filterDocEditor(q){
+  q=q.trim().toLowerCase();
+  document.querySelectorAll('#dm-docs details.doc-cat-edit').forEach(det=>{
+    let any=false;
+    det.querySelectorAll('.repeat-row').forEach(row=>{
+      const cat=row.querySelector('.dm-doc-cat').selectedOptions[0]?.textContent||'';
+      const sub=row.querySelector('.dm-doc-sub').value;
+      const desc=row.querySelector('.dm-doc-desc').value;
+      const hit=!q||`${cat} ${sub} ${desc}`.toLowerCase().includes(q);
+      row.style.display=hit?'':'none';
+      if(hit)any=true;
+    });
+    det.style.display=(q&&!any)?'none':'';
+    if(q&&any)det.open=true;
+  });
 }
 /* Detail box is only relevant when its role box is ticked. */
 function roleDetailSync(box,detail){
@@ -1797,16 +1869,7 @@ async function saveFac(){
   }
 }
 
-/* ─── DOCUMENTS MODAL ──────────────────────────────────────── */
-let dmId=null;   // faculty id whose documents are being edited
-function openDM(fid){
-  dmId=fid;
-  const f=FAC.find(x=>String(x.id)===String(fid));
-  $('dm-title').textContent='Documents — '+(f?full(f):'');
-  const docs=DOCS[fid]||[];
-  $('dm-docs').innerHTML=(docs.length?docs:[{}]).map(d=>docRowHTML(d)).join('');
-  openM('mo-docs');
-}
+/* ─── DOCUMENTS MODAL SAVE ─────────────────────────────────── */
 async function saveDocs(){
   const fid=dmId; if(!fid)return;
   const f=FAC.find(x=>String(x.id)===String(fid));
@@ -2393,10 +2456,24 @@ function wire(){
   $('pm-edu-add').onclick=()=>$('pm-edu').insertAdjacentHTML('beforeend',eduRowHTML());
   $('pm-res-add').onclick=()=>$('pm-res').insertAdjacentHTML('beforeend',resRowHTML());
   $('pm-awd-add').onclick=()=>$('pm-awd').insertAdjacentHTML('beforeend',awdRowHTML());
-  $('dm-docs-add').onclick=()=>$('dm-docs').insertAdjacentHTML('beforeend',docRowHTML());
-  ['pm-edu','pm-res','pm-awd','dm-docs'].forEach(cid=>$(cid).addEventListener('click',e=>{
+  ['pm-edu','pm-res','pm-awd'].forEach(cid=>$(cid).addEventListener('click',e=>{
     const rm=e.target.closest('.rrm'); if(rm)rm.closest('.repeat-row').remove();
   }));
+  $('dm-docs').addEventListener('click',e=>{
+    const add=e.target.closest('.dm-cat-add');
+    if(add){
+      e.preventDefault();   // clicking inside <summary> would otherwise also toggle it
+      const det=add.closest('details');
+      det.open=true;
+      det.querySelector('.dm-rows').insertAdjacentHTML('beforeend',docRowHTML({category:add.dataset.cat}));
+      return;
+    }
+    const rm=e.target.closest('.rrm');
+    if(rm)rm.closest('.repeat-row').remove();
+  });
+  $('dm-search').addEventListener('input',e=>filterDocEditor(e.target.value));
+  $('dm-expand-all').onclick=()=>document.querySelectorAll('#dm-docs details.doc-cat-edit').forEach(d=>d.open=true);
+  $('dm-collapse-all').onclick=()=>document.querySelectorAll('#dm-docs details.doc-cat-edit').forEach(d=>d.open=false);
   $('btn-save-docs').onclick=saveDocs;
   $('btn-manage-lists').onclick=openLists;
   $('ld-key').addEventListener('change',e=>loadListIntoEditor(e.target.value));
