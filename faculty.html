@@ -1340,7 +1340,10 @@ function docsCardHTML(fid,locked){
         (url?` — <a href="${esc(url)}" target="_blank" rel="noopener" style="color:var(--teal)">Open in SharePoint ↗</a>`:'')+
         `</div>`;
     }).join('');
-    return `<details class="doc-cat" open><summary>${esc(g.category)} <span class="doc-count">${g.items.length}</span></summary>${rows}</details>`;
+    const docCount=g.items.length;
+    const typeCount=new Set(g.items.map(d=>N(d.subcategory)||'')).size;
+    const countLabel=`${docCount} document${docCount===1?'':'s'}, ${typeCount} type${typeCount===1?'':'s'}`;
+    return `<details class="doc-cat" open><summary>${esc(g.category)} <span class="doc-count">${countLabel}</span></summary>${rows}</details>`;
   }).join('');
   return `<div class="card"><h3>Documents${lockSpan}</h3>${body}</div>`;
 }
