@@ -490,7 +490,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
           <thead><tr>
             <th data-col="term">Term</th><th data-col="prefix">Prefix</th><th data-col="fullName">Course</th>
             <th data-col="section">Section</th><th style="text-align:center">Cr</th><th data-col="instructor1">Instructor(s)</th><th data-col="days">Days</th><th data-col="time">Time</th>
-            <th data-col="modality">Modality</th><th style="text-align:center" title="Restrictions / Permission required to register / Night class (starts ≥ 4pm) / Online">Flags</th><th data-col="totalCap">Cap</th><th>Enroll</th>
+            <th data-col="modality">Modality</th><th style="text-align:center" title="Restrictions / Permission required to register / Night class (starts ≥ 4pm) / Online">Flags</th><th data-col="totalCap">Cap</th><th class="admin-only" style="display:none">Enroll</th>
             <th class="admin-only" style="display:none">Edit</th>
           </tr></thead>
           <tbody id="sched-tb"></tbody>
@@ -1980,6 +1980,7 @@ function delAY(ay){
 
 function renderSched(){
   const canSeeEnr=isAdmin||isPD;
+  const groupColspan=canSeeEnr?13:12;
   const term=val('f-term'),pfx=val('f-pfx'),mod=val('f-mod'),lvl=val('f-level'),q=val('f-q').toLowerCase();
   let rows=DB.offerings.filter(o=>{
     // Offerings from other academic years are loaded but not shown — the AY
@@ -2019,11 +2020,11 @@ function renderSched(){
     th.classList.remove('sa','sd');
     if(th.dataset.col===sortCol)th.classList.add(sortDir===1?'sa':'sd');
   });
-  if(!rows.length){$('sched-tb').innerHTML=`<tr><td colspan="13" class="nores">No offerings match filters.</td></tr>`;return;}
+  if(!rows.length){$('sched-tb').innerHTML=`<tr><td colspan="${groupColspan}" class="nores">No offerings match filters.</td></tr>`;return;}
   let h='',lt=null,lp=null;
   rows.forEach(o=>{
-    if(o.term!==lt){h+=`<tr class="gt"><td colspan="13">${esc(TL[o.term]??o.term)}</td></tr>`;lt=o.term;lp=null;}
-    if(o.prefix!==lp){h+=`<tr class="gp"><td colspan="13">${esc(o.prefix)}</td></tr>`;lp=o.prefix;}
+    if(o.term!==lt){h+=`<tr class="gt"><td colspan="${groupColspan}">${esc(TL[o.term]??o.term)}</td></tr>`;lt=o.term;lp=null;}
+    if(o.prefix!==lp){h+=`<tr class="gp"><td colspan="${groupColspan}">${esc(o.prefix)}</td></tr>`;lp=o.prefix;}
     const i2=o.instructor2?` &amp; ${facLink(o.instructor2)}`:'';
     // Per-term, not per-user: a PD may edit Spring while Fall is frozen.
     const canT=canEditTerm(o.term);
@@ -2068,7 +2069,7 @@ function renderSched(){
       <td>${facLink(o.instructor1)}${i2}</td>
       <td>${esc(o.days)}</td><td style="white-space:nowrap">${esc(o.time)}</td>
       <td>${modPill(o.modality,o.lms)}</td><td style="text-align:center;white-space:nowrap;font-size:13px">${flags}</td><td style="text-align:center">${esc(o.totalCap)}</td>
-      <td>${canSeeEnr?`<input type="number" class="enr ei" min="0" step="1" data-id="${esc(o.id)}" value="${esc(o.enrollment)}" placeholder="–" ${ro}>`:`<span style="color:#94A3B8" title="Enrollment is visible to Program Directors and Admins">–</span>`}</td>
+      ${canSeeEnr?`<td><input type="number" class="enr ei" min="0" step="1" data-id="${esc(o.id)}" value="${esc(o.enrollment)}" placeholder="–" ${ro}></td>`:''}
       ${eb}
     </tr>`;
   });
