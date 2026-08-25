@@ -3634,6 +3634,25 @@ function expCht(){
    devices — for a chosen date range, and writes a plain-text report.
    The date default follows "last run" via localStorage (per device). */
 const RP_LAST='sph_report_lastrun';
+// Paginated fetch for change_log reads, mirroring the fetchAll pattern in
+// loadData(): a single select is capped by the server (~1000 rows), and
+// change_log volume can exceed that within a normal report window — silently
+// truncating the tail (the most-recent rows, since queries here are ordered
+// ascending), which is exactly what makes a truncated report look complete.
+// Loop in ranges until a short page signals the end. buildQuery is called
+// fresh each iteration (fresh builder instance per Supabase client rules) and
+// must return an already-filtered/ordered query; this helper appends .range().
+async function fetchAllRows(buildQuery){
+  const PAGE=1000; let from=0; const all=[];
+  for(;;){
+    const {data,error}=await buildQuery().range(from,from+PAGE-1);
+    if(error)return {data:null,error};
+    all.push(...(data||[]));
+    if(!data||data.length<PAGE)break;
+    from+=PAGE;
+  }
+  return {data:all,error:null};
+}
 async function openReport(){
   // Default "From" to the last-run timestamp on this device (or 30 days back).
   let from;
@@ -3644,7 +3663,7 @@ async function openReport(){
   // Populate the editor filter from distinct actors already in the log.
   const sel=$('rp-actor'); sel.innerHTML='<option value="">All editors</option>';
   try{
-    const {data}=await sb.from('change_log').select('actor_email').not('actor_email','is',null);
+    const {data}=await fetchAllRows(()=>sb.from('change_log').select('actor_email').not('actor_email','is',null));
     const emails=[...new Set((data||[]).map(r=>r.actor_email).filter(Boolean))].sort();
     emails.forEach(e=>{const o=document.createElement('option');o.value=e;o.textContent=e;sel.appendChild(o);});
   }catch(e){}
@@ -3661,11 +3680,15 @@ async function genReport(){
   $('rp-status').textContent='Generating…';
   // Fetch everything in range (undo rows included) so we can pair undos with
   // the originals they reversed, then drop BOTH — leaving only net changes.
-  let q=sb.from('change_log').select('*')
-        .gte('created_at',fromISO).lte('created_at',toISO)
-        .order('created_at',{ascending:true});
-  if(actor)q=q.eq('actor_email',actor);
-  const {data,error}=await q;
+  // Paginated (fetchAllRows) so a large raw row count within the window can't
+  // silently truncate the tail — see fetchAllRows comment above.
+  const {data,error}=await fetchAllRows(()=>{
+    let qq=sb.from('change_log').select('*')
+          .gte('created_at',fromISO).lte('created_at',toISO)
+          .order('created_at',{ascending:true});
+    if(actor)qq=qq.eq('actor_email',actor);
+    return qq;
+  });
   if(error){$('rp-status').textContent='⚠ '+error.message;return;}
   const all=data||[];
   const reverted=new Set(all.filter(r=>r.is_undo&&r.reverts_id).map(r=>r.reverts_id));
