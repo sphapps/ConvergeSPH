@@ -1650,6 +1650,7 @@ function go(id,push=true){
   // history entry — that entry would be indistinguishable from the first,
   // so "Back to directory" would need two clicks to actually get there.
   const dup=push&&history.state&&String(history.state.id??'')===String(id??'');
+  console.log('[DEBUG go] id=',id,'push=',push,'dup=',dup,'prevState=',JSON.stringify(history.state));
   if(push&&!dup)history.pushState({id},'',u);
   route(id);
 }
@@ -1666,10 +1667,12 @@ function goRepl(id){
    deep link from index.html leaves state null; there is no directory entry
    behind us then, so fall through to a push. */
 function goBack(){
+  console.log('[DEBUG goBack] history.state=',JSON.stringify(history.state),'url=',location.href);
   if(history.state&&history.state.id){history.back();return;}
   go(null);
 }
 function route(id){
+  console.log('[DEBUG route] id=',id,new Error().stack.split('\n').slice(1,4).join(' | '));
   const prof=!!id;
   $('v-dir').classList.toggle('active',!prof);
   $('v-prof').classList.toggle('active',prof);
@@ -1699,7 +1702,8 @@ function restoreRow(){
   tr.classList.add('rowflash');
   setTimeout(()=>tr.classList.remove('rowflash'),1400);
 }
-window.addEventListener('popstate',()=>{
+window.addEventListener('popstate',(ev)=>{
+  console.log('[DEBUG popstate] event.state=',JSON.stringify(ev.state),'url=',location.href);
   route(new URL(window.location).searchParams.get('id'));
 });
 
