@@ -166,7 +166,7 @@ td{padding:7px 10px;vertical-align:middle}
 .pill{display:inline-block;padding:2px 8px;border-radius:10px;font-size:11px;font-weight:500;background:var(--pillbg);color:var(--pilltx)}
 .p-ip{background:var(--ltgrn);color:var(--txgrn)}.p-oa{background:var(--ltbluep);color:var(--txblue)}
 .p-os{background:var(--ltpurp);color:var(--txpurp)}.p-hy{background:var(--ltyel);color:var(--txyel)}
-.lms-sub{display:block;font-size:10px;color:var(--dgray);margin-top:2px;line-height:1.3}
+.lms-sub{display:block;font-size:12px;font-weight:600;color:var(--navytx);margin-top:3px;line-height:1.3}
 
 /* ═══ MODALS ════════════════════════════════════════════════ */
 .mo{display:none;position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:1000;align-items:center;justify-content:center}
@@ -883,7 +883,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       <div><label>Days</label><select id="om-days"></select></div>
       <div><label>Start / End Time</label><input id="om-time" placeholder="e.g. 1300-1450"></div>
       <div><label>Modality</label><select id="om-mod"><option value="">–</option><option>Online (async)</option><option>Online (sync)</option><option>Hybrid</option><option>In-Person</option><option>By Arrangement</option><option>Dept Arranged</option><option>Attend Anywhere</option></select></div>
-      <div><label>LMS</label><select id="om-lms"><option value="">–</option></select><div class="fhint">Only when modality is not In-Person.</div></div>
+      <div><label>LMS</label><select id="om-lms"><option value="">–</option></select></div>
       <div><label>Where Roomed</label><input id="om-room" placeholder="e.g. OHSU, PSU, Online"></div>
       <div><label>Room #</label><input id="om-roomn"></div>
       <div class="fsec">Caps &amp; Enrollment</div>
@@ -3001,8 +3001,7 @@ function openOM(id){
 }
 function toggleLmsField(){
   const sel=$('om-lms'); if(!sel)return;
-  if(val('om-mod')==='In-Person'){sel.value='';sel.disabled=true;}
-  else sel.disabled=false;
+  sel.disabled=false;
 }
 function togglePotRow(){
   const isSummer = /^Summer/i.test(val('om-term'));
@@ -3175,7 +3174,7 @@ function offRow(d){
   const T=v=>{const s=(v==null?'':String(v)).trim();return s===''?null:s;};
   return {source_id:d.id, course_id:_courseUuid(d.courseId),
     instructor1_id:_facIdByDisp(d.instructor1), instructor2_id:_facIdByDisp(d.instructor2),
-    term:d.term, days:T(d.days), time:T(d.time), modality:T(d.modality), lms:(String(d.modality||'').trim()==='In-Person'?null:T(d.lms)),
+    term:d.term, days:T(d.days), time:T(d.time), modality:T(d.modality), lms:T(d.lms),
     roomed:T(d.roomed), room_number:T(d.roomNumber), total_cap:I(d.totalCap), enrollment:I(d.enrollment),
     ohsu_cap1:I(d.ohsuCap1), ohsu_cap2:I(d.ohsuCap2), psu_cap1:I(d.psuCap1), psu_cap2:I(d.psuCap2),
     restrict_ohsu:T(d.restrictOhsu), restrict_psu:T(d.restrictPsu), psu_text:T(d.psuText),
@@ -3199,7 +3198,7 @@ function saveOff(){
   const data={id:eidO??genid(),term:val('om-term'),prefix:c.prefix,courseNumber:c.number,courseId:cid,
     fullName:crsFullName(c.prefix,c.number,c.number2,c.title,c.section),section:c.section||'',
     instructor1:val('om-i1'),instructor2:val('om-i2'),
-    i1Email:'',i2Email:'',days:val('om-days'),time:val('om-time'),modality:val('om-mod'),lms:(val('om-mod')==='In-Person'?'':val('om-lms')),
+    i1Email:'',i2Email:'',days:val('om-days'),time:val('om-time'),modality:val('om-mod'),lms:val('om-lms'),
     roomed:val('om-room'),roomNumber:val('om-roomn'),grugb:c.grugb||'GR',totalCap:val('om-cap'),
     enrollment:val('om-enroll'),ohsuCap1:val('om-o1'),ohsuCap2:val('om-o2'),psuCap1:val('om-p1'),
     psuCap2:val('om-p2'),restrictOhsu:val('om-ro'),restrictPsu:val('om-rp'),psuText:val('om-pt'),adminNotes:val('om-notes'),
