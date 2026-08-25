@@ -1645,7 +1645,12 @@ function teachHTML(fid){
 function go(id,push=true){
   const u=new URL(window.location);
   if(id)u.searchParams.set('id',id); else u.searchParams.delete('id');
-  if(push)history.pushState({id},'',u);
+  // A repeat call for the SAME id we're already showing (e.g. a double-click
+  // on a directory row firing two click events) must not stack a second
+  // history entry — that entry would be indistinguishable from the first,
+  // so "Back to directory" would need two clicks to actually get there.
+  const dup=push&&history.state&&String(history.state.id??'')===String(id??'');
+  if(push&&!dup)history.pushState({id},'',u);
   route(id);
 }
 /* Replace the current entry rather than stacking a new one — used after a
