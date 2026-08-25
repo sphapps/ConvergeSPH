@@ -1979,6 +1979,7 @@ function delAY(ay){
 }
 
 function renderSched(){
+  const canSeeEnr=isAdmin||isPD;
   const term=val('f-term'),pfx=val('f-pfx'),mod=val('f-mod'),lvl=val('f-level'),q=val('f-q').toLowerCase();
   let rows=DB.offerings.filter(o=>{
     // Offerings from other academic years are loaded but not shown — the AY
@@ -2061,19 +2062,25 @@ function renderSched(){
     const flags=restr+permReq+(isNight(o)?'<span title="Night class (starts ≥ 4pm)">🌙</span>':'')+(isOnline(o)?'<span title="Online">🖥️</span>':'');
     h+=`<tr${incomplete?' class="incomplete"':''} data-uuid="${esc(o._uuid||'')}">
       <td>${termBadge(o.term)}</td><td><strong>${esc(o.prefix)}</strong></td>
-      <td style="max-width:260px">${nameOpen}${esc(o.fullName)}${nameClose}${warnMark}${noPrint}${noteInd}${potBadge}${discBadge}</td>
+      <td style="max-width:260px">${nameOpen}${esc(schedCourseDisp(o))}${nameClose}${warnMark}${noPrint}${noteInd}${potBadge}${discBadge}</td>
       <td style="text-align:center">${o.section?`<span class="secpill">${esc(o.section)}</span>`:''}</td>
       <td style="text-align:center">${esc(_crsT&&_crsT.credits||'')}</td>
       <td>${facLink(o.instructor1)}${i2}</td>
       <td>${esc(o.days)}</td><td style="white-space:nowrap">${esc(o.time)}</td>
       <td>${modPill(o.modality,o.lms)}</td><td style="text-align:center;white-space:nowrap;font-size:13px">${flags}</td><td style="text-align:center">${esc(o.totalCap)}</td>
-      <td><input type="number" class="enr ei" min="0" step="1" data-id="${esc(o.id)}" value="${esc(o.enrollment)}" placeholder="–" ${ro}></td>
+      <td>${canSeeEnr?`<input type="number" class="enr ei" min="0" step="1" data-id="${esc(o.id)}" value="${esc(o.enrollment)}" placeholder="–" ${ro}>`:`<span style="color:#94A3B8" title="Enrollment is visible to Program Directors and Admins">–</span>`}</td>
       ${eb}
     </tr>`;
   });
   $('sched-tb').innerHTML=h;
 }
 function sortSched(col){if(sortCol===col)sortDir*=-1;else{sortCol=col;sortDir=1;}renderSched();}
+// The Prefix column already shows the prefix, so the Course column drops the
+// redundant "PFX - " lead-in from fullName (e.g. "BSTA - 500: Title" → "500: Title").
+function schedCourseDisp(o){
+  const lead=o.prefix?o.prefix+' - ':'';
+  return(o.fullName&&lead&&o.fullName.startsWith(lead))?o.fullName.slice(lead.length):(o.fullName||'');
+}
 function updateEnroll(id,v){
   const o=DB.offerings.find(x=>x.id===id);if(!o)return;
   // Enrollment is a headcount — negatives are always a typo. Revert the field
