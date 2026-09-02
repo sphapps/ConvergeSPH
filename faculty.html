@@ -427,6 +427,7 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
         <div><label>Role When Active</label><input id="fm-role"></div>
         <div><label>FTE in SPH</label><input id="fm-fte" type="number" step="0.01"></div>
         <div><label>Start Date</label><input id="fm-start" type="date"></div>
+        <div><label>End Date</label><input id="fm-end" type="date" placeholder="Leave date, if applicable"></div>
         <div><label>Appt Expiration Date</label><input id="fm-exp" type="date"></div>
 
         <div class="sect">Identifiers</div>
@@ -1226,7 +1227,8 @@ function contactSummary(f){
   return [['Email',f.email],['Secondary Email',f.secondary_email],['SPH Association',f.sph_association],
     ['Appointment Type',f.appointment_type],['Employer',f.employer],
     ['OHSU Employment Org',f.ohsu_employment_org],['Role When Active',f.role_when_active],
-    ['FTE in SPH',f.fte_in_sph],['Start Date',f.start_date?fmtDate(f.start_date):'']]
+    ['FTE in SPH',f.fte_in_sph],['Start Date',f.start_date?fmtDate(f.start_date):''],
+    ['End Date',f.end_date?fmtDate(f.end_date):'']]
     .filter(([,v])=>N(v)).map(([k,v])=>`${k}: ${v}`).join('\n');
 }
 const eduSummary=eds=>(eds||[]).map(e=>[e.degree,e.institution,e.field,e.year_text].filter(N).join(', ')).join('\n');
@@ -1524,6 +1526,7 @@ function renderProf(id){
       ${fld('Role When Active',f.role_when_active)}
       ${fld('FTE in SPH',f.fte_in_sph)}
       ${fld('Start Date',f.start_date,fmtDate)}
+      ${fld('End Date',f.end_date,fmtDate)}
     </div></div>`;
   }
 
@@ -1720,7 +1723,7 @@ const FM={ // element id → faculty column
   'fm-email2':'secondary_email','fm-unit':'sph_unit','fm-pron':'pronouns',
   'fm-rank':'rank','fm-appt':'appointment_type','fm-assoc':'sph_association',
   'fm-employer':'employer','fm-org':'ohsu_employment_org','fm-role':'role_when_active',
-  'fm-fte':'fte_in_sph','fm-start':'start_date','fm-exp':'appt_expiration_date',
+  'fm-fte':'fte_in_sph','fm-start':'start_date','fm-end':'end_date','fm-exp':'appt_expiration_date',
   'fm-pid':'primary_id','fm-ohsu':'ohsu_id','fm-psu':'psu_id',
   'fm-nrt':'next_review_type','fm-nry':'next_review_year',
   'fm-lrt':'last_review_type','fm-lry':'last_review_year',
@@ -1729,7 +1732,7 @@ const FM={ // element id → faculty column
   'fm-pd-detail':'program_director_detail','fm-admin-detail':'administrator_detail'
 };
 const NUMCOLS=new Set(['fte_in_sph']);
-const DATECOLS=new Set(['start_date','appt_expiration_date']);
+const DATECOLS=new Set(['start_date','end_date','appt_expiration_date']);
 
 // Faculty Documents row — category (from the admin-editable list), a
 // free-text sub-category/detail, a description, an optional document date
@@ -2099,6 +2102,7 @@ const RP_FAC_LABELS={
   sph_unit:'SPH Unit',pronouns:'Pronouns',rank:'Rank',appointment_type:'Appointment Type',
   sph_association:'SPH Association',employer:'Employer',ohsu_employment_org:'OHSU Employment Org',
   role_when_active:'Role When Active',fte_in_sph:'FTE in SPH',start_date:'Start Date',
+  end_date:'End Date',
   appt_expiration_date:'Appt Expiration',primary_id:'Primary ID',ohsu_id:'OHSU ID',psu_id:'PSU ID',
   next_review_type:'Next Review Type',next_review_year:'Next Review Year',
   last_review_type:'Last Review Type',last_review_year:'Last Review Year',
