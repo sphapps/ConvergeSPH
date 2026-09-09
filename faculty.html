@@ -6,7 +6,7 @@
 <title>ConvergeSPH — Faculty Directory</title>
 <!-- Theme: applied before first paint so there is no white flash on load.
      Explicit choice wins; otherwise follow the OS setting. Shares the
-     'sph-theme' key with index.html, so the two apps stay in step. -->
+     'sph-theme' key with the other ConvergeSPH pages, so all apps stay in step. -->
 <script>
 (function(){var t=null;try{t=localStorage.getItem('sph-theme');}catch(e){}
  if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}
@@ -15,7 +15,7 @@
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <style>
 /* ═══ TOKENS (shared with the scheduling app) ════════════════
-   Kept in sync with index.html — if you change a value here, change it there.
+   Kept in sync with scheduling.html — if you change a value here, change it there.
 
    Two naming notes:
    · --navy is a BACKGROUND. --navytx is the same colour used as TEXT. They are
@@ -69,7 +69,7 @@ header a.xlink:hover{background:rgba(255,255,255,.1);color:white}
 #auth-slot .who{font-size:12px;color:#CBD5E1}
 
 /* ═══ ADMIN TOOLS DROPDOWN ═══════════════════════════════════
-   Mirrors index.html's dropdown exactly: position:fixed, computed from the
+   Mirrors scheduling.html's dropdown exactly: position:fixed, computed from the
    trigger's own getBoundingClientRect() on each open. faculty.html has no
    <nav> bar (unlike the scheduling app), so this sits directly in the
    header — but the mechanics are identical, and this is where any future
@@ -339,7 +339,8 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
   <header>
     <div><h1>ConvergeSPH</h1><div class="sub">Faculty Directory · OHSU-PSU School of Public Health</div></div>
     <div class="hsp"></div>
-    <a class="xlink" href="index.html">📅 Scheduling</a>
+    <a class="xlink" href="index.html">🏠 Home</a>
+    <a class="xlink" href="scheduling.html">📅 Scheduling</a>
     <button id="btn-roadmap" class="signed-only" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#CBD5E1;border-radius:4px;cursor:pointer;font-size:12px;padding:4px 10px;font-family:inherit;margin-right:6px" title="What's coming to ConvergeSPH">🗺 Roadmap</button>
     <span id="auth-slot"></span>
     <button id="btn-theme" title="Switch to dark mode" aria-label="Switch to dark mode">🌙</button>
@@ -676,12 +677,14 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
 const SUPABASE_URL      = 'https://igusxvvnzdpoqwizcvke.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable__F-QsLesM18cKEozFSly6g_t8dSlptY';
 
-/* Must track index.html exactly: both apps share this flag AND storageKey
-   'sph_auth' on one origin, so a mismatch would have the two disagreeing about
-   whether the session survives the browser closing. See the long note in
-   index.html for why v1 was abandoned rather than migrated. This app has no
-   persistence checkbox of its own — it inherits whatever the scheduling app's
-   auth bar set. */
+/* Must track index.html (splash) and scheduling.html exactly: all three pages
+   share this flag AND storageKey 'sph_auth' on one origin, so a mismatch would
+   have them disagreeing about whether the session survives the browser
+   closing. See the long note in index.html for why v1 was abandoned rather
+   than migrated. Sign-in itself, and the "shared computer" persistence
+   checkbox, now live only on the splash page (index.html) — this app has no
+   sign-in UI of its own, it just reads whatever session/persist choice was
+   made there. */
 const PERSIST_FLAG='sph_persist_v2';
 const PERSIST_FLAG_LEGACY='sph_persist';
 function wantPersist(){
@@ -1629,7 +1632,7 @@ function teachHTML(fid){
         const meta=[o.days,o.time,o.modality].filter(Boolean).join(' · ');
         // Deep-link back into the scheduling app at this offering.
         h+=`<div class="trow">
-          <a href="index.html?offering=${esc(o.id)}">${esc(name)}</a>
+          <a href="scheduling.html?offering=${esc(o.id)}">${esc(name)}</a>
           <span class="meta">${esc(meta)||'—'}</span>
         </div>`;
       });
@@ -1666,7 +1669,7 @@ function goRepl(id){
 }
 /* If history.state carries an id, this entry was pushed by go() — so the
    previous entry IS the directory and a genuine pop is correct. Arriving by
-   deep link from index.html leaves state null; there is no directory entry
+   deep link from scheduling.html leaves state null; there is no directory entry
    behind us then, so fall through to a push. */
 function goBack(){
   if(history.state&&history.state.id){history.back();return;}
@@ -2359,15 +2362,10 @@ function updateAuthBar(){
       <button class="btn btn-s" id="btn-out" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3)">Sign out</button>`;
     $('btn-out').onclick=async()=>{await sb.auth.signOut();location.href=location.pathname;};
   }else{
-    slot.innerHTML=`<input id="au-email" type="email" placeholder="you@ohsu.edu">
-      <button class="btn btn-s" id="btn-in" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3)">Sign in</button>`;
-    $('btn-in').onclick=async()=>{
-      const em=val('au-email').trim();
-      if(!em){setSS('⚠ Enter an email');return;}
-      setSS('Sending link…');
-      const {error}=await sb.auth.signInWithOtp({email:em,options:{emailRedirectTo:window.location.href}});
-      setSS(error?('⚠ '+error.message):'✉ Check your email');
-    };
+    // Sign-in itself now only happens on the splash page (index.html), which
+    // shares this app's storageKey/persist logic — a session created there is
+    // picked up here automatically on next load, no separate sign-in flow needed.
+    slot.innerHTML=`<a href="index.html" class="btn btn-s" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3);text-decoration:none;display:inline-flex;align-items:center">Sign in from home →</a>`;
   }
   $('tier-badge').classList.toggle('on',isAdmin());
   document.body.classList.toggle('is-admin',isAdmin());
