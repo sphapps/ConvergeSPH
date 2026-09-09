@@ -225,7 +225,7 @@ tbody tr.clickable{cursor:pointer}
         <table>
           <thead><tr>
             <th>Name</th><th>Credential</th><th>Total CR</th>
-            <th>Core CR</th><th>Program CR</th><th>Elective CR</th><th></th>
+            <th>Core CR</th><th>Program CR</th><th>Elective CR</th><th>Culm. CR</th><th></th>
           </tr></thead>
           <tbody id="p-tb"></tbody>
         </table>
@@ -275,6 +275,7 @@ tbody tr.clickable{cursor:pointer}
         <div><label>Core Credits</label><input id="pm-core-cr" type="number" step="0.5"></div>
         <div><label>Program Credits</label><input id="pm-prog-cr" type="number" step="0.5"></div>
         <div><label>Elective Credits</label><input id="pm-elec-cr" type="number" step="0.5"></div>
+        <div><label>Culminating Credits</label><input id="pm-culm-cr" type="number" step="0.5"></div>
 
         <div class="sect">Competencies<button type="button" class="addrow" id="pm-comp-add">+ Add</button></div>
         <div class="repeat" id="pm-comp"></div>
@@ -287,6 +288,7 @@ tbody tr.clickable{cursor:pointer}
             <option value="program_required">Program Required</option>
             <option value="selective">Selective</option>
             <option value="elective">Elective</option>
+            <option value="culminating_experience">Culminating Experience</option>
           </select>
           <button type="button" class="btn btn-s" id="pc-add-btn">+ Add</button>
         </div>
@@ -533,8 +535,9 @@ function renderProgTable(){
       <td>${p.core_credits??'—'}</td>
       <td>${p.program_credits??'—'}</td>
       <td>${p.elective_credits??'—'}</td>
+      <td>${p.culminating_credits??'—'}</td>
       <td><button type="button" class="row-edit-btn admin-only" data-edit-prog="${esc(p.id)}" title="Edit program">✎ Edit</button></td>
-    </tr>`).join('')||`<tr><td colspan="7" class="muted" style="padding:20px">No programs yet.</td></tr>`;
+    </tr>`).join('')||`<tr><td colspan="8" class="muted" style="padding:20px">No programs yet.</td></tr>`;
   $('p-cnt').textContent=rows.length+' program'+(rows.length===1?'':'s');
 }
 
@@ -557,9 +560,9 @@ function populateCourseSelect(){
 }
 function renderPcGroups(){
   const wrap=$('pc-groups');
-  const groups={core_required:[],program_required:[],selective:[],elective:[]};
+  const groups={core_required:[],program_required:[],selective:[],elective:[],culminating_experience:[]};
   pcEdit.forEach((r,i)=>{if(groups[r.relationship_type])groups[r.relationship_type].push(i);});
-  const labels={core_required:'Core Required',program_required:'Program Required',selective:'Selectives',elective:'Electives'};
+  const labels={core_required:'Core Required',program_required:'Program Required',selective:'Selectives',elective:'Electives',culminating_experience:'Culminating Experience'};
   const editable=canProgWrite();
   wrap.innerHTML=Object.entries(groups).map(([type,idxs])=>{
     if(!idxs.length)return '';
@@ -591,13 +594,14 @@ function openProg(id){
   $('pm-title').textContent=id?'Edit Program':'Add Program';
   setv('pm-name',p.name); setv('pm-cred',p.credential); setv('pm-desc',p.description); setv('pm-cr',p.total_credits);
   setv('pm-core-cr',p.core_credits); setv('pm-prog-cr',p.program_credits); setv('pm-elec-cr',p.elective_credits);
+  setv('pm-culm-cr',p.culminating_credits);
   compEdit=(id?(PROG_COMP[id]||[]):[]).map(r=>({competency_text:r.competency_text}));
   renderCompEditor();
   pcEdit=(id?(PROG_COURSES[id]||[]):[]).map(r=>({course_id:r.course_id,relationship_type:r.relationship_type}));
   populateCourseSelect();
   renderPcGroups();
   const editable=canProgWrite();
-  ['pm-name','pm-cred','pm-desc','pm-cr','pm-core-cr','pm-prog-cr','pm-elec-cr'].forEach(fid=>{$(fid).disabled=!editable;});
+  ['pm-name','pm-cred','pm-desc','pm-cr','pm-core-cr','pm-prog-cr','pm-elec-cr','pm-culm-cr'].forEach(fid=>{$(fid).disabled=!editable;});
   $('btn-del-prog').style.display=(editable&&id)?'inline-flex':'none';
   openM('mo-prog');
 }
@@ -617,7 +621,8 @@ async function saveProg(){
     total_credits:NUM(val('pm-cr')),
     core_credits:NUM(val('pm-core-cr')),
     program_credits:NUM(val('pm-prog-cr')),
-    elective_credits:NUM(val('pm-elec-cr'))
+    elective_credits:NUM(val('pm-elec-cr')),
+    culminating_credits:NUM(val('pm-culm-cr'))
   };
   let progId=pmId;
   if(progId){
@@ -824,6 +829,7 @@ function renderProgramDetail(id){
       ${p.core_credits!=null?`<div class="pv-fact"><b>Core</b>${esc(p.core_credits)} Credits</div>`:''}
       ${p.program_credits!=null?`<div class="pv-fact"><b>Program</b>${esc(p.program_credits)} Credits</div>`:''}
       ${p.elective_credits!=null?`<div class="pv-fact"><b>Elective</b>${esc(p.elective_credits)} Credits</div>`:''}
+      ${p.culminating_credits!=null?`<div class="pv-fact"><b>Culminating</b>${esc(p.culminating_credits)} Credits</div>`:''}
     </div>
     ${canProgWrite()?`<div style="margin-top:12px"><button class="btn btn-s" id="pv-edit-btn">✎ Edit Program</button></div>`:''}
   </div>`;
@@ -839,6 +845,7 @@ function renderProgramDetail(id){
   h+=courseSectionHTML('Program Required Coursework',id,'program_required',p.program_credits);
   h+=courseSectionHTML('Selective courses from the following',id,'selective',null);
   h+=courseSectionHTML('Elective courses from the following',id,'elective',p.elective_credits);
+  h+=courseSectionHTML('Culminating Experience',id,'culminating_experience',p.culminating_credits);
   wrap.innerHTML=h;
   $('pv-back').onclick=closeProgramView;
   const editBtn=$('pv-edit-btn');
