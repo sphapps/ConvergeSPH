@@ -632,19 +632,22 @@ async function saveProg(){
     const {data,error}=await sb.from('programs').insert(payload).select('id').single();
     if(error){setSS('⚠ '+friendlyDbError(error));return;}
     progId=data.id;
+    pmId=progId;   // so a retry after a downstream failure edits this row instead of inserting a duplicate
   }
   const comps=readCompRows();
-  await sbSave(sb.from('program_competencies').delete().eq('program_id',progId));
-  if(comps.length){
-    await sbSave(sb.from('program_competencies').insert(
-      comps.map((t,i)=>({program_id:progId,competency_text:t,sort_order:i}))
-    ));
+  {
+    const {error}=await sb.rpc('replace_program_competencies',{
+      p_program_id:progId,
+      p_rows:comps.map((t,i)=>({competency_text:t,sort_order:i}))
+    });
+    if(error){setSS('⚠ Competencies not saved — nothing changed there: '+error.message);return;}
   }
-  await sbSave(sb.from('program_courses').delete().eq('program_id',progId));
-  if(pcEdit.length){
-    await sbSave(sb.from('program_courses').insert(
-      pcEdit.map((r,i)=>({program_id:progId,course_id:r.course_id,relationship_type:r.relationship_type,sort_order:i}))
-    ));
+  {
+    const {error}=await sb.rpc('replace_program_courses',{
+      p_program_id:progId,
+      p_rows:pcEdit.map((r,i)=>({course_id:r.course_id,relationship_type:r.relationship_type,sort_order:i}))
+    });
+    if(error){setSS('⚠ Courses not saved — nothing changed there: '+error.message);return;}
   }
   setSS('● Saved');
   closeM('mo-prog');
