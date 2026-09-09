@@ -414,7 +414,7 @@ async function loadData(){
     paginate(()=>sb.from('programs').select('*')),
     paginate(()=>sb.from('program_competencies').select('*')),
     paginate(()=>sb.from('program_courses').select('*')),
-    paginate(()=>sb.from('courses').select('id,full_name,prefix')),
+    paginate(()=>sb.from('courses').select('id,full_name,prefix,parent_id')),
     // Curricular Changes tab is disabled pending a rework — no point pulling
     // this data until the tab is reachable again.
     noRows
@@ -501,7 +501,8 @@ function readCompRows(){
 }
 function populateCourseSelect(){
   const sel=$('pc-course-sel');
-  const opts=Object.values(COURSES).sort((a,b)=>String(a.full_name||'').localeCompare(String(b.full_name||'')));
+  const opts=Object.values(COURSES).filter(c=>!c.parent_id)
+    .sort((a,b)=>String(a.full_name||'').localeCompare(String(b.full_name||'')));
   sel.innerHTML=opts.map(c=>`<option value="${esc(c.id)}">${esc(c.full_name||c.prefix||c.id)}</option>`).join('');
 }
 function renderPcGroups(){
