@@ -190,6 +190,21 @@ td{padding:7px 10px;vertical-align:middle}
 .crow{display:flex;align-items:center;gap:8px}
 .crow input{width:auto}.crow label{text-transform:none;font-size:13px;font-weight:400;margin:0}
 
+/* Prerequisites / Co-requisites / Programs / Syllabi editors in the course modal */
+.tag-add{display:flex;gap:8px;align-items:center;margin-bottom:6px}
+.tag-add select{flex:2}
+.tag-add input{flex:1}
+.tag-list{display:flex;flex-direction:column;gap:4px;margin-bottom:4px}
+.tag-row{display:flex;align-items:center;gap:8px;padding:4px 8px;background:var(--lgray);border-radius:5px;font-size:12.5px}
+.tag-row .tag-nm{flex:1}
+.tag-row .tag-note{color:var(--dgray);font-size:11px}
+.rrm{flex:0 0 auto;width:24px;height:24px;border:1px solid var(--mgray);background:var(--surface);color:var(--dgray);border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0}
+.rrm:hover{background:var(--ltred);color:var(--red);border-color:var(--red)}
+.pc-groups{display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
+.pc-group h5{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--navytx);margin-bottom:3px}
+.doc-row-edit{display:grid;grid-template-columns:110px 1fr 100px 1fr 24px;gap:6px;margin-bottom:6px;align-items:center}
+.doc-row-edit input,.doc-row-edit select{font-size:12px;padding:5px 6px}
+
 /* Confirm modal */
 .cbody{padding:24px 20px 12px;font-size:14px;line-height:1.5}
 .cdetail{margin-top:8px;font-size:12px;color:var(--dgray)}
@@ -439,6 +454,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
     <div class="hsp"></div>
     <a href="index.html" style="color:#CBD5E1;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:4px;margin-right:6px" title="ConvergeSPH home">🏠 Home</a>
     <a href="faculty.html" style="color:#CBD5E1;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:4px;margin-right:6px" title="Faculty directory">👤 Faculty</a>
+    <a href="program.html" style="color:#CBD5E1;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:4px;margin-right:6px" title="Programs & curricular changes">🎓 Programs</a>
     <span id="auth-slot" style="display:inline-flex;align-items:center;gap:8px;margin-right:6px"></span>
     <span id="admin-badge">ADMIN</span>
     <button id="btn-sync" class="btn btn-s" style="font-size:11px;padding:4px 10px;color:white;border-color:rgba(255,255,255,.3);background:rgba(255,255,255,.1)" title="Reload latest data from the database">↺ Sync</button>
@@ -937,6 +953,41 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       <div class="s2"><label>Catalog URL (OHSU)</label><input id="cm-cat-ohsu">
         <div class="fhint" id="cm-hint-ohsu"></div></div>
       <div id="cm-terms" class="s2"></div>
+
+      <div class="fsec">Prerequisites, Programs &amp; Syllabi</div>
+      <div class="s2" id="cm-adv-hint" style="display:none">
+        <div class="fhint">Save this course once first — prerequisites, program links and syllabi can be added after that.</div>
+      </div>
+      <div class="s2" id="cm-adv-body">
+        <label>Prerequisites</label>
+        <div class="tag-add">
+          <select id="cm-prereq-sel"></select>
+          <input id="cm-prereq-note" placeholder="Note (optional) — e.g. or instructor permission">
+          <button type="button" class="btn btn-s" id="cm-prereq-add">+ Add</button>
+        </div>
+        <div class="tag-list" id="cm-prereq-list"></div>
+
+        <label style="margin-top:10px">Co-requisites</label>
+        <div class="tag-add">
+          <select id="cm-coreq-sel"></select>
+          <input id="cm-coreq-note" placeholder="Note (optional)">
+          <button type="button" class="btn btn-s" id="cm-coreq-add">+ Add</button>
+        </div>
+        <div class="tag-list" id="cm-coreq-list"></div>
+
+        <label style="margin-top:10px">Program Relationships</label>
+        <div class="fhint" id="cm-prog-perm-hint" style="margin:0 0 6px"></div>
+        <div class="tag-add">
+          <select id="cm-prog-sel"></select>
+          <select id="cm-prog-type-sel"><option value="required">Required</option><option value="selective">Selective</option><option value="elective">Elective</option></select>
+          <button type="button" class="btn btn-s" id="cm-prog-add">+ Add</button>
+        </div>
+        <div class="pc-groups" id="cm-prog-groups"></div>
+
+        <label style="margin-top:10px">Syllabi / Documents</label>
+        <div id="cm-doc-rows"></div>
+        <button type="button" class="btn btn-s" id="cm-doc-add" style="margin-top:2px">+ Add Document</button>
+      </div>
     </div></div>
     <div class="mft">
       <button class="btn btn-s" data-close="mo-crs">Cancel</button>
@@ -1204,7 +1255,8 @@ function parseDays(s){
 const GCOLS=['#2E75B6','#375623','#C55A11','#7B2C8C','#C00000','#1F6B75','#7F4F24','#2F5496','#4F6228','#843C0C'];
 
 /* ─── STATE ────────────────────────────────────────────────── */
-let DB={courses:[],instructors:[],offerings:[]};
+let DB={courses:[],instructors:[],offerings:[],
+  programsById:{},programCoursesByCourse:{},coursePrereqByCourse:{},courseCoreqByCourse:{},courseDocsByCourse:{}};
 let isAdmin=false;
 /* LOCKDOWN. Read from the anon-readable app_lockdown singleton row on every
    load/sync. The actual write block lives in RLS (is_locked(), see
@@ -1218,6 +1270,14 @@ let LOCKED=false, LOCK_MSG='', LOCK_BY='', LOCK_AT=null;
    The database is the authority on all of this; these flags only decide which
    controls to draw. */
 let isPD=false;
+// Programs is a separate app_access dimension (app='program', level admin/apcc/
+// viewer) from this app's own admin/pd/viewer. A scheduling admin/pd is NOT
+// automatically a Programs admin — this only gates the course modal's Program
+// Relationships section (writes to program_courses), never courses/offerings
+// themselves.
+let isProgAdmin=false;
+// Course-modal editor buffers, live only while mo-crs is open.
+let prereqEdit=[], coreqEdit=[], progLinkEdit=[], docEdit=[];
 /* Three states, not two: signed-out < signed-in (read-only) < admin.
    `signedIn` gates VISIBILITY (what an anonymous visitor may see);
    `isAdmin` gates EDITING. They are independent — a signed-in non-admin sees
@@ -1318,17 +1378,30 @@ async function loadData(){
     return {data:all,error:null};
   };
 
-  const [cR,oR,mR,dR,lR,kR]=await Promise.all([
+  const [cR,oR,mR,dR,lR,kR,pgR,pcR,preR,coR,docR]=await Promise.all([
     fetchAll('courses'),
     fetchAll('offerings'),
     fetchAll('instructor_meta'),
     fetchAll('faculty_directory'),
     fetchAll('app_lists'),
-    sb.from('app_lockdown').select('*').eq('id',1).maybeSingle()
+    sb.from('app_lockdown').select('*').eq('id',1).maybeSingle(),
+    fetchAll('programs'),
+    fetchAll('program_courses'),
+    fetchAll('course_prerequisites'),
+    fetchAll('course_corequisites'),
+    fetchAll('course_documents')
   ]);
   for(const r of [cR,oR,mR,dR,lR]){
     if(r.error){setLM('');setSS('⚠ Load failed: '+r.error.message);throw r.error;}
   }
+  // Programs/CC-adjacent tables are best-effort — a hiccup here shouldn't
+  // block the whole scheduling app from loading; the course modal's new
+  // sections just show empty until the next successful reload.
+  const programs=pgR.error?[]:(pgR.data||[]);
+  const programCourses=pcR.error?[]:(pcR.data||[]);
+  const coursePrereqRows=preR.error?[]:(preR.data||[]);
+  const courseCoreqRows=coR.error?[]:(coR.data||[]);
+  const courseDocRows=docR.error?[]:(docR.data||[]);
   // Lockdown state is best-effort: a fetch hiccup here shouldn't block the
   // whole app from loading, it just means the banner may lag a refresh.
   if(!kR.error&&kR.data){
@@ -1434,7 +1507,22 @@ async function loadData(){
     };
   });
 
-  DB={courses,instructors,offerings,lists};
+  // Programs (by id) and program_courses (by course uuid — course_prerequisites/
+  // corequisites/documents are also keyed by course uuid, matching courses._uuid,
+  // NOT courses.id which is the course_code string used elsewhere in this app).
+  const programsById={}; programs.forEach(p=>{programsById[p.id]=p;});
+  const programCoursesByCourse={};
+  programCourses.forEach(r=>{(programCoursesByCourse[r.course_id]=programCoursesByCourse[r.course_id]||[]).push(r);});
+  const coursePrereqByCourse={};
+  coursePrereqRows.forEach(r=>{(coursePrereqByCourse[r.course_id]=coursePrereqByCourse[r.course_id]||[]).push(r);});
+  const courseCoreqByCourse={};
+  courseCoreqRows.forEach(r=>{(courseCoreqByCourse[r.course_id]=courseCoreqByCourse[r.course_id]||[]).push(r);});
+  const courseDocsByCourse={};
+  courseDocRows.forEach(r=>{(courseDocsByCourse[r.course_id]=courseDocsByCourse[r.course_id]||[]).push(r);});
+  Object.values(courseDocsByCourse).forEach(a=>a.sort((x,y)=>(x.sort_order??0)-(y.sort_order??0)));
+
+  DB={courses,instructors,offerings,lists,
+    programsById,programCoursesByCourse,coursePrereqByCourse,courseCoreqByCourse,courseDocsByCourse};
   renderLockBanner();
   applyLockUI();
   setLM('');
@@ -3263,7 +3351,94 @@ function openCM(id){
   // rather than pre-filling it — pre-filling would silently pin every new
   // course to today's URL and break the next bulletin roll.
   catalogPlaceholders();
+  // Prerequisites / co-requisites / program links / syllabi all key off the
+  // course's real UUID (c._uuid), not the course_code (c.id) used everywhere
+  // else in this app. A brand-new, unsaved course has no UUID yet, so these
+  // sections stay hidden until the course itself has been saved once.
+  const cForAdv=id?DB.courses.find(x=>x.id===id):null;
+  const uuidForAdv=cForAdv?cForAdv._uuid:null;
+  if(uuidForAdv){
+    $('cm-adv-body').style.display='';
+    $('cm-adv-hint').style.display='none';
+    populateAdvSelects(uuidForAdv);
+    populateProgSelect();
+    prereqEdit=(DB.coursePrereqByCourse[uuidForAdv]||[]).map(r=>({prerequisite_course_id:r.prerequisite_course_id,note:r.note}));
+    coreqEdit=(DB.courseCoreqByCourse[uuidForAdv]||[]).map(r=>({corequisite_course_id:r.corequisite_course_id,note:r.note}));
+    progLinkEdit=(DB.programCoursesByCourse[uuidForAdv]||[]).map(r=>({program_id:r.program_id,relationship_type:r.relationship_type}));
+    renderPrereqList();renderCoreqList();renderProgGroups();
+    $('cm-doc-rows').innerHTML=(DB.courseDocsByCourse[uuidForAdv]||[]).map(docRowEditHTML).join('');
+    $('cm-prog-perm-hint').textContent=isProgAdmin?''
+      :'Read-only here — editing requires Programs admin access (Programs app).';
+    $('cm-prog-sel').closest('.tag-add').style.display=isProgAdmin?'':'none';
+  }else{
+    $('cm-adv-body').style.display='none';
+    $('cm-adv-hint').style.display='';
+    prereqEdit=[];coreqEdit=[];progLinkEdit=[];
+    $('cm-doc-rows').innerHTML='';
+  }
   openM('mo-crs');
+}
+function populateAdvSelects(excludeUuid){
+  const opts=DB.courses.filter(c=>!c.parentUuid&&!c.discontinued&&c._uuid!==excludeUuid)
+    .sort((a,b)=>String(a.fullName||'').localeCompare(String(b.fullName||'')));
+  const html=opts.map(c=>`<option value="${esc(c._uuid)}">${esc(c.fullName)}</option>`).join('');
+  $('cm-prereq-sel').innerHTML=html;
+  $('cm-coreq-sel').innerHTML=html;
+}
+function populateProgSelect(){
+  const progs=Object.values(DB.programsById).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
+  $('cm-prog-sel').innerHTML=progs.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+}
+function courseNameByUuid(uuid){
+  const c=DB.courses.find(x=>x._uuid===uuid);
+  return c?c.fullName:uuid;
+}
+function renderPrereqList(){
+  $('cm-prereq-list').innerHTML=prereqEdit.map((r,i)=>
+    `<div class="tag-row"><span class="tag-nm">${esc(courseNameByUuid(r.prerequisite_course_id))}</span>`+
+    (r.note?`<span class="tag-note">${esc(r.note)}</span>`:'')+
+    `<button type="button" class="rrm" data-rm-prereq="${i}">✕</button></div>`
+  ).join('')||'<div class="fhint">None yet.</div>';
+}
+function renderCoreqList(){
+  $('cm-coreq-list').innerHTML=coreqEdit.map((r,i)=>
+    `<div class="tag-row"><span class="tag-nm">${esc(courseNameByUuid(r.corequisite_course_id))}</span>`+
+    (r.note?`<span class="tag-note">${esc(r.note)}</span>`:'')+
+    `<button type="button" class="rrm" data-rm-coreq="${i}">✕</button></div>`
+  ).join('')||'<div class="fhint">None yet.</div>';
+}
+function renderProgGroups(){
+  const groups={required:[],selective:[],elective:[]};
+  progLinkEdit.forEach((r,i)=>{if(groups[r.relationship_type])groups[r.relationship_type].push({program_id:r.program_id,_i:i});});
+  const labels={required:'Required',selective:'Selectives',elective:'Electives'};
+  const rmHidden=isProgAdmin?'':' style="display:none"';
+  $('cm-prog-groups').innerHTML=Object.entries(groups).map(([type,rows])=>{
+    if(!rows.length)return '';
+    return `<div class="pc-group"><h5>${labels[type]}</h5>`+rows.map(r=>{
+      const p=DB.programsById[r.program_id];
+      return `<div class="tag-row"><span class="tag-nm">${esc(p?p.name:r.program_id)}</span>`+
+        `<button type="button" class="rrm" data-rm-prog="${r._i}"${rmHidden}>✕</button></div>`;
+    }).join('')+`</div>`;
+  }).join('')||'<div class="fhint">No program assignments yet.</div>';
+}
+function docRowEditHTML(d){
+  d=d||{};
+  const cats=(DB.lists&&DB.lists.courseDocCategories)||['Syllabus','Assessment','Other'];
+  return `<div class="doc-row-edit">
+    <select class="cm-doc-cat">${cats.map(c=>`<option${c===d.category?' selected':''}>${esc(c)}</option>`).join('')}</select>
+    <input class="cm-doc-desc" placeholder="Description" value="${esc(d.description||'')}">
+    <input class="cm-doc-date" placeholder="YYYY / YYYY-MM / YYYY-MM-DD" value="${esc(d.doc_date||'')}">
+    <input class="cm-doc-url" placeholder="SharePoint URL" value="${esc(d.sp_url||'')}">
+    <button type="button" class="rrm" data-rm-doc>✕</button>
+  </div>`;
+}
+function readDocRows(){
+  return [...document.querySelectorAll('#cm-doc-rows .doc-row-edit')].map(row=>({
+    category:row.querySelector('.cm-doc-cat').value,
+    description:row.querySelector('.cm-doc-desc').value.trim()||null,
+    doc_date:row.querySelector('.cm-doc-date').value.trim()||null,
+    sp_url:row.querySelector('.cm-doc-url').value.trim()
+  })).filter(d=>d.sp_url);   // a row with no URL yet isn't worth saving
 }
 /* legacy course object → courses table columns */
 function crsRow(d){
@@ -3319,6 +3494,47 @@ async function saveCrs(){
     data._uuid=ins.id;data.id=ins.course_code;uuid=ins.id;id=ins.course_code;
     DB.courses.push(data);
   }
+
+  // Prerequisites / co-requisites / syllabi — gated by this app's own
+  // admin/pd RLS (course_prerequisites_write etc.), same as courses itself.
+  // Delete-then-reinsert, scoped to THIS course's uuid only.
+  await sbSave(sb.from('course_prerequisites').delete().eq('course_id',uuid));
+  if(prereqEdit.length){
+    await sbSave(sb.from('course_prerequisites').insert(
+      prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id,note:r.note}))
+    ));
+  }
+  await sbSave(sb.from('course_corequisites').delete().eq('course_id',uuid));
+  if(coreqEdit.length){
+    await sbSave(sb.from('course_corequisites').insert(
+      coreqEdit.map(r=>({course_id:uuid,corequisite_course_id:r.corequisite_course_id,note:r.note}))
+    ));
+  }
+  const cmDocs=readDocRows();
+  await sbSave(sb.from('course_documents').delete().eq('course_id',uuid));
+  if(cmDocs.length){
+    await sbSave(sb.from('course_documents').insert(
+      cmDocs.map((d,i)=>({course_id:uuid,category:d.category,description:d.description,
+        doc_date:d.doc_date,sp_url:d.sp_url,sort_order:i}))
+    ));
+  }
+  // Program relationships require separate Programs-app admin rights
+  // (app_access app='program'), which a scheduling admin/pd may not hold —
+  // RLS would silently reject this otherwise, so this stays client-gated too.
+  if(isProgAdmin){
+    await sbSave(sb.from('program_courses').delete().eq('course_id',uuid));
+    if(progLinkEdit.length){
+      await sbSave(sb.from('program_courses').insert(
+        progLinkEdit.map((r,i)=>({program_id:r.program_id,course_id:uuid,relationship_type:r.relationship_type,sort_order:i}))
+      ));
+    }
+    DB.programCoursesByCourse[uuid]=progLinkEdit.map(r=>({course_id:uuid,program_id:r.program_id,relationship_type:r.relationship_type}));
+  }
+  // Refresh this course's in-memory indexes so the modal reflects the save
+  // immediately if reopened before the next full reload.
+  DB.coursePrereqByCourse[uuid]=prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id,note:r.note}));
+  DB.courseCoreqByCourse[uuid]=coreqEdit.map(r=>({course_id:uuid,corequisite_course_id:r.corequisite_course_id,note:r.note}));
+  DB.courseDocsByCourse[uuid]=cmDocs.map((d,i)=>({course_id:uuid,category:d.category,description:d.description,doc_date:d.doc_date,sp_url:d.sp_url,sort_order:i}));
 
   // Sections keep their own copy of every inherited field, because faculty.html
   // reads courses.full_name straight from the table and never sees this app's
@@ -4083,6 +4299,42 @@ function wireEvents(){
   });
   $('btn-save-crs').addEventListener('click',saveCrs);
   $('btn-del-crs').addEventListener('click',delCrs);
+  $('cm-prereq-add').addEventListener('click',()=>{
+    const cid=val('cm-prereq-sel');if(!cid)return;
+    if(prereqEdit.some(r=>r.prerequisite_course_id===cid))return;
+    prereqEdit.push({prerequisite_course_id:cid,note:val('cm-prereq-note').trim()||null});
+    setv('cm-prereq-note','');renderPrereqList();
+  });
+  $('cm-prereq-list').addEventListener('click',e=>{
+    const rm=e.target.closest('[data-rm-prereq]');if(!rm)return;
+    prereqEdit.splice(+rm.dataset.rmPrereq,1);renderPrereqList();
+  });
+  $('cm-coreq-add').addEventListener('click',()=>{
+    const cid=val('cm-coreq-sel');if(!cid)return;
+    if(coreqEdit.some(r=>r.corequisite_course_id===cid))return;
+    coreqEdit.push({corequisite_course_id:cid,note:val('cm-coreq-note').trim()||null});
+    setv('cm-coreq-note','');renderCoreqList();
+  });
+  $('cm-coreq-list').addEventListener('click',e=>{
+    const rm=e.target.closest('[data-rm-coreq]');if(!rm)return;
+    coreqEdit.splice(+rm.dataset.rmCoreq,1);renderCoreqList();
+  });
+  $('cm-prog-add').addEventListener('click',()=>{
+    if(!isProgAdmin)return;
+    const pid=val('cm-prog-sel'),type=val('cm-prog-type-sel');if(!pid)return;
+    if(progLinkEdit.some(r=>r.program_id===pid&&r.relationship_type===type))return;
+    progLinkEdit.push({program_id:pid,relationship_type:type});renderProgGroups();
+  });
+  $('cm-prog-groups').addEventListener('click',e=>{
+    const rm=e.target.closest('[data-rm-prog]');if(!rm||!isProgAdmin)return;
+    progLinkEdit.splice(+rm.dataset.rmProg,1);renderProgGroups();
+  });
+  $('cm-doc-add').addEventListener('click',()=>{
+    $('cm-doc-rows').insertAdjacentHTML('beforeend',docRowEditHTML());
+  });
+  $('cm-doc-rows').addEventListener('click',e=>{
+    const rm=e.target.closest('[data-rm-doc]');if(rm)rm.closest('.doc-row-edit').remove();
+  });
   // Section modal
   $('sm-course').addEventListener('change',secPreview);
   $('sm-sec').addEventListener('input',secPreview);
@@ -4122,9 +4374,9 @@ function wireEvents(){
    self-read policy (is the signed-in user a 'scheduling' admin?). The
    incognito/persist toggle controls whether the session survives reload. */
 async function refreshAdmin(){
-  if(!sb){signedIn=false;isPD=false;applyAuthVis();disableAdmin();return;}
+  if(!sb){signedIn=false;isPD=false;isProgAdmin=false;applyAuthVis();disableAdmin();return;}
   const {data:{session}}=await sb.auth.getSession();
-  if(!session){signedIn=false;isPD=false;applyAuthVis();disableAdmin();updateAuthBar(null);currentUserEmail=null;return;}
+  if(!session){signedIn=false;isPD=false;isProgAdmin=false;applyAuthVis();disableAdmin();updateAuthBar(null);currentUserEmail=null;return;}
   currentUserEmail=session.user?.email||null;
   // What level am I? Self-read on app_access (RLS: own rows only). The row's
   // EXISTENCE is now what grants `signedIn`, not the session — a person who
@@ -4141,6 +4393,14 @@ async function refreshAdmin(){
       if(data.level==='admin')admin=true;
       else if(data.level==='pd')pd=true;
     }
+  }catch(e){}
+  // Separate check: is this person a Programs admin? Silent best-effort —
+  // absence just means the Program Relationships editor stays read-only.
+  isProgAdmin=false;
+  try{
+    const {data,error}=await sb.from('app_access')
+      .select('level').eq('app','program').maybeSingle();
+    if(!error && data && data.level==='admin')isProgAdmin=true;
   }catch(e){}
   signedIn=provisioned;applyAuthVis();
   isPD=pd;

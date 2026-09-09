@@ -1,0 +1,794 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ConvergeSPH — Programs &amp; Curricular Changes</title>
+<script>
+(function(){var t=null;try{t=localStorage.getItem('sph-theme');}catch(e){}
+ if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}
+ document.documentElement.setAttribute('data-theme',t);})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ═══ TOKENS (shared with scheduling.html / faculty.html) ═══ */
+:root {
+  color-scheme:light;
+  --navy:#1F3864; --teal:#2E75B6; --tealhv:#245f95; --ltblue:#D6E4F0;
+  --lgray:#F4F6F9; --mgray:#CBD5E1; --dgray:#475569; --text:#1E293B;
+  --red:#DC2626; --redhv:#b91c1c; --ltred:#FEE2E2; --ltgrn:#DCFCE7; --ltgold:#FEF3C7;
+  --surface:#FFFFFF; --surface-2:#F8FAFC; --navytx:#1F3864;
+  --rowline:#E8EDF3; --rowhover:#F8FAFD; --muted:#94A3B8;
+  --scrim:rgba(15,23,42,.5); --txgrn:#166534; --txgold:#92400E;
+}
+html[data-theme="dark"] {
+  color-scheme:dark;
+  --navy:#152036; --teal:#6FB2E8; --tealhv:#9BCBF2; --ltblue:#22314C;
+  --lgray:#0E1626; --mgray:#3B4A63; --dgray:#9AABC2; --text:#DDE4EE;
+  --red:#F1867F; --redhv:#F5A5A0; --ltred:#3B1D22; --ltgrn:#153322; --ltgold:#3A2D0B;
+  --surface:#18223A; --surface-2:#131B2E; --navytx:#93BAE8;
+  --rowline:#27334D; --rowhover:#202D48; --muted:#8FA0B8;
+  --scrim:rgba(0,0,0,.65); --txgrn:#7FD8A2; --txgold:#EAC77C;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--lgray);color:var(--text);font-size:14px}
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{background:var(--navy);color:white;padding:0 20px;height:52px;display:flex;align-items:center;gap:16px;flex-shrink:0}
+header h1{font-size:16px;font-weight:600}
+header .sub{font-size:11px;color:var(--muted);margin-top:1px}
+.hsp{flex:1}
+header a.xlink{color:#CBD5E1;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:4px}
+header a.xlink:hover{background:rgba(255,255,255,.1);color:white}
+#tier-badge{display:none;background:#3B82F6;color:white;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:.5px}
+#tier-badge.on{display:inline-block}
+#tier-badge.apcc{background:#7C3AED}
+#save-status{font-size:12px;color:var(--muted);min-width:90px;text-align:right}
+#auth-slot{display:inline-flex;align-items:center;gap:8px}
+#auth-slot .who{font-size:12px;color:#CBD5E1}
+#btn-theme{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#CBD5E1;
+  border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:5px 9px;font-family:inherit}
+#btn-theme:hover{background:rgba(255,255,255,.2);color:white}
+
+/* Lockdown banner — read-only reflection of app_lockdown, set from Scheduling. */
+#lockdown-banner{display:none;background:#7C2D12;color:#FEE2E2;padding:9px 16px;font-size:13px;
+  align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #991B1B;line-height:1.4}
+body.is-locked #lockdown-banner{display:flex}
+body.is-locked .admin-only,body.is-locked .apcc-only{display:none!important}
+
+/* Tier visibility */
+.admin-only{display:none!important}
+body.is-admin .admin-only{display:inline-flex!important}
+.apcc-only{display:none!important}
+body.is-admin .apcc-only,body.is-apcc .apcc-only{display:inline-flex!important}
+.signed-only{display:none!important}
+body.is-admin .signed-only,body.is-apcc .signed-only,body.is-viewer .signed-only{display:inline-flex!important}
+.cc-tab{display:none!important}
+body.is-admin .cc-tab,body.is-apcc .cc-tab{display:inline-flex!important}
+
+/* Tabs */
+.tabs{background:var(--surface);border-bottom:1px solid var(--mgray);display:flex;gap:2px;padding:0 16px;flex-shrink:0}
+.tab-btn{font-family:inherit;font-size:13px;font-weight:600;padding:10px 16px;border:none;background:none;
+  color:var(--dgray);cursor:pointer;border-bottom:2px solid transparent}
+.tab-btn:hover{color:var(--navytx)}
+.tab-btn.active{color:var(--navytx);border-bottom-color:var(--teal)}
+
+main{flex:1;overflow:auto;display:flex;flex-direction:column}
+.view{display:none;flex:1;flex-direction:column}
+.view.active{display:flex}
+
+.tb{background:var(--surface);border-bottom:1px solid var(--mgray);padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex-shrink:0}
+.tb input,.tb select{font-size:13px;padding:6px 10px;border:1px solid var(--mgray);border-radius:5px;font-family:inherit;background:var(--surface);color:var(--text)}
+.tb input[type=search]{width:240px}
+.cnt{font-size:12px;color:var(--dgray);margin-left:auto}
+
+.btn{font-family:inherit;font-size:13px;padding:6px 14px;border-radius:5px;border:1px solid var(--mgray);background:var(--surface);color:var(--text);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--lgray)}
+.btn-p{background:var(--teal);border-color:var(--teal);color:white}
+.btn-p:hover{background:var(--tealhv)}
+.btn-d{background:var(--red);border-color:var(--red);color:white}
+.btn-d:hover{background:var(--redhv)}
+.btn-s{font-size:12px;padding:4px 10px}
+html[data-theme="dark"] .btn-p,html[data-theme="dark"] .btn-d{color:#0E1626;font-weight:600}
+
+.tw{flex:1;overflow:auto}
+table{width:100%;border-collapse:collapse;background:var(--surface)}
+thead th{position:sticky;top:0;background:var(--ltblue);color:var(--navytx);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:9px 12px;text-align:left;border-bottom:2px solid var(--mgray);white-space:nowrap;z-index:2}
+tbody td{padding:9px 12px;border-bottom:1px solid var(--rowline);font-size:13px;vertical-align:top}
+tbody tr:hover td{background:var(--rowhover)}
+tbody tr.clickable{cursor:pointer}
+.nm{color:var(--navytx);font-weight:600}
+.muted{color:var(--muted)}
+.chip{display:inline-block;background:var(--ltblue);color:var(--navytx);font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px;margin:1px 3px 1px 0;white-space:nowrap}
+.pill{font-size:10px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:9px;text-transform:uppercase}
+.pill.proposed{background:var(--ltgold);color:var(--txgold)}
+.pill.approved{background:var(--ltgrn);color:var(--txgrn)}
+.pill.pending_delete{background:var(--ltred);color:var(--red)}
+
+/* Modal */
+.mo{display:none;position:fixed;inset:0;background:var(--scrim);z-index:1000;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
+.mo.open{display:flex}
+.mc{background:var(--surface);border-radius:8px;width:100%;max-width:760px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.mc.sm{max-width:420px}
+.mh{padding:14px 20px;border-bottom:1px solid var(--mgray);display:flex;align-items:center}
+.mh h3{font-size:15px;color:var(--navytx);font-weight:600}
+.mh .x{margin-left:auto;background:none;border:none;font-size:20px;color:var(--dgray);cursor:pointer;line-height:1}
+.mb{padding:18px 20px;max-height:65vh;overflow:auto}
+.mf{padding:12px 20px;border-top:1px solid var(--mgray);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
+.mf .lft{margin-right:auto}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.fg .full{grid-column:1/-1}
+.f label{display:block;font-size:11px;font-weight:600;color:var(--dgray);margin-bottom:3px}
+.f input,.f select,.f textarea{width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--mgray);border-radius:5px;font-family:inherit;background:var(--surface);color:var(--text)}
+.f textarea{min-height:64px;resize:vertical}
+.f input:disabled,.f select:disabled,.f textarea:disabled{background:var(--surface-2);color:var(--dgray)}
+.sect{grid-column:1/-1;display:flex;align-items:baseline;gap:10px;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--navytx);border-bottom:1px solid var(--mgray);padding-bottom:5px;margin-top:6px}
+.sect .addrow{margin-left:auto;font:inherit;font-size:11px;font-weight:600;color:var(--teal);background:none;border:none;cursor:pointer;padding:0}
+.repeat{display:flex;flex-direction:column;gap:8px;grid-column:1/-1}
+.repeat-row{display:flex;gap:6px;align-items:center}
+.repeat-row input{flex:1;min-width:0}
+.rrm{flex:0 0 auto;width:28px;height:32px;border:1px solid var(--mgray);background:var(--surface);color:var(--dgray);border-radius:5px;cursor:pointer;font-size:15px;line-height:1}
+.rrm:hover{background:var(--ltred);color:var(--red);border-color:var(--red)}
+.pc-add{grid-column:1/-1;display:flex;gap:8px;align-items:center}
+.pc-add select:first-child{flex:2}
+.pc-add select:nth-child(2){flex:1}
+.pc-groups{grid-column:1/-1;display:flex;flex-direction:column;gap:10px}
+.pc-group h4{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--navytx);margin-bottom:4px}
+.pc-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;border-bottom:1px solid var(--rowline)}
+.pc-row:last-child{border-bottom:none}
+.pc-row .pc-nm{flex:1}
+.empty-note{font-size:12px;color:var(--muted);font-style:italic;grid-column:1/-1}
+.hint{font-size:11px;color:var(--dgray);margin-top:4px;grid-column:1/-1}
+.status-row{display:flex;align-items:center;gap:10px;grid-column:1/-1;padding:8px 0;border-top:1px solid var(--mgray);margin-top:4px}
+.status-row .lbl{font-size:11px;font-weight:600;color:var(--dgray)}
+.target-radio{display:flex;gap:16px;grid-column:1/-1;font-size:12px;color:var(--text)}
+.target-radio label{display:flex;align-items:center;gap:5px;cursor:pointer}
+
+#ls{position:fixed;inset:0;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:9000}
+#ls h2{font-size:18px;color:var(--navytx)}
+#ls p{font-size:13px;color:var(--dgray)}
+.spin{width:36px;height:36px;border:3px solid var(--ltblue);border-top-color:var(--teal);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+#cfm-msg{font-size:13px;line-height:1.5}
+</style>
+</head>
+<body>
+
+<div id="ls"><div class="spin"></div><h2>ConvergeSPH</h2><p id="lm">Loading…</p></div>
+
+<div id="app" style="display:none">
+  <div id="lockdown-banner"></div>
+  <header>
+    <div><h1>ConvergeSPH</h1><div class="sub">Programs &amp; Curricular Changes · OHSU-PSU School of Public Health</div></div>
+    <div class="hsp"></div>
+    <a class="xlink" href="index.html">🏠 Home</a>
+    <a class="xlink" href="scheduling.html">📅 Scheduling</a>
+    <a class="xlink" href="faculty.html">👤 Faculty</a>
+    <span id="auth-slot"></span>
+    <button id="btn-theme" title="Switch to dark mode" aria-label="Switch to dark mode">🌙</button>
+    <span id="tier-badge">ADMIN</span>
+    <span id="save-status">Ready</span>
+  </header>
+
+  <div class="tabs">
+    <button class="tab-btn active" id="tab-prog" data-view="v-prog">Programs</button>
+    <button class="tab-btn cc-tab" id="tab-cc" data-view="v-cc">Curricular Changes</button>
+  </div>
+
+  <main>
+    <!-- ── PROGRAMS ─────────────────────────────────────────── -->
+    <section class="view active" id="v-prog">
+      <div class="tb">
+        <input type="search" id="p-q" placeholder="Search program name, credential…">
+        <button class="btn btn-s" id="btn-p-clear">Clear</button>
+        <button class="btn btn-p btn-s admin-only" id="btn-p-add">+ Add Program</button>
+        <span class="cnt" id="p-cnt"></span>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr>
+            <th>Name</th><th>Credential</th><th>Total CR</th>
+            <th>Required</th><th>Selectives</th><th>Electives</th>
+          </tr></thead>
+          <tbody id="p-tb"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── CURRICULAR CHANGES ───────────────────────────────── -->
+    <section class="view" id="v-cc">
+      <div class="tb">
+        <select id="cc-status-filter">
+          <option value="">All statuses</option>
+          <option value="proposed">Proposed</option>
+          <option value="approved">Approved</option>
+          <option value="pending_delete">Pending delete</option>
+        </select>
+        <button class="btn btn-p btn-s" id="btn-cc-add">+ Add Curricular Change</button>
+        <span class="cnt" id="cc-cnt"></span>
+      </div>
+      <div class="tw">
+        <table>
+          <thead><tr>
+            <th>Target</th><th>Type</th><th>Status</th><th>Effective Term</th><th>Created</th>
+          </tr></thead>
+          <tbody id="cc-tb"></tbody>
+        </table>
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- ── PROGRAM MODAL ─────────────────────────────────────────── -->
+<div class="mo" id="mo-prog">
+  <div class="mc">
+    <div class="mh"><h3 id="pm-title">Program</h3><button class="x" data-close="mo-prog">×</button></div>
+    <div class="mb f">
+      <div class="fg" id="pm-fields">
+        <div class="sect">Details</div>
+        <div><label>Name *</label><input id="pm-name"></div>
+        <div><label>Credential</label><input id="pm-cred" placeholder="MPH, PhD, Graduate Certificate…"></div>
+        <div class="full"><label>Description</label><textarea id="pm-desc"></textarea></div>
+        <div><label>Total Credits</label><input id="pm-cr" type="number" step="0.5"></div>
+
+        <div class="sect">Competencies<button type="button" class="addrow" id="pm-comp-add">+ Add</button></div>
+        <div class="repeat" id="pm-comp"></div>
+
+        <div class="sect">Courses</div>
+        <div class="pc-add admin-only">
+          <select id="pc-course-sel"></select>
+          <select id="pc-type-sel">
+            <option value="required">Required</option>
+            <option value="selective">Selective</option>
+            <option value="elective">Elective</option>
+          </select>
+          <button type="button" class="btn btn-s" id="pc-add-btn">+ Add</button>
+        </div>
+        <div class="pc-groups" id="pc-groups"></div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-d lft admin-only" id="btn-del-prog">Delete</button>
+      <button class="btn" data-close="mo-prog">Close</button>
+      <button class="btn btn-p admin-only" id="btn-save-prog">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CURRICULAR CHANGE MODAL ─────────────────────────────────── -->
+<div class="mo" id="mo-cc">
+  <div class="mc">
+    <div class="mh"><h3 id="ccm-title">Curricular Change</h3><button class="x" data-close="mo-cc">×</button></div>
+    <div class="mb f">
+      <div class="fg">
+        <div class="sect">Target</div>
+        <div class="target-radio">
+          <label><input type="radio" name="cc-target" id="cc-target-prog" value="program" checked> Program</label>
+          <label><input type="radio" name="cc-target" id="cc-target-crs" value="course"> Course</label>
+        </div>
+        <div class="full" id="ccm-prog-wrap"><label>Program</label><select id="ccm-prog"></select></div>
+        <div class="full" id="ccm-crs-wrap" style="display:none"><label>Course</label><select id="ccm-crs"></select></div>
+
+        <div class="sect">Change</div>
+        <div><label>Change Type</label>
+          <select id="ccm-type">
+            <option>New Course</option><option>Prereq Update</option><option>Credit Change</option>
+            <option>Program Revision</option><option>Course Removal</option><option>Other</option>
+          </select>
+        </div>
+        <div><label>Effective Term</label><input id="ccm-term" placeholder="e.g. Fall27"></div>
+        <div class="full"><label>Description</label><textarea id="ccm-desc"></textarea></div>
+
+        <div class="status-row">
+          <span class="lbl">Status:</span><span id="ccm-status-pill" class="pill">—</span>
+          <span class="hint" id="ccm-status-hint" style="margin:0"></span>
+        </div>
+      </div>
+    </div>
+    <div class="mf">
+      <button class="btn btn-d lft" id="btn-cc-request-delete">Request Deletion</button>
+      <button class="btn btn-d lft admin-only" id="btn-cc-harddelete">Delete Permanently</button>
+      <button class="btn admin-only" id="btn-cc-restore">Restore</button>
+      <button class="btn btn-p admin-only" id="btn-cc-approve">Approve</button>
+      <button class="btn" data-close="mo-cc">Cancel</button>
+      <button class="btn btn-p" id="btn-save-cc">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONFIRM MODAL ─────────────────────────────────────────── -->
+<div class="mo" id="mo-cfm">
+  <div class="mc sm">
+    <div class="mh"><h3 id="cfm-title">Confirm</h3><button class="x" data-close="mo-cfm">×</button></div>
+    <div class="mb"><p id="cfm-msg"></p></div>
+    <div class="mf">
+      <button class="btn" id="cfm-no" data-close="mo-cfm">Cancel</button>
+      <button class="btn btn-d" id="cfm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const val=id=>($(id)?$(id).value:'');
+const setv=(id,v)=>{const e=$(id);if(e)e.value=v??'';};
+const setSS=m=>{const e=$('save-status');if(e)e.textContent=m;};
+const setLM=m=>{const e=$('lm');if(e)e.textContent=m;};
+const N=v=>{const s=String(v??'').trim();return s===''?null:s;};
+const NUM=v=>{const s=String(v??'').trim();return s===''?null:(isNaN(+s)?null:+s);};
+
+/* ── SUPABASE CONFIG — must match index.html / scheduling.html / faculty.html ── */
+const SUPABASE_URL      = 'https://igusxvvnzdpoqwizcvke.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable__F-QsLesM18cKEozFSly6g_t8dSlptY';
+const PERSIST_FLAG='sph_persist_v2';
+const PERSIST_FLAG_LEGACY='sph_persist';
+function wantPersist(){
+  try{
+    localStorage.removeItem(PERSIST_FLAG_LEGACY);
+    return localStorage.getItem(PERSIST_FLAG)!=='0';
+  }catch(e){return true;}
+}
+let sb=null,authSub=null,onAuthChange=null;
+function initSupabase(){
+  const persist=wantPersist();
+  try{ if(authSub&&authSub.unsubscribe)authSub.unsubscribe(); }catch(e){}
+  authSub=null;
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{
+    auth:{persistSession:persist,autoRefreshToken:persist,
+          storage:persist?window.localStorage:undefined,storageKey:'sph_auth'}
+  });
+  if(onAuthChange){
+    const {data}=sb.auth.onAuthStateChange((evt,session)=>onAuthChange(evt,session));
+    authSub=(data&&data.subscription)||null;
+  }
+  return sb;
+}
+
+/* ── STATE ── */
+let TIER='public';                 // 'public' | 'viewer' | 'apcc' | 'admin'
+let currentUserEmail=null;
+let PROGRAMS={};                   // id -> row
+let PROG_COMP={};                  // program_id -> [row,...]
+let PROG_COURSES={};               // program_id -> [row,...]
+let COURSES={};                    // id -> {id,full_name,prefix}
+let CCS=[];                        // curricular_changes rows (admin/apcc only)
+let LOCKED=false,LOCK_MSG='';
+let pmId=null;                     // program being edited ('' = new)
+let pcEdit=[];                     // in-memory course-assignment rows while pm modal open: {course_id,relationship_type}
+let compEdit=[];                   // in-memory competency rows while pm modal open
+let ccId=null;                     // curricular change being edited (null = new)
+let cfmCb=null;
+
+const isAdmin=()=>TIER==='admin';
+const isApcc=()=>TIER==='apcc';
+const canProgWrite=()=>isAdmin();
+const canCCWrite=()=>isAdmin()||isApcc();
+
+async function sbSave(q,okMsg){
+  const {error}=await q;
+  if(error){setSS('⚠ '+error.message);return false;}
+  if(okMsg)setSS(okMsg);
+  return true;
+}
+
+/* Paginated fetch — Supabase caps a bare select at ~1000 rows. */
+async function paginate(makeQuery){
+  const PAGE=1000; let from=0; const all=[];
+  for(;;){
+    const {data,error}=await makeQuery().range(from,from+PAGE-1);
+    if(error)return {data:null,error};
+    all.push(...(data||[]));
+    if(!data||data.length<PAGE)break;
+    from+=PAGE;
+  }
+  return {data:all,error:null};
+}
+
+async function resolveTier(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){TIER='public';currentUserEmail=null;return;}
+  currentUserEmail=session.user?.email||null;
+  TIER='public';
+  try{
+    const {data,error}=await sb.from('app_access')
+      .select('level').eq('app','program').maybeSingle();
+    if(!error&&data){
+      if(data.level==='admin')TIER='admin';
+      else if(data.level==='apcc')TIER='apcc';
+      else TIER='viewer';
+    }
+  }catch(e){}
+}
+
+async function loadData(){
+  setLM('Connecting…');
+  if(!sb)initSupabase();
+  await resolveTier();
+
+  setLM('Loading programs…');
+  const noRows=Promise.resolve({data:[],error:null});
+  const [progR,compR,pcR,crsR,ccR]=await Promise.all([
+    paginate(()=>sb.from('programs').select('*')),
+    paginate(()=>sb.from('program_competencies').select('*')),
+    paginate(()=>sb.from('program_courses').select('*')),
+    paginate(()=>sb.from('courses').select('id,full_name,prefix')),
+    canCCWrite()? paginate(()=>sb.from('curricular_changes').select('*')) : noRows
+  ]);
+  for(const r of [progR,compR,pcR,crsR,ccR]){
+    if(r.error){setLM('');throw r.error;}
+  }
+
+  PROGRAMS={}; (progR.data||[]).forEach(p=>{PROGRAMS[p.id]=p;});
+  PROG_COMP={}; (compR.data||[]).forEach(r=>{(PROG_COMP[r.program_id]=PROG_COMP[r.program_id]||[]).push(r);});
+  Object.values(PROG_COMP).forEach(a=>a.sort((x,y)=>(x.sort_order??0)-(y.sort_order??0)));
+  PROG_COURSES={}; (pcR.data||[]).forEach(r=>{(PROG_COURSES[r.program_id]=PROG_COURSES[r.program_id]||[]).push(r);});
+  COURSES={}; (crsR.data||[]).forEach(c=>{COURSES[c.id]=c;});
+  CCS=(ccR.data||[]).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
+
+  try{
+    const {data,error}=await sb.from('app_lockdown').select('*').eq('id',1).maybeSingle();
+    if(!error&&data){LOCKED=!!data.locked;LOCK_MSG=data.message||'';}
+    else if(!error){LOCKED=false;}
+  }catch(e){}
+  renderLockBanner();
+  document.body.classList.toggle('is-locked',LOCKED);
+}
+
+function renderLockBanner(){
+  $('lockdown-banner').innerHTML=LOCKED?('🔒 Editing is locked. '+esc(LOCK_MSG||'')):'';
+}
+
+async function reload(){ await loadData(); renderProgTable(); renderCCTable(); }
+
+/* ── AUTH BAR ── */
+function updateAuthBar(){
+  const slot=$('auth-slot');
+  if(currentUserEmail){
+    slot.innerHTML=`<span class="who">${esc(currentUserEmail)}</span>
+      <button class="btn btn-s" id="btn-out" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3)">Sign out</button>`;
+    $('btn-out').onclick=async()=>{await sb.auth.signOut();location.href=location.pathname;};
+  }else{
+    slot.innerHTML=`<a href="index.html" class="btn btn-s" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3);text-decoration:none;display:inline-flex;align-items:center">Sign in from home →</a>`;
+  }
+  const badge=$('tier-badge');
+  badge.classList.toggle('on',TIER!=='public');
+  badge.classList.toggle('apcc',TIER==='apcc');
+  badge.textContent=TIER.toUpperCase();
+  document.body.classList.toggle('is-admin',isAdmin());
+  document.body.classList.toggle('is-apcc',isApcc());
+  document.body.classList.toggle('is-viewer',TIER==='viewer');
+}
+
+/* ── PROGRAMS: LIST ── */
+function progList(){
+  const q=(val('p-q')||'').toLowerCase();
+  return Object.values(PROGRAMS)
+    .filter(p=>!q||(p.name||'').toLowerCase().includes(q)||(p.credential||'').toLowerCase().includes(q))
+    .sort((a,b)=>(a.sort_order??0)-(b.sort_order??0)||String(a.name||'').localeCompare(String(b.name||'')));
+}
+function countByType(programId,type){
+  return (PROG_COURSES[programId]||[]).filter(r=>r.relationship_type===type).length;
+}
+function renderProgTable(){
+  const rows=progList();
+  $('p-tb').innerHTML=rows.map(p=>`
+    <tr class="clickable" data-id="${esc(p.id)}">
+      <td class="nm">${esc(p.name)}</td>
+      <td>${esc(p.credential||'—')}</td>
+      <td>${p.total_credits??'—'}</td>
+      <td>${countByType(p.id,'required')}</td>
+      <td>${countByType(p.id,'selective')}</td>
+      <td>${countByType(p.id,'elective')}</td>
+    </tr>`).join('')||`<tr><td colspan="6" class="muted" style="padding:20px">No programs yet.</td></tr>`;
+  $('p-cnt').textContent=rows.length+' program'+(rows.length===1?'':'s');
+}
+
+/* ── PROGRAMS: MODAL ── */
+function compRowHTML(text){
+  return `<div class="repeat-row"><input class="cf-comp" placeholder="Competency" value="${esc(text||'')}">
+    <button type="button" class="rrm">✕</button></div>`;
+}
+function renderCompEditor(){
+  $('pm-comp').innerHTML=(compEdit.length?compEdit:['']).map(c=>compRowHTML(c.competency_text??c)).join('');
+}
+function readCompRows(){
+  return [...$('pm-comp').querySelectorAll('.cf-comp')].map(i=>i.value.trim()).filter(Boolean);
+}
+function populateCourseSelect(){
+  const sel=$('pc-course-sel');
+  const opts=Object.values(COURSES).sort((a,b)=>String(a.full_name||'').localeCompare(String(b.full_name||'')));
+  sel.innerHTML=opts.map(c=>`<option value="${esc(c.id)}">${esc(c.full_name||c.prefix||c.id)}</option>`).join('');
+}
+function renderPcGroups(){
+  const wrap=$('pc-groups');
+  const groups={required:[],selective:[],elective:[]};
+  pcEdit.forEach(r=>{if(groups[r.relationship_type])groups[r.relationship_type].push(r);});
+  const labels={required:'Required',selective:'Selectives',elective:'Electives'};
+  wrap.innerHTML=Object.entries(groups).map(([type,rows])=>{
+    if(!rows.length)return '';
+    return `<div class="pc-group"><h4>${labels[type]}</h4>${rows.map(r=>{
+      const c=COURSES[r.course_id];
+      return `<div class="pc-row"><span class="pc-nm">${esc(c?c.full_name:r.course_id)}</span>
+        <button type="button" class="rrm admin-only" data-rm-course="${esc(r.course_id)}" data-rm-type="${esc(type)}">✕</button></div>`;
+    }).join('')}</div>`;
+  }).join('')||'<div class="empty-note">No courses assigned yet.</div>';
+}
+function openProg(id){
+  pmId=id;
+  const p=id?PROGRAMS[id]:{};
+  $('pm-title').textContent=id?'Edit Program':'Add Program';
+  setv('pm-name',p.name); setv('pm-cred',p.credential); setv('pm-desc',p.description); setv('pm-cr',p.total_credits);
+  compEdit=(id?(PROG_COMP[id]||[]):[]).map(r=>({competency_text:r.competency_text}));
+  renderCompEditor();
+  pcEdit=(id?(PROG_COURSES[id]||[]):[]).map(r=>({course_id:r.course_id,relationship_type:r.relationship_type}));
+  populateCourseSelect();
+  renderPcGroups();
+  const editable=canProgWrite();
+  ['pm-name','pm-cred','pm-desc','pm-cr'].forEach(fid=>{$(fid).disabled=!editable;});
+  $('btn-del-prog').style.display=(editable&&id)?'inline-flex':'none';
+  openM('mo-prog');
+}
+async function saveProg(){
+  if(!canProgWrite())return;
+  const name=val('pm-name').trim();
+  if(!name){setSS('⚠ Name is required');return;}
+  const payload={
+    name, credential:N(val('pm-cred')), description:N(val('pm-desc')),
+    total_credits:NUM(val('pm-cr'))
+  };
+  let progId=pmId;
+  if(progId){
+    const ok=await sbSave(sb.from('programs').update(payload).eq('id',progId));
+    if(!ok)return;
+  }else{
+    const {data,error}=await sb.from('programs').insert(payload).select('id').single();
+    if(error){setSS('⚠ '+error.message);return;}
+    progId=data.id;
+  }
+  const comps=readCompRows();
+  await sbSave(sb.from('program_competencies').delete().eq('program_id',progId));
+  if(comps.length){
+    await sbSave(sb.from('program_competencies').insert(
+      comps.map((t,i)=>({program_id:progId,competency_text:t,sort_order:i}))
+    ));
+  }
+  await sbSave(sb.from('program_courses').delete().eq('program_id',progId));
+  if(pcEdit.length){
+    await sbSave(sb.from('program_courses').insert(
+      pcEdit.map((r,i)=>({program_id:progId,course_id:r.course_id,relationship_type:r.relationship_type,sort_order:i}))
+    ));
+  }
+  setSS('● Saved');
+  closeM('mo-prog');
+  await reload();
+}
+function delProg(){
+  if(!pmId)return;
+  showCfm('Delete program?','This also removes its competencies and course assignments. This cannot be undone.',async()=>{
+    const ok=await sbSave(sb.from('programs').delete().eq('id',pmId),'● Deleted');
+    if(ok){closeM('mo-prog');await reload();}
+  });
+}
+
+/* ── CURRICULAR CHANGES: LIST ── */
+function ccTargetLabel(r){
+  if(r.program_id)return 'Program: '+(PROGRAMS[r.program_id]?.name||r.program_id);
+  if(r.course_id)return 'Course: '+(COURSES[r.course_id]?.full_name||r.course_id);
+  return '—';
+}
+function ccList(){
+  const st=val('cc-status-filter');
+  return CCS.filter(r=>!st||r.status===st);
+}
+function renderCCTable(){
+  const rows=ccList();
+  $('cc-tb').innerHTML=rows.map(r=>`
+    <tr class="clickable" data-id="${esc(r.id)}">
+      <td class="nm">${esc(ccTargetLabel(r))}</td>
+      <td>${esc(r.change_type||'—')}</td>
+      <td><span class="pill ${esc(r.status)}">${esc((r.status||'').replace('_',' '))}</span></td>
+      <td>${esc(r.effective_term||'—')}</td>
+      <td>${r.created_at?new Date(r.created_at).toLocaleDateString():'—'}</td>
+    </tr>`).join('')||`<tr><td colspan="5" class="muted" style="padding:20px">No curricular changes.</td></tr>`;
+  $('cc-cnt').textContent=rows.length+' change'+(rows.length===1?'':'s');
+}
+
+/* ── CURRICULAR CHANGES: MODAL ── */
+function populateProgSelect(){
+  const sel=$('ccm-prog');
+  sel.innerHTML=Object.values(PROGRAMS).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')))
+    .map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+}
+function populateCrsSelect(){
+  const sel=$('ccm-crs');
+  sel.innerHTML=Object.values(COURSES).sort((a,b)=>String(a.full_name||'').localeCompare(String(b.full_name||'')))
+    .map(c=>`<option value="${esc(c.id)}">${esc(c.full_name||c.id)}</option>`).join('');
+}
+function ccTargetToggle(){
+  const isProg=$('cc-target-prog').checked;
+  $('ccm-prog-wrap').style.display=isProg?'':'none';
+  $('ccm-crs-wrap').style.display=isProg?'none':'';
+}
+function openCC(id){
+  ccId=id;
+  const r=id?CCS.find(x=>x.id===id):null;
+  $('ccm-title').textContent=id?'Edit Curricular Change':(isApcc()?'Propose Curricular Change':'Add Curricular Change');
+  populateProgSelect(); populateCrsSelect();
+  if(r&&r.course_id){$('cc-target-crs').checked=true;} else {$('cc-target-prog').checked=true;}
+  ccTargetToggle();
+  if(r&&r.program_id)setv('ccm-prog',r.program_id);
+  if(r&&r.course_id)setv('ccm-crs',r.course_id);
+  setv('ccm-type',r?.change_type||'New Course');
+  setv('ccm-term',r?.effective_term);
+  setv('ccm-desc',r?.description);
+  const status=r?.status||(isApcc()?'proposed':'approved');
+  $('ccm-status-pill').textContent=status.replace('_',' ');
+  $('ccm-status-pill').className='pill '+status;
+  $('ccm-status-hint').textContent=isApcc()&&!r?'Submitted as Proposed — requires admin approval before it takes effect.':'';
+  $('btn-cc-approve').style.display=(isAdmin()&&r&&r.status==='proposed')?'inline-flex':'none';
+  $('btn-cc-restore').style.display=(isAdmin()&&r&&r.status==='pending_delete')?'inline-flex':'none';
+  $('btn-cc-harddelete').style.display=(isAdmin()&&r)?'inline-flex':'none';
+  $('btn-cc-request-delete').style.display=(r&&r.status!=='pending_delete'&&canCCWrite())?'inline-flex':'none';
+  openM('mo-cc');
+}
+function ccPayloadFromForm(){
+  const isProg=$('cc-target-prog').checked;
+  return {
+    program_id:isProg?(val('ccm-prog')||null):null,
+    course_id:isProg?null:(val('ccm-crs')||null),
+    change_type:N(val('ccm-type')),
+    effective_term:N(val('ccm-term')),
+    description:N(val('ccm-desc'))
+  };
+}
+async function saveCC(){
+  const payload=ccPayloadFromForm();
+  if(!payload.program_id&&!payload.course_id){setSS('⚠ Pick a Program or a Course');return;}
+  if(ccId){
+    const ok=await sbSave(sb.from('curricular_changes').update(payload).eq('id',ccId),'● Saved');
+    if(!ok)return;
+  }else{
+    payload.status=isApcc()?'proposed':'approved';
+    const ok=await sbSave(sb.from('curricular_changes').insert(payload),
+      isApcc()?'● Proposed — pending admin approval':'● Added');
+    if(!ok)return;
+  }
+  closeM('mo-cc');
+  await reload();
+}
+async function approveCC(){
+  if(!ccId||!isAdmin())return;
+  const {data:{session}}=await sb.auth.getSession();
+  await sbSave(sb.from('curricular_changes').update({
+    status:'approved',approved_by:session?.user?.id||null,approved_at:new Date().toISOString()
+  }).eq('id',ccId),'● Approved');
+  closeM('mo-cc'); await reload();
+}
+async function requestDeleteCC(){
+  if(!ccId)return;
+  await sbSave(sb.from('curricular_changes').update({status:'pending_delete'}).eq('id',ccId),'● Marked pending delete');
+  closeM('mo-cc'); await reload();
+}
+async function restoreCC(){
+  if(!ccId||!isAdmin())return;
+  await sbSave(sb.from('curricular_changes').update({status:'approved'}).eq('id',ccId),'● Restored');
+  closeM('mo-cc'); await reload();
+}
+function hardDeleteCC(){
+  if(!ccId||!isAdmin())return;
+  showCfm('Delete permanently?','This cannot be undone.',async()=>{
+    const ok=await sbSave(sb.from('curricular_changes').delete().eq('id',ccId),'● Deleted');
+    if(ok){closeM('mo-cc');await reload();}
+  });
+}
+
+/* ── MODAL PLUMBING ── */
+function openM(id){$(id).classList.add('open');}
+function closeM(id){$(id).classList.remove('open');if(id==='mo-cfm')cfmCb=null;}
+function showCfm(title,msg,onOk){
+  $('cfm-title').textContent=title; $('cfm-msg').textContent=msg;
+  cfmCb=onOk||null; openM('mo-cfm');
+}
+
+/* ── TABS ── */
+function switchTab(viewId){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===viewId));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===viewId));
+}
+
+/* ── WIRING ── */
+function wire(){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.view)));
+  $('p-q').addEventListener('input',renderProgTable);
+  $('btn-p-clear').onclick=()=>{setv('p-q','');renderProgTable();};
+  $('btn-p-add').onclick=()=>openProg(null);
+  $('p-tb').addEventListener('click',e=>{const tr=e.target.closest('tr[data-id]');if(tr)openProg(tr.dataset.id);});
+  $('pm-comp-add').onclick=()=>{$('pm-comp').insertAdjacentHTML('beforeend',compRowHTML(''));};
+  $('pm-comp').addEventListener('click',e=>{const rm=e.target.closest('.rrm');if(rm)rm.closest('.repeat-row').remove();});
+  $('pc-add-btn').onclick=()=>{
+    const cid=val('pc-course-sel'),type=val('pc-type-sel');
+    if(!cid)return;
+    if(pcEdit.some(r=>r.course_id===cid&&r.relationship_type===type))return;
+    pcEdit.push({course_id:cid,relationship_type:type});
+    renderPcGroups();
+  };
+  $('pc-groups').addEventListener('click',e=>{
+    const rm=e.target.closest('[data-rm-course]');
+    if(!rm)return;
+    pcEdit=pcEdit.filter(r=>!(r.course_id===rm.dataset.rmCourse&&r.relationship_type===rm.dataset.rmType));
+    renderPcGroups();
+  });
+  $('btn-save-prog').onclick=saveProg;
+  $('btn-del-prog').onclick=delProg;
+
+  $('cc-status-filter').addEventListener('change',renderCCTable);
+  $('btn-cc-add').onclick=()=>openCC(null);
+  $('cc-tb').addEventListener('click',e=>{const tr=e.target.closest('tr[data-id]');if(tr)openCC(tr.dataset.id);});
+  $('cc-target-prog').addEventListener('change',ccTargetToggle);
+  $('cc-target-crs').addEventListener('change',ccTargetToggle);
+  $('btn-save-cc').onclick=saveCC;
+  $('btn-cc-approve').onclick=approveCC;
+  $('btn-cc-request-delete').onclick=requestDeleteCC;
+  $('btn-cc-restore').onclick=restoreCC;
+  $('btn-cc-harddelete').onclick=hardDeleteCC;
+
+  $('cfm-ok').onclick=()=>{const cb=cfmCb;closeM('mo-cfm');if(cb)cb();};
+  document.querySelectorAll('[data-close]').forEach(b=>{b.onclick=()=>closeM(b.dataset.close);});
+  document.querySelectorAll('.mo').forEach(o=>{
+    o.addEventListener('click',e=>{if(e.target===o&&o.id!=='mo-prog'&&o.id!=='mo-cc')closeM(o.id);});
+  });
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape')document.querySelectorAll('.mo.open').forEach(o=>closeM(o.id));
+  });
+}
+
+/* ── BOOT ── */
+(async function boot(){
+  wire();
+  onAuthChange=()=>{};
+  initSupabase();
+  try{
+    await loadData();
+  }catch(e){
+    $('ls').style.display='none';
+    $('app').style.display='flex';
+    setSS('⚠ Load failed: '+(e.message||e));
+    updateAuthBar();
+    return;
+  }
+  updateAuthBar();
+  renderProgTable();
+  renderCCTable();
+  $('ls').style.display='none';
+  $('app').style.display='flex';
+  setSS(isAdmin()?'Ready · admin':isApcc()?'Ready · APCC':TIER==='viewer'?'Ready · signed in':'Ready · public view');
+})();
+
+/* ── THEME TOGGLE ── */
+(function(){
+  const KEY='sph-theme', root=document.documentElement, btn=$('btn-theme');
+  const stored=()=>{try{return localStorage.getItem(KEY);}catch(e){return null;}};
+  function sync(){
+    if(!btn)return;
+    const dark=root.getAttribute('data-theme')==='dark';
+    btn.textContent=dark?'☀':'🌙';
+    const t=dark?'Switch to light mode':'Switch to dark mode';
+    btn.title=t; btn.setAttribute('aria-label',t);
+  }
+  if(btn)btn.addEventListener('click',()=>{
+    const next=root.getAttribute('data-theme')==='dark'?'light':'dark';
+    root.setAttribute('data-theme',next);
+    try{localStorage.setItem(KEY,next);}catch(e){}
+    sync();
+  });
+  if(window.matchMedia){
+    const mq=window.matchMedia('(prefers-color-scheme:dark)');
+    const onSys=e=>{const s=stored();if(s!=='dark'&&s!=='light'){root.setAttribute('data-theme',e.matches?'dark':'light');sync();}};
+    mq.addEventListener?mq.addEventListener('change',onSys):mq.addListener(onSys);
+  }
+  sync();
+})();
+</script>
+</body>
+</html>
