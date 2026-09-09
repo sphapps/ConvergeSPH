@@ -304,6 +304,12 @@ tbody tr.deeplink td:first-child{box-shadow:inset 3px 0 0 var(--teal)}
 .ctgrp{padding:2px 12px 10px}
 .cth{font-size:11px;font-weight:700;color:var(--dgray);text-transform:uppercase;letter-spacing:.5px;padding:9px 0 2px}
 .corow{display:grid;grid-template-columns:1fr auto;gap:12px;align-items:baseline;padding:6px 0;border-top:1px solid var(--rowline);font-size:12.5px}
+.creq-list{display:flex;flex-direction:column;gap:2px}
+.creq-item{padding:6px 0;border-top:1px solid var(--rowline);font-size:13px}
+.creq-item:first-child{border-top:none}
+.creq-item a{color:var(--teal);text-decoration:none}
+.creq-item a:hover{text-decoration:underline}
+.creq-note{color:var(--dgray);font-size:11.5px}
 .corow .cmeta{color:var(--dgray);font-size:11.5px;text-align:right;white-space:nowrap}
 /* On-Campus frozen header + time ruler. `top` on .g-times is set from the
    header's measured height after each render — the header's height depends on
@@ -962,6 +968,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
         <label>Prerequisites</label>
         <div class="tag-add">
           <select id="cm-prereq-sel"></select>
+          <input id="cm-prereq-custom" placeholder="Custom text (e.g. Consent of instructor)" style="display:none">
           <input id="cm-prereq-note" placeholder="Note (optional) — e.g. or instructor permission">
           <button type="button" class="btn btn-s" id="cm-prereq-add">+ Add</button>
         </div>
@@ -970,6 +977,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
         <label style="margin-top:10px">Co-requisites</label>
         <div class="tag-add">
           <select id="cm-coreq-sel"></select>
+          <input id="cm-coreq-custom" placeholder="Custom text (e.g. Consent of instructor)" style="display:none">
           <input id="cm-coreq-note" placeholder="Note (optional)">
           <button type="button" class="btn btn-s" id="cm-coreq-add">+ Add</button>
         </div>
@@ -2888,6 +2896,31 @@ let crsReturnView='schedule';   // tab to restore when the page is dismissed
 
 function courseHistoryVisible(){return canEdit();}   // ← SHOW_HISTORY
 
+function prereqCoreqHTML(rows,uuidKey){
+  return rows.map(r=>{
+    const noteTxt=r.note?` <span class="creq-note">(${esc(r.note)})</span>`:'';
+    const targetUuid=r[uuidKey];
+    if(!targetUuid)return `<div class="creq-item">${esc(r.custom_text||'')}${noteTxt}</div>`;
+    const tc=DB.courses.find(x=>x._uuid===targetUuid);
+    if(!tc)return `<div class="creq-item">${esc(r.custom_text||targetUuid)}${noteTxt}</div>`;
+    return `<div class="creq-item"><a class="clink" href="?course=${esc(encodeURIComponent(tc.id))}" data-course="${esc(tc.id)}">${esc(tc.fullName)}</a>${noteTxt}</div>`;
+  }).join('');
+}
+function programLinkageHTML(c){
+  const rows=DB.programCoursesByCourse[c._uuid]||[];
+  if(!rows.length)return '';
+  const labels={core_required:'Core Required',program_required:'Program Required',selective:'Selective',elective:'Elective'};
+  const items=rows.slice().sort((a,b)=>{
+    const pa=DB.programsById[a.program_id],pb=DB.programsById[b.program_id];
+    return String(pa?pa.name:'').localeCompare(String(pb?pb.name:''));
+  }).map(r=>{
+    const p=DB.programsById[r.program_id];
+    const name=p?(p.name+(p.credential?' ('+p.credential+')':'')):r.program_id;
+    return `<div class="creq-item"><a href="program.html?program=${esc(encodeURIComponent(r.program_id))}">${esc(name)}</a>
+      <span class="creq-note">${esc(labels[r.relationship_type]||r.relationship_type)}</span></div>`;
+  }).join('');
+  return `<div class="ccard"><h3>Program Linkage</h3><div class="creq-list">${items}</div></div>`;
+}
 function renderCourse(code){
   const wrap=$('crs-body');
   let c=DB.courses.find(x=>String(x.id)===String(code));
@@ -2924,6 +2957,14 @@ function renderCourse(code){
   h+=`<div class="ccard"><h3>Description</h3>`+
      (N_(c.description)?`<div class="cdesc">${esc(c.description)}</div>`
                        :`<div class="cgate">No description on file.</div>`)+`</div>`;
+
+  const preRows=DB.coursePrereqByCourse[c._uuid]||[];
+  if(preRows.length)
+    h+=`<div class="ccard"><h3>Prerequisites</h3><div class="creq-list">${prereqCoreqHTML(preRows,'prerequisite_course_id')}</div></div>`;
+  const coRows=DB.courseCoreqByCourse[c._uuid]||[];
+  if(coRows.length)
+    h+=`<div class="ccard"><h3>Co-requisites</h3><div class="creq-list">${prereqCoreqHTML(coRows,'corequisite_course_id')}</div></div>`;
+  h+=programLinkageHTML(c);
 
   const uPsu=catalogUrl(c,'psu'), uOhsu=catalogUrl(c,'ohsu');
   if(uPsu||uOhsu){
@@ -3362,8 +3403,8 @@ function openCM(id){
     $('cm-adv-hint').style.display='none';
     populateAdvSelects(uuidForAdv);
     populateProgSelect();
-    prereqEdit=(DB.coursePrereqByCourse[uuidForAdv]||[]).map(r=>({prerequisite_course_id:r.prerequisite_course_id,note:r.note}));
-    coreqEdit=(DB.courseCoreqByCourse[uuidForAdv]||[]).map(r=>({corequisite_course_id:r.corequisite_course_id,note:r.note}));
+    prereqEdit=(DB.coursePrereqByCourse[uuidForAdv]||[]).map(r=>({prerequisite_course_id:r.prerequisite_course_id,custom_text:r.custom_text,note:r.note}));
+    coreqEdit=(DB.courseCoreqByCourse[uuidForAdv]||[]).map(r=>({corequisite_course_id:r.corequisite_course_id,custom_text:r.custom_text,note:r.note}));
     progLinkEdit=(DB.programCoursesByCourse[uuidForAdv]||[]).map(r=>({program_id:r.program_id,relationship_type:r.relationship_type}));
     renderPrereqList();renderCoreqList();renderProgGroups();
     $('cm-doc-rows').innerHTML=(DB.courseDocsByCourse[uuidForAdv]||[]).map(docRowEditHTML).join('');
@@ -3381,9 +3422,12 @@ function openCM(id){
 function populateAdvSelects(excludeUuid){
   const opts=DB.courses.filter(c=>!c.parentUuid&&!c.discontinued&&c._uuid!==excludeUuid)
     .sort((a,b)=>String(a.fullName||'').localeCompare(String(b.fullName||'')));
-  const html=opts.map(c=>`<option value="${esc(c._uuid)}">${esc(c.fullName)}</option>`).join('');
+  const html=opts.map(c=>`<option value="${esc(c._uuid)}">${esc(c.fullName)}</option>`).join('')
+    +'<option value="__other__">Other (custom text)…</option>';
   $('cm-prereq-sel').innerHTML=html;
   $('cm-coreq-sel').innerHTML=html;
+  $('cm-prereq-custom').style.display='none';$('cm-prereq-custom').value='';
+  $('cm-coreq-custom').style.display='none';$('cm-coreq-custom').value='';
 }
 function populateProgSelect(){
   const progs=Object.values(DB.programsById).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
@@ -3395,14 +3439,14 @@ function courseNameByUuid(uuid){
 }
 function renderPrereqList(){
   $('cm-prereq-list').innerHTML=prereqEdit.map((r,i)=>
-    `<div class="tag-row"><span class="tag-nm">${esc(courseNameByUuid(r.prerequisite_course_id))}</span>`+
+    `<div class="tag-row"><span class="tag-nm">${esc(r.prerequisite_course_id?courseNameByUuid(r.prerequisite_course_id):r.custom_text)}</span>`+
     (r.note?`<span class="tag-note">${esc(r.note)}</span>`:'')+
     `<button type="button" class="rrm" data-rm-prereq="${i}">✕</button></div>`
   ).join('')||'<div class="fhint">None yet.</div>';
 }
 function renderCoreqList(){
   $('cm-coreq-list').innerHTML=coreqEdit.map((r,i)=>
-    `<div class="tag-row"><span class="tag-nm">${esc(courseNameByUuid(r.corequisite_course_id))}</span>`+
+    `<div class="tag-row"><span class="tag-nm">${esc(r.corequisite_course_id?courseNameByUuid(r.corequisite_course_id):r.custom_text)}</span>`+
     (r.note?`<span class="tag-note">${esc(r.note)}</span>`:'')+
     `<button type="button" class="rrm" data-rm-coreq="${i}">✕</button></div>`
   ).join('')||'<div class="fhint">None yet.</div>';
@@ -3501,13 +3545,13 @@ async function saveCrs(){
   await sbSave(sb.from('course_prerequisites').delete().eq('course_id',uuid));
   if(prereqEdit.length){
     await sbSave(sb.from('course_prerequisites').insert(
-      prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id,note:r.note}))
+      prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id||null,custom_text:r.custom_text||null,note:r.note}))
     ));
   }
   await sbSave(sb.from('course_corequisites').delete().eq('course_id',uuid));
   if(coreqEdit.length){
     await sbSave(sb.from('course_corequisites').insert(
-      coreqEdit.map(r=>({course_id:uuid,corequisite_course_id:r.corequisite_course_id,note:r.note}))
+      coreqEdit.map(r=>({course_id:uuid,corequisite_course_id:r.corequisite_course_id||null,custom_text:r.custom_text||null,note:r.note}))
     ));
   }
   const cmDocs=readDocRows();
@@ -3532,8 +3576,8 @@ async function saveCrs(){
   }
   // Refresh this course's in-memory indexes so the modal reflects the save
   // immediately if reopened before the next full reload.
-  DB.coursePrereqByCourse[uuid]=prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id,note:r.note}));
-  DB.courseCoreqByCourse[uuid]=coreqEdit.map(r=>({course_id:uuid,corequisite_course_id:r.corequisite_course_id,note:r.note}));
+  DB.coursePrereqByCourse[uuid]=prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id,custom_text:r.custom_text,note:r.note}));
+  DB.courseCoreqByCourse[uuid]=coreqEdit.map(r=>({course_id:uuid,corequisite_course_id:r.corequisite_course_id,custom_text:r.custom_text,note:r.note}));
   DB.courseDocsByCourse[uuid]=cmDocs.map((d,i)=>({course_id:uuid,category:d.category,description:d.description,doc_date:d.doc_date,sp_url:d.sp_url,sort_order:i}));
 
   // Sections keep their own copy of every inherited field, because faculty.html
@@ -4297,22 +4341,44 @@ function wireEvents(){
     const d=e.target.closest('.dot');if(d)toggleOff(d.dataset.cid,d.dataset.pfx,d.dataset.term);
     const b=e.target.closest('.ec');if(b)openCM(b.dataset.id);
   });
+  $('crs-body').addEventListener('click',e=>{
+    const a=e.target.closest('a.clink');
+    if(a&&!(e.metaKey||e.ctrlKey||e.shiftKey||e.button)){e.preventDefault();openCourse(a.dataset.course);return;}
+  });
   $('btn-save-crs').addEventListener('click',saveCrs);
   $('btn-del-crs').addEventListener('click',delCrs);
+  $('cm-prereq-sel').addEventListener('change',()=>{
+    $('cm-prereq-custom').style.display=val('cm-prereq-sel')==='__other__'?'':'none';
+  });
   $('cm-prereq-add').addEventListener('click',()=>{
-    const cid=val('cm-prereq-sel');if(!cid)return;
-    if(prereqEdit.some(r=>r.prerequisite_course_id===cid))return;
-    prereqEdit.push({prerequisite_course_id:cid,note:val('cm-prereq-note').trim()||null});
+    const sel=val('cm-prereq-sel');if(!sel)return;
+    if(sel==='__other__'){
+      const txt=val('cm-prereq-custom').trim();if(!txt)return;
+      prereqEdit.push({prerequisite_course_id:null,custom_text:txt,note:val('cm-prereq-note').trim()||null});
+      setv('cm-prereq-custom','');
+    }else{
+      if(prereqEdit.some(r=>r.prerequisite_course_id===sel))return;
+      prereqEdit.push({prerequisite_course_id:sel,custom_text:null,note:val('cm-prereq-note').trim()||null});
+    }
     setv('cm-prereq-note','');renderPrereqList();
   });
   $('cm-prereq-list').addEventListener('click',e=>{
     const rm=e.target.closest('[data-rm-prereq]');if(!rm)return;
     prereqEdit.splice(+rm.dataset.rmPrereq,1);renderPrereqList();
   });
+  $('cm-coreq-sel').addEventListener('change',()=>{
+    $('cm-coreq-custom').style.display=val('cm-coreq-sel')==='__other__'?'':'none';
+  });
   $('cm-coreq-add').addEventListener('click',()=>{
-    const cid=val('cm-coreq-sel');if(!cid)return;
-    if(coreqEdit.some(r=>r.corequisite_course_id===cid))return;
-    coreqEdit.push({corequisite_course_id:cid,note:val('cm-coreq-note').trim()||null});
+    const sel=val('cm-coreq-sel');if(!sel)return;
+    if(sel==='__other__'){
+      const txt=val('cm-coreq-custom').trim();if(!txt)return;
+      coreqEdit.push({corequisite_course_id:null,custom_text:txt,note:val('cm-coreq-note').trim()||null});
+      setv('cm-coreq-custom','');
+    }else{
+      if(coreqEdit.some(r=>r.corequisite_course_id===sel))return;
+      coreqEdit.push({corequisite_course_id:sel,custom_text:null,note:val('cm-coreq-note').trim()||null});
+    }
     setv('cm-coreq-note','');renderCoreqList();
   });
   $('cm-coreq-list').addEventListener('click',e=>{
