@@ -145,6 +145,42 @@ tbody tr.clickable{cursor:pointer}
 .target-radio{display:flex;gap:16px;grid-column:1/-1;font-size:12px;color:var(--text)}
 .target-radio label{display:flex;align-items:center;gap:5px;cursor:pointer}
 
+/* Row edit-icon (Programs list) */
+.row-edit-btn{background:none;border:1px solid var(--mgray);color:var(--dgray);border-radius:4px;
+  cursor:pointer;font-size:12px;padding:3px 7px;line-height:1}
+.row-edit-btn:hover{background:var(--lgray);color:var(--navytx);border-color:var(--teal)}
+
+/* Reorder buttons in the course-assignment editor */
+.reorder-btns{display:flex;flex-direction:column;gap:1px}
+.reorder-btns button{background:none;border:1px solid var(--mgray);color:var(--dgray);
+  border-radius:3px;cursor:pointer;font-size:9px;line-height:1;padding:1px 4px;width:18px}
+.reorder-btns button:hover{background:var(--lgray);color:var(--navytx)}
+.reorder-btns button:disabled{opacity:.3;cursor:default}
+
+/* ═══ PROGRAM DETAIL PAGE (mirrors scheduling.html's course page) ═══ */
+.pv-scroll{flex:1;overflow:auto}
+.pv-wrap{max-width:820px;margin:0 auto;padding:20px 24px 60px}
+.pv-back{background:none;border:none;color:var(--teal);font-size:13px;cursor:pointer;padding:4px 0;margin-bottom:12px;font-family:inherit}
+.pv-back:hover{text-decoration:underline}
+.pv-head{background:var(--surface);border:1px solid var(--mgray);border-radius:8px;padding:18px 20px;margin-bottom:14px}
+.pv-head h2{font-size:20px;color:var(--navytx);font-weight:600;line-height:1.35}
+.pv-head .pv-sub{font-size:12px;color:var(--dgray);margin-top:5px;letter-spacing:.3px}
+.pv-facts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.pv-fact{background:var(--lgray);border:1px solid var(--rowline);border-radius:6px;padding:6px 12px;font-size:13px;min-width:96px}
+.pv-fact b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--dgray);font-weight:600;margin-bottom:2px}
+.pv-card{background:var(--surface);border:1px solid var(--mgray);border-radius:8px;padding:16px 20px;margin-bottom:14px}
+.pv-card h3{font-size:12px;color:var(--navytx);text-transform:uppercase;letter-spacing:.7px;margin-bottom:10px;font-weight:700}
+.pv-desc{font-size:14px;line-height:1.65;white-space:pre-wrap}
+.pv-gate{font-size:13px;color:var(--dgray);font-style:italic}
+.pv-complist{margin:0;padding-left:18px;font-size:13px;line-height:1.7}
+.pv-ctable{width:100%;border-collapse:collapse}
+.pv-ctable td{padding:6px 4px;border-top:1px solid var(--rowline);font-size:13px}
+.pv-ctable tr:first-child td{border-top:none}
+.pv-ctable td.pv-code{width:90px;color:var(--dgray);white-space:nowrap}
+.pv-ctable td.pv-cr{width:50px;text-align:right;color:var(--dgray);white-space:nowrap}
+.pv-ctable a{color:var(--teal);text-decoration:none}
+.pv-ctable a:hover{text-decoration:underline}
+
 #ls{position:fixed;inset:0;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:9000}
 #ls h2{font-size:18px;color:var(--navytx)}
 #ls p{font-size:13px;color:var(--dgray)}
@@ -189,7 +225,7 @@ tbody tr.clickable{cursor:pointer}
         <table>
           <thead><tr>
             <th>Name</th><th>Credential</th><th>Total CR</th>
-            <th>Required</th><th>Selectives</th><th>Electives</th>
+            <th>Core CR</th><th>Program CR</th><th>Elective CR</th><th></th>
           </tr></thead>
           <tbody id="p-tb"></tbody>
         </table>
@@ -217,6 +253,11 @@ tbody tr.clickable{cursor:pointer}
         </table>
       </div>
     </section>
+
+    <!-- ── PROGRAM DETAIL PAGE (no tab — reached by clicking a program) ── -->
+    <section class="view" id="v-progdetail">
+      <div class="pv-scroll" id="pv-scroll"><div class="pv-wrap" id="pv-body"></div></div>
+    </section>
   </main>
 </div>
 
@@ -231,6 +272,9 @@ tbody tr.clickable{cursor:pointer}
         <div><label>Credential *</label><input id="pm-cred" placeholder="MPH, PhD, Graduate Certificate…"></div>
         <div class="full"><label>Description</label><textarea id="pm-desc"></textarea></div>
         <div><label>Total Credits</label><input id="pm-cr" type="number" step="0.5"></div>
+        <div><label>Core Credits</label><input id="pm-core-cr" type="number" step="0.5"></div>
+        <div><label>Program Credits</label><input id="pm-prog-cr" type="number" step="0.5"></div>
+        <div><label>Elective Credits</label><input id="pm-elec-cr" type="number" step="0.5"></div>
 
         <div class="sect">Competencies<button type="button" class="addrow" id="pm-comp-add">+ Add</button></div>
         <div class="repeat" id="pm-comp"></div>
@@ -239,7 +283,8 @@ tbody tr.clickable{cursor:pointer}
         <div class="pc-add admin-only">
           <select id="pc-course-sel"></select>
           <select id="pc-type-sel">
-            <option value="required">Required</option>
+            <option value="core_required">Core Required</option>
+            <option value="program_required">Program Required</option>
             <option value="selective">Selective</option>
             <option value="elective">Elective</option>
           </select>
@@ -360,6 +405,8 @@ let pmId=null;                     // program being edited ('' = new)
 let pcEdit=[];                     // in-memory course-assignment rows while pm modal open: {course_id,relationship_type}
 let compEdit=[];                   // in-memory competency rows while pm modal open
 let ccId=null;                     // curricular change being edited (null = new)
+let progViewId=null;               // program currently shown on the detail page (null = not on it)
+let progReturnView='v-prog';       // tab to restore when the detail page is dismissed
 let cfmCb=null;
 
 const isAdmin=()=>TIER==='admin';
@@ -414,7 +461,7 @@ async function loadData(){
     paginate(()=>sb.from('programs').select('*')),
     paginate(()=>sb.from('program_competencies').select('*')),
     paginate(()=>sb.from('program_courses').select('*')),
-    paginate(()=>sb.from('courses').select('id,full_name,prefix,parent_id')),
+    paginate(()=>sb.from('courses').select('id,course_code,full_name,prefix,number,title,credits,parent_id')),
     // Curricular Changes tab is disabled pending a rework — no point pulling
     // this data until the tab is reachable again.
     noRows
@@ -443,7 +490,12 @@ function renderLockBanner(){
   $('lockdown-banner').innerHTML=LOCKED?('🔒 Editing is locked. '+esc(LOCK_MSG||'')):'';
 }
 
-async function reload(){ await loadData(); renderProgTable(); renderCCTable(); }
+async function reload(){
+  await loadData();
+  renderProgTable();
+  renderCCTable();
+  if(progViewId&&PROGRAMS[progViewId])renderProgramDetail(progViewId);
+}
 
 /* ── AUTH BAR ── */
 function updateAuthBar(){
@@ -471,9 +523,6 @@ function progList(){
     .filter(p=>!q||(p.name||'').toLowerCase().includes(q)||(p.credential||'').toLowerCase().includes(q))
     .sort((a,b)=>(a.sort_order??0)-(b.sort_order??0)||String(a.name||'').localeCompare(String(b.name||'')));
 }
-function countByType(programId,type){
-  return (PROG_COURSES[programId]||[]).filter(r=>r.relationship_type===type).length;
-}
 function renderProgTable(){
   const rows=progList();
   $('p-tb').innerHTML=rows.map(p=>`
@@ -481,10 +530,11 @@ function renderProgTable(){
       <td class="nm">${esc(p.name)}</td>
       <td>${esc(p.credential||'—')}</td>
       <td>${p.total_credits??'—'}</td>
-      <td>${countByType(p.id,'required')}</td>
-      <td>${countByType(p.id,'selective')}</td>
-      <td>${countByType(p.id,'elective')}</td>
-    </tr>`).join('')||`<tr><td colspan="6" class="muted" style="padding:20px">No programs yet.</td></tr>`;
+      <td>${p.core_credits??'—'}</td>
+      <td>${p.program_credits??'—'}</td>
+      <td>${p.elective_credits??'—'}</td>
+      <td><button type="button" class="row-edit-btn admin-only" data-edit-prog="${esc(p.id)}" title="Edit program">✎ Edit</button></td>
+    </tr>`).join('')||`<tr><td colspan="7" class="muted" style="padding:20px">No programs yet.</td></tr>`;
   $('p-cnt').textContent=rows.length+' program'+(rows.length===1?'':'s');
 }
 
@@ -507,30 +557,47 @@ function populateCourseSelect(){
 }
 function renderPcGroups(){
   const wrap=$('pc-groups');
-  const groups={required:[],selective:[],elective:[]};
-  pcEdit.forEach(r=>{if(groups[r.relationship_type])groups[r.relationship_type].push(r);});
-  const labels={required:'Required',selective:'Selectives',elective:'Electives'};
-  wrap.innerHTML=Object.entries(groups).map(([type,rows])=>{
-    if(!rows.length)return '';
-    return `<div class="pc-group"><h4>${labels[type]}</h4>${rows.map(r=>{
+  const groups={core_required:[],program_required:[],selective:[],elective:[]};
+  pcEdit.forEach((r,i)=>{if(groups[r.relationship_type])groups[r.relationship_type].push(i);});
+  const labels={core_required:'Core Required',program_required:'Program Required',selective:'Selectives',elective:'Electives'};
+  const editable=canProgWrite();
+  wrap.innerHTML=Object.entries(groups).map(([type,idxs])=>{
+    if(!idxs.length)return '';
+    return `<div class="pc-group"><h4>${labels[type]}</h4>${idxs.map((i,pos)=>{
+      const r=pcEdit[i];
       const c=COURSES[r.course_id];
-      return `<div class="pc-row"><span class="pc-nm">${esc(c?c.full_name:r.course_id)}</span>
-        <button type="button" class="rrm admin-only" data-rm-course="${esc(r.course_id)}" data-rm-type="${esc(type)}">✕</button></div>`;
+      const upDis=pos===0?' disabled':'';
+      const dnDis=pos===idxs.length-1?' disabled':'';
+      return `<div class="pc-row">
+        ${editable?`<span class="reorder-btns"><button type="button" data-move-up="${i}"${upDis}>▲</button><button type="button" data-move-dn="${i}"${dnDis}>▼</button></span>`:''}
+        <span class="pc-nm">${esc(c?c.full_name:r.course_id)}</span>
+        <button type="button" class="rrm admin-only" data-rm-course="${i}">✕</button></div>`;
     }).join('')}</div>`;
   }).join('')||'<div class="empty-note">No courses assigned yet.</div>';
+}
+function moveProgCourse(i,dir){
+  // Swap with the nearest neighbor OF THE SAME TYPE in the given direction —
+  // reordering within a group must not disturb the other groups' order.
+  const type=pcEdit[i].relationship_type;
+  let j=i+dir;
+  while(j>=0&&j<pcEdit.length&&pcEdit[j].relationship_type!==type)j+=dir;
+  if(j<0||j>=pcEdit.length)return;
+  [pcEdit[i],pcEdit[j]]=[pcEdit[j],pcEdit[i]];
+  renderPcGroups();
 }
 function openProg(id){
   pmId=id;
   const p=id?PROGRAMS[id]:{};
   $('pm-title').textContent=id?'Edit Program':'Add Program';
   setv('pm-name',p.name); setv('pm-cred',p.credential); setv('pm-desc',p.description); setv('pm-cr',p.total_credits);
+  setv('pm-core-cr',p.core_credits); setv('pm-prog-cr',p.program_credits); setv('pm-elec-cr',p.elective_credits);
   compEdit=(id?(PROG_COMP[id]||[]):[]).map(r=>({competency_text:r.competency_text}));
   renderCompEditor();
   pcEdit=(id?(PROG_COURSES[id]||[]):[]).map(r=>({course_id:r.course_id,relationship_type:r.relationship_type}));
   populateCourseSelect();
   renderPcGroups();
   const editable=canProgWrite();
-  ['pm-name','pm-cred','pm-desc','pm-cr'].forEach(fid=>{$(fid).disabled=!editable;});
+  ['pm-name','pm-cred','pm-desc','pm-cr','pm-core-cr','pm-prog-cr','pm-elec-cr'].forEach(fid=>{$(fid).disabled=!editable;});
   $('btn-del-prog').style.display=(editable&&id)?'inline-flex':'none';
   openM('mo-prog');
 }
@@ -547,7 +614,10 @@ async function saveProg(){
   if(!credential){setSS('⚠ Credential is required');return;}
   const payload={
     name, credential, description:N(val('pm-desc')),
-    total_credits:NUM(val('pm-cr'))
+    total_credits:NUM(val('pm-cr')),
+    core_credits:NUM(val('pm-core-cr')),
+    program_credits:NUM(val('pm-prog-cr')),
+    elective_credits:NUM(val('pm-elec-cr'))
   };
   let progId=pmId;
   if(progId){
@@ -705,8 +775,109 @@ function showCfm(title,msg,onOk){
 
 /* ── TABS ── */
 function switchTab(viewId){
+  // Leaving the program detail page via a tab click: strip the param so a
+  // refresh doesn't drop the person back onto the program they just left.
+  const u=new URL(window.location);
+  if(u.searchParams.has('program')){u.searchParams.delete('program');history.replaceState({},'',u);}
+  progViewId=null;
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===viewId));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===viewId));
+}
+
+/* ── PROGRAM DETAIL PAGE ── */
+function courseTableRows(programId,type){
+  return (PROG_COURSES[programId]||[])
+    .filter(r=>r.relationship_type===type)
+    .sort((a,b)=>(a.sort_order??0)-(b.sort_order??0))
+    .map(r=>COURSES[r.course_id])
+    .filter(Boolean);
+}
+function courseRowHTML(c){
+  const code=c.course_code||c.id;
+  const label=[c.prefix,c.number].filter(Boolean).join(' ')||code;
+  return `<tr><td class="pv-code">${esc(label)}</td>
+    <td><a href="scheduling.html?course=${encodeURIComponent(code)}">${esc(c.title||c.full_name||label)}</a></td>
+    <td class="pv-cr">${c.credits??''}</td></tr>`;
+}
+function courseSectionHTML(title,programId,type,credits){
+  const rows=courseTableRows(programId,type);
+  if(!rows.length)return '';
+  const heading=credits!=null?`${title} (${credits} Credits)`:title;
+  return `<div class="pv-card"><h3>${esc(heading)}</h3>
+    <table class="pv-ctable">${rows.map(courseRowHTML).join('')}</table></div>`;
+}
+function renderProgramDetail(id){
+  const p=PROGRAMS[id];
+  const wrap=$('pv-body');
+  if(!p){
+    wrap.innerHTML=`<button class="pv-back" id="pv-back">← Back</button>
+      <div class="pv-card"><div class="pv-gate">That program isn't in the catalog.</div></div>`;
+    $('pv-back').onclick=closeProgramView;
+    return;
+  }
+  let h=`<button class="pv-back" id="pv-back">← Back</button>`;
+  h+=`<div class="pv-head">
+    <h2>${esc(p.name)}</h2>
+    <div class="pv-sub">${esc(p.credential||'')}</div>
+    <div class="pv-facts">
+      ${p.total_credits!=null?`<div class="pv-fact"><b>Total</b>${esc(p.total_credits)} Credits</div>`:''}
+      ${p.core_credits!=null?`<div class="pv-fact"><b>Core</b>${esc(p.core_credits)} Credits</div>`:''}
+      ${p.program_credits!=null?`<div class="pv-fact"><b>Program</b>${esc(p.program_credits)} Credits</div>`:''}
+      ${p.elective_credits!=null?`<div class="pv-fact"><b>Elective</b>${esc(p.elective_credits)} Credits</div>`:''}
+    </div>
+    ${canProgWrite()?`<div style="margin-top:12px"><button class="btn btn-s" id="pv-edit-btn">✎ Edit Program</button></div>`:''}
+  </div>`;
+  h+=`<div class="pv-card"><h3>Description</h3>`+
+    (p.description?`<div class="pv-desc">${esc(p.description)}</div>`:`<div class="pv-gate">No description on file.</div>`)+
+    `</div>`;
+  const comps=PROG_COMP[id]||[];
+  if(comps.length){
+    h+=`<div class="pv-card"><h3>Program Competencies</h3>
+      <ul class="pv-complist">${comps.map(c=>`<li>${esc(c.competency_text)}</li>`).join('')}</ul></div>`;
+  }
+  h+=courseSectionHTML('Core Required Coursework',id,'core_required',p.core_credits);
+  h+=courseSectionHTML('Program Required Coursework',id,'program_required',p.program_credits);
+  h+=courseSectionHTML('Selective courses from the following',id,'selective',null);
+  h+=courseSectionHTML('Elective courses from the following',id,'elective',p.elective_credits);
+  wrap.innerHTML=h;
+  $('pv-back').onclick=closeProgramView;
+  const editBtn=$('pv-edit-btn');
+  if(editBtn)editBtn.onclick=()=>openProg(id);
+}
+
+/* ── PROGRAM DETAIL ROUTER (mirrors scheduling.html's course-page router) ── */
+function openProgramView(id,push=true){
+  if(!id||!PROGRAMS[id])return;
+  const cur=document.querySelector('.view.active');
+  if(cur&&cur.id!=='v-progdetail')progReturnView=cur.id;
+  if(push){
+    const u=new URL(window.location);u.searchParams.set('program',id);
+    history.pushState({program:id},'',u);
+  }
+  progViewId=id;
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  $('v-progdetail').classList.add('active');
+  renderProgramDetail(id);
+  const s=$('pv-scroll');if(s)s.scrollTop=0;
+}
+function closeProgramView(){
+  if(history.state&&history.state.program){history.back();return;}
+  const u=new URL(window.location);u.searchParams.delete('program');
+  history.replaceState({},'',u);
+  progViewId=null;
+  switchTab(progReturnView||'v-prog');
+}
+window.addEventListener('popstate',()=>{
+  const id=new URL(window.location).searchParams.get('program');
+  if(id)openProgramView(id,false);
+  else if(progViewId!==null){progViewId=null;switchTab(progReturnView||'v-prog');}
+});
+function handleProgramDeepLink(){
+  const id=new URL(window.location).searchParams.get('program');
+  if(!id)return false;
+  openProgramView(id,false);
+  return true;
 }
 
 /* ── WIRING ── */
@@ -715,7 +886,12 @@ function wire(){
   $('p-q').addEventListener('input',renderProgTable);
   $('btn-p-clear').onclick=()=>{setv('p-q','');renderProgTable();};
   $('btn-p-add').onclick=()=>openProg(null);
-  $('p-tb').addEventListener('click',e=>{const tr=e.target.closest('tr[data-id]');if(tr)openProg(tr.dataset.id);});
+  $('p-tb').addEventListener('click',e=>{
+    const editBtn=e.target.closest('[data-edit-prog]');
+    if(editBtn){openProg(editBtn.dataset.editProg);return;}
+    const tr=e.target.closest('tr[data-id]');
+    if(tr)openProgramView(tr.dataset.id);
+  });
   $('pm-comp-add').onclick=()=>{$('pm-comp').insertAdjacentHTML('beforeend',compRowHTML(''));};
   $('pm-comp').addEventListener('click',e=>{const rm=e.target.closest('.rrm');if(rm)rm.closest('.repeat-row').remove();});
   $('pc-add-btn').onclick=()=>{
@@ -726,9 +902,15 @@ function wire(){
     renderPcGroups();
   };
   $('pc-groups').addEventListener('click',e=>{
+    const mv=e.target.closest('[data-move-up],[data-move-dn]');
+    if(mv){
+      const i=+(mv.dataset.moveUp??mv.dataset.moveDn);
+      moveProgCourse(i,mv.dataset.moveUp!=null?-1:1);
+      return;
+    }
     const rm=e.target.closest('[data-rm-course]');
     if(!rm)return;
-    pcEdit=pcEdit.filter(r=>!(r.course_id===rm.dataset.rmCourse&&r.relationship_type===rm.dataset.rmType));
+    pcEdit.splice(+rm.dataset.rmCourse,1);
     renderPcGroups();
   });
   $('btn-save-prog').onclick=saveProg;
@@ -772,6 +954,7 @@ function wire(){
   updateAuthBar();
   renderProgTable();
   renderCCTable();
+  handleProgramDeepLink();
   $('ls').style.display='none';
   $('app').style.display='flex';
   setSS(isAdmin()?'Ready · admin':isApcc()?'Ready · APCC':TIER==='viewer'?'Ready · signed in':'Ready · public view');

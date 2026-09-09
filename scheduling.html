@@ -979,7 +979,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
         <div class="fhint" id="cm-prog-perm-hint" style="margin:0 0 6px"></div>
         <div class="tag-add">
           <select id="cm-prog-sel"></select>
-          <select id="cm-prog-type-sel"><option value="required">Required</option><option value="selective">Selective</option><option value="elective">Elective</option></select>
+          <select id="cm-prog-type-sel"><option value="core_required">Core Required</option><option value="program_required">Program Required</option><option value="selective">Selective</option><option value="elective">Elective</option></select>
           <button type="button" class="btn btn-s" id="cm-prog-add">+ Add</button>
         </div>
         <div class="pc-groups" id="cm-prog-groups"></div>
@@ -3408,9 +3408,9 @@ function renderCoreqList(){
   ).join('')||'<div class="fhint">None yet.</div>';
 }
 function renderProgGroups(){
-  const groups={required:[],selective:[],elective:[]};
+  const groups={core_required:[],program_required:[],selective:[],elective:[]};
   progLinkEdit.forEach((r,i)=>{if(groups[r.relationship_type])groups[r.relationship_type].push({program_id:r.program_id,_i:i});});
-  const labels={required:'Required',selective:'Selectives',elective:'Electives'};
+  const labels={core_required:'Core Required',program_required:'Program Required',selective:'Selectives',elective:'Electives'};
   const rmHidden=isProgAdmin?'':' style="display:none"';
   $('cm-prog-groups').innerHTML=Object.entries(groups).map(([type,rows])=>{
     if(!rows.length)return '';
