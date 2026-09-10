@@ -198,6 +198,13 @@ td{padding:7px 10px;vertical-align:middle}
 .tag-row{display:flex;align-items:center;gap:8px;padding:4px 8px;background:var(--lgray);border-radius:5px;font-size:12.5px}
 .tag-row .tag-nm{flex:1}
 .tag-row .tag-note{color:var(--dgray);font-size:11px}
+.tag-row.tag-cluster{flex-wrap:wrap}
+.tag-cluster-items{flex:1;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.tag-and-item{display:inline-flex;align-items:center;gap:5px}
+.tag-and-item .rrm{width:20px;height:20px;font-size:11px;padding:0}
+.tag-and-lbl{font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;margin-right:2px}
+.tag-and-add{flex:0 0 auto}
+.creq-and{font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;margin:0 2px}
 .rrm{flex:0 0 auto;width:24px;height:24px;border:1px solid var(--mgray);background:var(--surface);color:var(--dgray);border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0}
 .rrm:hover{background:var(--ltred);color:var(--red);border-color:var(--red)}
 .pc-groups{display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
@@ -808,7 +815,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
         <section class="rm-card">
           <h3>Programs & Competencies</h3>
           <ul class="rm-list">
-            <li><strong>Program Module</strong> — Introduces Programs as a structure above courses, with courses tagged as required, selective, or elective.</li>
+            <li><strong>Program Module</strong> — Introduces Programs as a structure above courses, with courses tagged as required, elective, culminating, or other.</li>
             <li><strong>CEPH Competencies</strong> — Filter and map courses (and specific assessments) to CEPH accreditation competencies, at both the program and course level.</li>
             <li><strong>SPH Competencies</strong> — The same competency-mapping structure, built for SPH-specific learning objectives.</li>
           </ul>
@@ -966,11 +973,12 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       </div>
       <div class="s2" id="cm-adv-body">
         <label>Prerequisites</label>
+        <div class="fhint">"+ Add" starts a new OR-group (e.g. "BSTA 513"). Use "+ AND" on an existing group to require it alongside that group (e.g. "BSTA 500 and BSTA 501").</div>
         <div class="tag-add">
           <select id="cm-prereq-sel"></select>
           <input id="cm-prereq-custom" placeholder="Custom text (e.g. Consent of instructor)" style="display:none">
           <input id="cm-prereq-note" placeholder="Note (optional) — e.g. or instructor permission">
-          <button type="button" class="btn btn-s" id="cm-prereq-add">+ Add</button>
+          <button type="button" class="btn btn-s" id="cm-prereq-add">+ Add (new group)</button>
         </div>
         <div class="tag-list" id="cm-prereq-list"></div>
 
@@ -987,7 +995,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
         <div class="fhint" id="cm-prog-perm-hint" style="margin:0 0 6px"></div>
         <div class="tag-add">
           <select id="cm-prog-sel"></select>
-          <select id="cm-prog-type-sel"><option value="core_required">Core Required</option><option value="program_required">Program Required</option><option value="selective">Selective</option><option value="elective">Elective</option></select>
+          <select id="cm-prog-type-sel"><option value="core_required">Core Required</option><option value="program_required">Program Required</option><option value="elective">Elective</option><option value="culminating_experience">Culminating Experience</option><option value="other">Other</option></select>
           <button type="button" class="btn btn-s" id="cm-prog-add">+ Add</button>
         </div>
         <div class="pc-groups" id="cm-prog-groups"></div>
@@ -2896,20 +2904,32 @@ let crsReturnView='schedule';   // tab to restore when the page is dismissed
 
 function courseHistoryVisible(){return canEdit();}   // ← SHOW_HISTORY
 
+function creqItemHTML(r,uuidKey){
+  const noteTxt=r.note?` <span class="creq-note">(${esc(r.note)})</span>`:'';
+  const targetUuid=r[uuidKey];
+  if(!targetUuid)return `${esc(r.custom_text||'')}${noteTxt}`;
+  const tc=DB.courses.find(x=>x._uuid===targetUuid);
+  if(!tc)return `${esc(r.custom_text||targetUuid)}${noteTxt}`;
+  return `<a class="clink" href="?course=${esc(encodeURIComponent(tc.id))}" data-course="${esc(tc.id)}">${esc(tc.fullName)}</a>${noteTxt}`;
+}
 function prereqCoreqHTML(rows,uuidKey){
-  return rows.map(r=>{
-    const noteTxt=r.note?` <span class="creq-note">(${esc(r.note)})</span>`:'';
-    const targetUuid=r[uuidKey];
-    if(!targetUuid)return `<div class="creq-item">${esc(r.custom_text||'')}${noteTxt}</div>`;
-    const tc=DB.courses.find(x=>x._uuid===targetUuid);
-    if(!tc)return `<div class="creq-item">${esc(r.custom_text||targetUuid)}${noteTxt}</div>`;
-    return `<div class="creq-item"><a class="clink" href="?course=${esc(encodeURIComponent(tc.id))}" data-course="${esc(tc.id)}">${esc(tc.fullName)}</a>${noteTxt}</div>`;
-  }).join('');
+  // Group consecutive-by-appearance rows sharing the same and_group into a
+  // single AND'd line; different and_group values render as separate lines
+  // (i.e. alternatives / OR), same as the edit modal's grouping.
+  const clusters=[],seen=new Map();
+  rows.forEach(r=>{
+    const g=r.and_group||1;
+    if(seen.has(g))clusters[seen.get(g)].push(r);
+    else{seen.set(g,clusters.length);clusters.push([r]);}
+  });
+  return clusters.map(cl=>
+    `<div class="creq-item">${cl.map(r=>creqItemHTML(r,uuidKey)).join(' <span class="creq-and">and</span> ')}</div>`
+  ).join('');
 }
 function programLinkageHTML(c){
   const rows=DB.programCoursesByCourse[c._uuid]||[];
   if(!rows.length)return '';
-  const labels={core_required:'Core Required',program_required:'Program Required',selective:'Selective',elective:'Elective'};
+  const labels={core_required:'Core Required',program_required:'Program Required',elective:'Elective',culminating_experience:'Culminating Experience',other:'Other'};
   const items=rows.slice().sort((a,b)=>{
     const pa=DB.programsById[a.program_id],pb=DB.programsById[b.program_id];
     return String(pa?pa.name:'').localeCompare(String(pb?pb.name:''));
@@ -3403,7 +3423,7 @@ function openCM(id){
     $('cm-adv-hint').style.display='none';
     populateAdvSelects(uuidForAdv);
     populateProgSelect();
-    prereqEdit=(DB.coursePrereqByCourse[uuidForAdv]||[]).map(r=>({prerequisite_course_id:r.prerequisite_course_id,custom_text:r.custom_text,note:r.note}));
+    prereqEdit=(DB.coursePrereqByCourse[uuidForAdv]||[]).map(r=>({prerequisite_course_id:r.prerequisite_course_id,custom_text:r.custom_text,note:r.note,and_group:r.and_group||1}));
     coreqEdit=(DB.courseCoreqByCourse[uuidForAdv]||[]).map(r=>({corequisite_course_id:r.corequisite_course_id,custom_text:r.custom_text,note:r.note}));
     progLinkEdit=(DB.programCoursesByCourse[uuidForAdv]||[]).map(r=>({program_id:r.program_id,relationship_type:r.relationship_type}));
     renderPrereqList();renderCoreqList();renderProgGroups();
@@ -3437,12 +3457,34 @@ function courseNameByUuid(uuid){
   const c=DB.courses.find(x=>x._uuid===uuid);
   return c?c.fullName:uuid;
 }
+// Group prereqEdit's row-indices (in current order) into AND-clusters —
+// rows sharing the same and_group are required together; different
+// and_group values are alternatives (OR).
+function prereqClusters(){
+  const clusters=[],seen=new Map();
+  prereqEdit.forEach((r,i)=>{
+    const g=r.and_group||1;
+    if(seen.has(g))clusters[seen.get(g)].push(i);
+    else{seen.set(g,clusters.length);clusters.push([i]);}
+  });
+  return clusters;
+}
+function prereqNextAndGroup(){
+  let max=0;prereqEdit.forEach(r=>{if((r.and_group||1)>max)max=r.and_group||1;});
+  return max+1;
+}
 function renderPrereqList(){
-  $('cm-prereq-list').innerHTML=prereqEdit.map((r,i)=>
-    `<div class="tag-row"><span class="tag-nm">${esc(r.prerequisite_course_id?courseNameByUuid(r.prerequisite_course_id):r.custom_text)}</span>`+
-    (r.note?`<span class="tag-note">${esc(r.note)}</span>`:'')+
-    `<button type="button" class="rrm" data-rm-prereq="${i}">✕</button></div>`
-  ).join('')||'<div class="fhint">None yet.</div>';
+  const clusters=prereqClusters();
+  $('cm-prereq-list').innerHTML=clusters.map(cl=>{
+    const itemsHtml=cl.map((i,pos)=>{
+      const r=prereqEdit[i];
+      const nm=esc(r.prerequisite_course_id?courseNameByUuid(r.prerequisite_course_id):r.custom_text);
+      const noteTxt=r.note?`<span class="tag-note">${esc(r.note)}</span>`:'';
+      return `<span class="tag-and-item">${pos>0?'<span class="tag-and-lbl">and</span>':''}${nm}${noteTxt}<button type="button" class="rrm" data-rm-prereq="${i}">✕</button></span>`;
+    }).join('');
+    return `<div class="tag-row tag-cluster"><span class="tag-cluster-items">${itemsHtml}</span>
+      <button type="button" class="btn btn-s tag-and-add" data-and-group="${prereqEdit[cl[0]].and_group||1}">+ AND</button></div>`;
+  }).join('')||'<div class="fhint">None yet.</div>';
 }
 function renderCoreqList(){
   $('cm-coreq-list').innerHTML=coreqEdit.map((r,i)=>
@@ -3452,9 +3494,9 @@ function renderCoreqList(){
   ).join('')||'<div class="fhint">None yet.</div>';
 }
 function renderProgGroups(){
-  const groups={core_required:[],program_required:[],selective:[],elective:[]};
+  const groups={core_required:[],program_required:[],elective:[],culminating_experience:[],other:[]};
   progLinkEdit.forEach((r,i)=>{if(groups[r.relationship_type])groups[r.relationship_type].push({program_id:r.program_id,_i:i});});
-  const labels={core_required:'Core Required',program_required:'Program Required',selective:'Selectives',elective:'Electives'};
+  const labels={core_required:'Core Required',program_required:'Program Required',elective:'Electives',culminating_experience:'Culminating Experience',other:'Other'};
   const rmHidden=isProgAdmin?'':' style="display:none"';
   $('cm-prog-groups').innerHTML=Object.entries(groups).map(([type,rows])=>{
     if(!rows.length)return '';
@@ -3545,7 +3587,7 @@ async function saveCrs(){
   await sbSave(sb.from('course_prerequisites').delete().eq('course_id',uuid));
   if(prereqEdit.length){
     await sbSave(sb.from('course_prerequisites').insert(
-      prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id||null,custom_text:r.custom_text||null,note:r.note}))
+      prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id||null,custom_text:r.custom_text||null,note:r.note,and_group:r.and_group||1}))
     ));
   }
   await sbSave(sb.from('course_corequisites').delete().eq('course_id',uuid));
@@ -3576,7 +3618,7 @@ async function saveCrs(){
   }
   // Refresh this course's in-memory indexes so the modal reflects the save
   // immediately if reopened before the next full reload.
-  DB.coursePrereqByCourse[uuid]=prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id,custom_text:r.custom_text,note:r.note}));
+  DB.coursePrereqByCourse[uuid]=prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id,custom_text:r.custom_text,note:r.note,and_group:r.and_group||1}));
   DB.courseCoreqByCourse[uuid]=coreqEdit.map(r=>({course_id:uuid,corequisite_course_id:r.corequisite_course_id,custom_text:r.custom_text,note:r.note}));
   DB.courseDocsByCourse[uuid]=cmDocs.map((d,i)=>({course_id:uuid,category:d.category,description:d.description,doc_date:d.doc_date,sp_url:d.sp_url,sort_order:i}));
 
@@ -4352,17 +4394,33 @@ function wireEvents(){
   });
   $('cm-prereq-add').addEventListener('click',()=>{
     const sel=val('cm-prereq-sel');if(!sel)return;
+    const g=prereqNextAndGroup();
     if(sel==='__other__'){
       const txt=val('cm-prereq-custom').trim();if(!txt)return;
-      prereqEdit.push({prerequisite_course_id:null,custom_text:txt,note:val('cm-prereq-note').trim()||null});
+      prereqEdit.push({prerequisite_course_id:null,custom_text:txt,note:val('cm-prereq-note').trim()||null,and_group:g});
       setv('cm-prereq-custom','');
     }else{
       if(prereqEdit.some(r=>r.prerequisite_course_id===sel))return;
-      prereqEdit.push({prerequisite_course_id:sel,custom_text:null,note:val('cm-prereq-note').trim()||null});
+      prereqEdit.push({prerequisite_course_id:sel,custom_text:null,note:val('cm-prereq-note').trim()||null,and_group:g});
     }
     setv('cm-prereq-note','');renderPrereqList();
   });
   $('cm-prereq-list').addEventListener('click',e=>{
+    const andBtn=e.target.closest('.tag-and-add');
+    if(andBtn){
+      const sel=val('cm-prereq-sel');if(!sel)return;
+      const g=+andBtn.dataset.andGroup;
+      if(sel==='__other__'){
+        const txt=val('cm-prereq-custom').trim();if(!txt)return;
+        prereqEdit.push({prerequisite_course_id:null,custom_text:txt,note:val('cm-prereq-note').trim()||null,and_group:g});
+        setv('cm-prereq-custom','');
+      }else{
+        if(prereqEdit.some(r=>r.prerequisite_course_id===sel&&(r.and_group||1)===g))return;
+        prereqEdit.push({prerequisite_course_id:sel,custom_text:null,note:val('cm-prereq-note').trim()||null,and_group:g});
+      }
+      setv('cm-prereq-note','');renderPrereqList();
+      return;
+    }
     const rm=e.target.closest('[data-rm-prereq]');if(!rm)return;
     prereqEdit.splice(+rm.dataset.rmPrereq,1);renderPrereqList();
   });

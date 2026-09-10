@@ -130,14 +130,23 @@ tbody tr.clickable{cursor:pointer}
 .repeat-row input{flex:1;min-width:0}
 .rrm{flex:0 0 auto;width:28px;height:32px;border:1px solid var(--mgray);background:var(--surface);color:var(--dgray);border-radius:5px;cursor:pointer;font-size:15px;line-height:1}
 .rrm:hover{background:var(--ltred);color:var(--red);border-color:var(--red)}
-.pc-add{grid-column:1/-1;display:flex;gap:8px;align-items:center}
+.pc-add{grid-column:1/-1;display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .pc-add select:first-child{flex:2}
 .pc-add select:nth-child(2){flex:1}
+.pc-add input#pc-course-custom{flex:2}
 .pc-groups{grid-column:1/-1;display:flex;flex-direction:column;gap:10px}
 .pc-group h4{font-size:11px;text-transform:uppercase;letter-spacing:.4px;color:var(--navytx);margin-bottom:4px}
 .pc-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;border-bottom:1px solid var(--rowline)}
 .pc-row:last-child{border-bottom:none}
 .pc-row .pc-nm{flex:1}
+.pc-cluster[draggable="true"]{cursor:grab}
+.pc-cluster.dragging{opacity:.4}
+.pc-cluster .drag-handle{flex:0 0 auto;color:var(--muted);cursor:grab;font-size:14px;user-select:none}
+.pc-cluster-items{flex:1;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
+.pc-and-item{display:inline-flex;align-items:center;gap:5px}
+.pc-and-item .rrm{width:20px;height:20px;font-size:11px;padding:0}
+.pc-and-lbl{font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;margin-right:2px}
+.pc-and-add{flex:0 0 auto}
 .empty-note{font-size:12px;color:var(--muted);font-style:italic;grid-column:1/-1}
 .hint{font-size:11px;color:var(--dgray);margin-top:4px;grid-column:1/-1}
 .status-row{display:flex;align-items:center;gap:10px;grid-column:1/-1;padding:8px 0;border-top:1px solid var(--mgray);margin-top:4px}
@@ -150,12 +159,8 @@ tbody tr.clickable{cursor:pointer}
   cursor:pointer;font-size:12px;padding:3px 7px;line-height:1}
 .row-edit-btn:hover{background:var(--lgray);color:var(--navytx);border-color:var(--teal)}
 
-/* Reorder buttons in the course-assignment editor */
-.reorder-btns{display:flex;flex-direction:column;gap:1px}
-.reorder-btns button{background:none;border:1px solid var(--mgray);color:var(--dgray);
-  border-radius:3px;cursor:pointer;font-size:9px;line-height:1;padding:1px 4px;width:18px}
-.reorder-btns button:hover{background:var(--lgray);color:var(--navytx)}
-.reorder-btns button:disabled{opacity:.3;cursor:default}
+/* AND/OR joiner text on the public program page */
+.pv-and{font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;margin:0 2px}
 
 /* ═══ PROGRAM DETAIL PAGE (mirrors scheduling.html's course page) ═══ */
 .pv-scroll{flex:1;overflow:auto}
@@ -276,6 +281,7 @@ tbody tr.clickable{cursor:pointer}
         <div><label>Program Credits</label><input id="pm-prog-cr" type="number" step="0.5"></div>
         <div><label>Elective Credits</label><input id="pm-elec-cr" type="number" step="0.5"></div>
         <div><label>Culminating Credits</label><input id="pm-culm-cr" type="number" step="0.5"></div>
+        <div><label>Other Credits</label><input id="pm-other-cr" type="number" step="0.5"></div>
 
         <div class="sect">Competencies<button type="button" class="addrow" id="pm-comp-add">+ Add</button></div>
         <div class="repeat" id="pm-comp"></div>
@@ -283,15 +289,17 @@ tbody tr.clickable{cursor:pointer}
         <div class="sect">Courses</div>
         <div class="pc-add admin-only">
           <select id="pc-course-sel"></select>
+          <input id="pc-course-custom" placeholder="Custom text (e.g. Departmental approval)" style="display:none">
           <select id="pc-type-sel">
             <option value="core_required">Core Required</option>
             <option value="program_required">Program Required</option>
-            <option value="selective">Selective</option>
             <option value="elective">Elective</option>
             <option value="culminating_experience">Culminating Experience</option>
+            <option value="other">Other</option>
           </select>
-          <button type="button" class="btn btn-s" id="pc-add-btn">+ Add</button>
+          <button type="button" class="btn btn-s" id="pc-add-btn">+ Add (new group)</button>
         </div>
+        <div class="fhint">"+ Add" starts a new OR-group in the chosen category. Use the "+ AND" button on an existing group below to require it alongside that group (e.g. BSTA 500 <b>and</b> BSTA 501).</div>
         <div class="pc-groups" id="pc-groups"></div>
       </div>
     </div>
@@ -404,7 +412,8 @@ let COURSES={};                    // id -> {id,full_name,prefix}
 let CCS=[];                        // curricular_changes rows (admin/apcc only)
 let LOCKED=false,LOCK_MSG='';
 let pmId=null;                     // program being edited ('' = new)
-let pcEdit=[];                     // in-memory course-assignment rows while pm modal open: {course_id,relationship_type}
+let pcEdit=[];                     // in-memory course-assignment rows while pm modal open: {course_id,custom_text,relationship_type,and_group}
+let dragCluster=null;              // {cat,idx} of the cluster currently being dragged in the pc-groups editor
 let compEdit=[];                   // in-memory competency rows while pm modal open
 let ccId=null;                     // curricular change being edited (null = new)
 let progViewId=null;               // program currently shown on the detail page (null = not on it)
@@ -556,36 +565,76 @@ function populateCourseSelect(){
   const sel=$('pc-course-sel');
   const opts=Object.values(COURSES).filter(c=>!c.parent_id)
     .sort((a,b)=>String(a.full_name||'').localeCompare(String(b.full_name||'')));
-  sel.innerHTML=opts.map(c=>`<option value="${esc(c.id)}">${esc(c.full_name||c.prefix||c.id)}</option>`).join('');
+  sel.innerHTML='<option value="">— choose a course —</option>'+
+    opts.map(c=>`<option value="${esc(c.id)}">${esc(c.full_name||c.prefix||c.id)}</option>`).join('')+
+    '<option value="__other__">Other (custom text)…</option>';
+}
+function pcLabel(r){
+  if(r.course_id){const c=COURSES[r.course_id];return c?c.full_name:r.course_id;}
+  return r.custom_text||'(custom)';
+}
+// Group a category's row-indices (already in current display order) into
+// AND-clusters: rows sharing the same and_group travel and render together.
+function pcClusters(idxs){
+  const clusters=[],seen=new Map();
+  idxs.forEach(i=>{
+    const g=pcEdit[i].and_group||1;
+    if(seen.has(g))clusters[seen.get(g)].push(i);
+    else{seen.set(g,clusters.length);clusters.push([i]);}
+  });
+  return clusters;
+}
+function pcNextAndGroup(type){
+  let max=0;
+  pcEdit.forEach(r=>{if(r.relationship_type===type&&(r.and_group||1)>max)max=r.and_group||1;});
+  return max+1;
 }
 function renderPcGroups(){
   const wrap=$('pc-groups');
-  const groups={core_required:[],program_required:[],selective:[],elective:[],culminating_experience:[]};
+  const types=['core_required','program_required','elective','culminating_experience','other'];
+  const labels={core_required:'Core Required',program_required:'Program Required',elective:'Electives',culminating_experience:'Culminating Experience',other:'Other'};
+  const groups={};types.forEach(t=>groups[t]=[]);
   pcEdit.forEach((r,i)=>{if(groups[r.relationship_type])groups[r.relationship_type].push(i);});
-  const labels={core_required:'Core Required',program_required:'Program Required',selective:'Selectives',elective:'Electives',culminating_experience:'Culminating Experience'};
   const editable=canProgWrite();
-  wrap.innerHTML=Object.entries(groups).map(([type,idxs])=>{
+  wrap.innerHTML=types.map(type=>{
+    const idxs=groups[type];
     if(!idxs.length)return '';
-    return `<div class="pc-group"><h4>${labels[type]}</h4>${idxs.map((i,pos)=>{
-      const r=pcEdit[i];
-      const c=COURSES[r.course_id];
-      const upDis=pos===0?' disabled':'';
-      const dnDis=pos===idxs.length-1?' disabled':'';
-      return `<div class="pc-row">
-        ${editable?`<span class="reorder-btns"><button type="button" data-move-up="${i}"${upDis}>▲</button><button type="button" data-move-dn="${i}"${dnDis}>▼</button></span>`:''}
-        <span class="pc-nm">${esc(c?c.full_name:r.course_id)}</span>
-        <button type="button" class="rrm admin-only" data-rm-course="${i}">✕</button></div>`;
-    }).join('')}</div>`;
+    const clusters=pcClusters(idxs);
+    const rows=clusters.map((cl,ci)=>{
+      const itemsHtml=cl.map((i,pos)=>
+        `<span class="pc-and-item">${pos>0?'<span class="pc-and-lbl">and</span>':''}${esc(pcLabel(pcEdit[i]))}<button type="button" class="rrm admin-only" data-rm-course="${i}" title="Remove">✕</button></span>`
+      ).join('');
+      return `<div class="pc-row pc-cluster"${editable?` draggable="true" data-cat="${esc(type)}" data-cluster="${ci}"`:''}>
+        ${editable?'<span class="drag-handle" title="Drag to reorder">⠿</span>':''}
+        <span class="pc-cluster-items">${itemsHtml}</span>
+        ${editable?`<button type="button" class="btn btn-s pc-and-add" data-and-type="${esc(type)}" data-and-group="${pcEdit[cl[0]].and_group||1}">+ AND</button>`:''}
+      </div>`;
+    }).join('');
+    return `<div class="pc-group"><h4>${labels[type]}</h4>${rows}</div>`;
   }).join('')||'<div class="empty-note">No courses assigned yet.</div>';
+  wirePcDrag();
 }
-function moveProgCourse(i,dir){
-  // Swap with the nearest neighbor OF THE SAME TYPE in the given direction —
-  // reordering within a group must not disturb the other groups' order.
-  const type=pcEdit[i].relationship_type;
-  let j=i+dir;
-  while(j>=0&&j<pcEdit.length&&pcEdit[j].relationship_type!==type)j+=dir;
-  if(j<0||j>=pcEdit.length)return;
-  [pcEdit[i],pcEdit[j]]=[pcEdit[j],pcEdit[i]];
+function wirePcDrag(){
+  document.querySelectorAll('#pc-groups .pc-cluster[draggable="true"]').forEach(el=>{
+    el.addEventListener('dragstart',()=>{dragCluster={cat:el.dataset.cat,idx:+el.dataset.cluster};el.classList.add('dragging');});
+    el.addEventListener('dragend',()=>{el.classList.remove('dragging');});
+    el.addEventListener('dragover',e=>{if(dragCluster&&dragCluster.cat===el.dataset.cat)e.preventDefault();});
+    el.addEventListener('drop',e=>{
+      e.preventDefault();
+      if(!dragCluster||dragCluster.cat!==el.dataset.cat)return;
+      reorderPcCluster(el.dataset.cat,dragCluster.idx,+el.dataset.cluster);
+      dragCluster=null;
+    });
+  });
+}
+function reorderPcCluster(type,from,to){
+  if(from===to)return;
+  const idxs=[];pcEdit.forEach((r,i)=>{if(r.relationship_type===type)idxs.push(i);});
+  const clusters=pcClusters(idxs);
+  const moved=clusters.splice(from,1)[0];
+  clusters.splice(to,0,moved);
+  const rowsInNewOrder=clusters.flat().map(i=>pcEdit[i]);
+  idxs.forEach((posInPcEdit,k)=>{pcEdit[posInPcEdit]=rowsInNewOrder[k];});
   renderPcGroups();
 }
 function openProg(id){
@@ -594,14 +643,15 @@ function openProg(id){
   $('pm-title').textContent=id?'Edit Program':'Add Program';
   setv('pm-name',p.name); setv('pm-cred',p.credential); setv('pm-desc',p.description); setv('pm-cr',p.total_credits);
   setv('pm-core-cr',p.core_credits); setv('pm-prog-cr',p.program_credits); setv('pm-elec-cr',p.elective_credits);
-  setv('pm-culm-cr',p.culminating_credits);
+  setv('pm-culm-cr',p.culminating_credits); setv('pm-other-cr',p.other_credits);
   compEdit=(id?(PROG_COMP[id]||[]):[]).map(r=>({competency_text:r.competency_text}));
   renderCompEditor();
-  pcEdit=(id?(PROG_COURSES[id]||[]):[]).map(r=>({course_id:r.course_id,relationship_type:r.relationship_type}));
+  pcEdit=(id?(PROG_COURSES[id]||[]):[]).map(r=>({course_id:r.course_id,custom_text:r.custom_text,relationship_type:r.relationship_type,and_group:r.and_group||1}));
   populateCourseSelect();
+  $('pc-course-custom').style.display='none';$('pc-course-custom').value='';
   renderPcGroups();
   const editable=canProgWrite();
-  ['pm-name','pm-cred','pm-desc','pm-cr','pm-core-cr','pm-prog-cr','pm-elec-cr','pm-culm-cr'].forEach(fid=>{$(fid).disabled=!editable;});
+  ['pm-name','pm-cred','pm-desc','pm-cr','pm-core-cr','pm-prog-cr','pm-elec-cr','pm-culm-cr','pm-other-cr'].forEach(fid=>{$(fid).disabled=!editable;});
   $('btn-del-prog').style.display=(editable&&id)?'inline-flex':'none';
   openM('mo-prog');
 }
@@ -622,7 +672,8 @@ async function saveProg(){
     core_credits:NUM(val('pm-core-cr')),
     program_credits:NUM(val('pm-prog-cr')),
     elective_credits:NUM(val('pm-elec-cr')),
-    culminating_credits:NUM(val('pm-culm-cr'))
+    culminating_credits:NUM(val('pm-culm-cr')),
+    other_credits:NUM(val('pm-other-cr'))
   };
   let progId=pmId;
   if(progId){
@@ -645,7 +696,7 @@ async function saveProg(){
   {
     const {error}=await sb.rpc('replace_program_courses',{
       p_program_id:progId,
-      p_rows:pcEdit.map((r,i)=>({course_id:r.course_id,relationship_type:r.relationship_type,sort_order:i}))
+      p_rows:pcEdit.map((r,i)=>({course_id:r.course_id,custom_text:r.custom_text||null,relationship_type:r.relationship_type,and_group:r.and_group||1,sort_order:i}))
     });
     if(error){setSS('⚠ Courses not saved — nothing changed there: '+error.message);return;}
   }
@@ -793,26 +844,51 @@ function switchTab(viewId){
 }
 
 /* ── PROGRAM DETAIL PAGE ── */
-function courseTableRows(programId,type){
+function courseGroupRows(programId,type){
   return (PROG_COURSES[programId]||[])
     .filter(r=>r.relationship_type===type)
-    .sort((a,b)=>(a.sort_order??0)-(b.sort_order??0))
-    .map(r=>COURSES[r.course_id])
-    .filter(Boolean);
+    .sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
 }
-function courseRowHTML(c){
-  const code=c.course_code||c.id;
-  const label=[c.prefix,c.number].filter(Boolean).join(' ')||code;
-  return `<tr><td class="pv-code">${esc(label)}</td>
-    <td><a href="scheduling.html?course=${encodeURIComponent(code)}">${esc(c.title||c.full_name||label)}</a></td>
-    <td class="pv-cr">${c.credits??''}</td></tr>`;
+// Cluster a (sorted) list of program_courses rows into AND-groups — rows
+// sharing the same and_group are required together; different and_group
+// values are alternatives (OR) within the section.
+function pvClusters(rows){
+  const clusters=[],seen=new Map();
+  rows.forEach(r=>{
+    const g=r.and_group||1;
+    if(seen.has(g))clusters[seen.get(g)].push(r);
+    else{seen.set(g,clusters.length);clusters.push([r]);}
+  });
+  return clusters;
+}
+function pvItem(r){
+  if(r.course_id){
+    const c=COURSES[r.course_id];if(!c)return null;
+    const code=c.course_code||c.id;
+    const label=[c.prefix,c.number].filter(Boolean).join(' ')||code;
+    return {label,credits:c.credits,html:`<a href="scheduling.html?course=${encodeURIComponent(code)}">${esc(c.title||c.full_name||label)}</a>`};
+  }
+  return {label:'',credits:null,html:esc(r.custom_text||'')};
+}
+function courseRowHTML(cluster){
+  const parts=cluster.map(pvItem).filter(Boolean);
+  if(!parts.length)return '';
+  const nameHtml=parts.map(p=>p.html).join(' <span class="pv-and">and</span> ');
+  const codeTxt=parts.length===1?parts[0].label:'';
+  const creditsTxt=parts.length===1?(parts[0].credits??'')
+    :(parts.every(p=>p.credits!=null)?parts.reduce((s,p)=>s+Number(p.credits),0):'');
+  return `<tr><td class="pv-code">${esc(codeTxt)}</td>
+    <td>${nameHtml}</td>
+    <td class="pv-cr">${creditsTxt}</td></tr>`;
 }
 function courseSectionHTML(title,programId,type,credits){
-  const rows=courseTableRows(programId,type);
+  const rows=courseGroupRows(programId,type);
   if(!rows.length)return '';
+  const trs=pvClusters(rows).map(courseRowHTML).filter(Boolean).join('');
+  if(!trs)return '';
   const heading=credits!=null?`${title} (${credits} Credits)`:title;
   return `<div class="pv-card"><h3>${esc(heading)}</h3>
-    <table class="pv-ctable">${rows.map(courseRowHTML).join('')}</table></div>`;
+    <table class="pv-ctable">${trs}</table></div>`;
 }
 function renderProgramDetail(id){
   const p=PROGRAMS[id];
@@ -833,6 +909,7 @@ function renderProgramDetail(id){
       ${p.program_credits!=null?`<div class="pv-fact"><b>Program</b>${esc(p.program_credits)} Credits</div>`:''}
       ${p.elective_credits!=null?`<div class="pv-fact"><b>Elective</b>${esc(p.elective_credits)} Credits</div>`:''}
       ${p.culminating_credits!=null?`<div class="pv-fact"><b>Culminating</b>${esc(p.culminating_credits)} Credits</div>`:''}
+      ${p.other_credits!=null?`<div class="pv-fact"><b>Other</b>${esc(p.other_credits)} Credits</div>`:''}
     </div>
     ${canProgWrite()?`<div style="margin-top:12px"><button class="btn btn-s" id="pv-edit-btn">✎ Edit Program</button></div>`:''}
   </div>`;
@@ -846,9 +923,9 @@ function renderProgramDetail(id){
   }
   h+=courseSectionHTML('Core Required Coursework',id,'core_required',p.core_credits);
   h+=courseSectionHTML('Program Required Coursework',id,'program_required',p.program_credits);
-  h+=courseSectionHTML('Selective courses from the following',id,'selective',null);
   h+=courseSectionHTML('Elective courses from the following',id,'elective',p.elective_credits);
   h+=courseSectionHTML('Culminating Experience',id,'culminating_experience',p.culminating_credits);
+  h+=courseSectionHTML('Other',id,'other',p.other_credits);
   wrap.innerHTML=h;
   $('pv-back').onclick=closeProgramView;
   const editBtn=$('pv-edit-btn');
@@ -904,18 +981,37 @@ function wire(){
   });
   $('pm-comp-add').onclick=()=>{$('pm-comp').insertAdjacentHTML('beforeend',compRowHTML(''));};
   $('pm-comp').addEventListener('click',e=>{const rm=e.target.closest('.rrm');if(rm)rm.closest('.repeat-row').remove();});
+  $('pc-course-sel').addEventListener('change',()=>{
+    $('pc-course-custom').style.display=val('pc-course-sel')==='__other__'?'':'none';
+  });
   $('pc-add-btn').onclick=()=>{
-    const cid=val('pc-course-sel'),type=val('pc-type-sel');
-    if(!cid)return;
-    if(pcEdit.some(r=>r.course_id===cid&&r.relationship_type===type))return;
-    pcEdit.push({course_id:cid,relationship_type:type});
+    const sel=val('pc-course-sel'),type=val('pc-type-sel');
+    if(!sel)return;
+    const g=pcNextAndGroup(type);
+    if(sel==='__other__'){
+      const txt=val('pc-course-custom').trim();if(!txt)return;
+      pcEdit.push({course_id:null,custom_text:txt,relationship_type:type,and_group:g});
+      setv('pc-course-custom','');
+    }else{
+      if(pcEdit.some(r=>r.course_id===sel&&r.relationship_type===type))return;
+      pcEdit.push({course_id:sel,custom_text:null,relationship_type:type,and_group:g});
+    }
     renderPcGroups();
   };
   $('pc-groups').addEventListener('click',e=>{
-    const mv=e.target.closest('[data-move-up],[data-move-dn]');
-    if(mv){
-      const i=+(mv.dataset.moveUp??mv.dataset.moveDn);
-      moveProgCourse(i,mv.dataset.moveUp!=null?-1:1);
+    const andBtn=e.target.closest('.pc-and-add');
+    if(andBtn){
+      const sel=val('pc-course-sel');if(!sel)return;
+      const type=andBtn.dataset.andType,g=+andBtn.dataset.andGroup;
+      if(sel==='__other__'){
+        const txt=val('pc-course-custom').trim();if(!txt)return;
+        pcEdit.push({course_id:null,custom_text:txt,relationship_type:type,and_group:g});
+        setv('pc-course-custom','');
+      }else{
+        if(pcEdit.some(r=>r.course_id===sel&&r.relationship_type===type&&(r.and_group||1)===g))return;
+        pcEdit.push({course_id:sel,custom_text:null,relationship_type:type,and_group:g});
+      }
+      renderPcGroups();
       return;
     }
     const rm=e.target.closest('[data-rm-course]');
