@@ -3737,18 +3737,22 @@ async function saveCrs(){
   // deleted before the group tree (course_prerequisite_groups) so nothing
   // is left dangling on a group about to disappear; groups are then
   // re-inserted parent-first (self-referencing FK) before the new leaves
-  // that point at them.
-  await sbSave(sb.from('course_prerequisites').delete().eq('course_id',uuid));
-  await sbSave(sb.from('course_prerequisite_groups').delete().eq('course_id',uuid));
+  // that point at them. Each step's success is checked — sbSave already
+  // reverts (reloadAll) on failure, but without checking the return value
+  // here, the optimistic cache overwrite below would re-apply the failed
+  // local state on top of that fresh reload, masking the failure until a
+  // real page refresh.
+  if(!await sbSave(sb.from('course_prerequisites').delete().eq('course_id',uuid)))return;
+  if(!await sbSave(sb.from('course_prerequisite_groups').delete().eq('course_id',uuid)))return;
   if(prereqGroups.length){
-    await sbSave(sb.from('course_prerequisite_groups').insert(
+    if(!await sbSave(sb.from('course_prerequisite_groups').insert(
       pqGroupsTopoSorted().map(g=>({id:g.id,course_id:uuid,logic:g.logic,parent_group_id:g.parent_group_id||null,sort_order:g.sort_order||0}))
-    ));
+    )))return;
   }
   if(prereqEdit.length){
-    await sbSave(sb.from('course_prerequisites').insert(
+    if(!await sbSave(sb.from('course_prerequisites').insert(
       prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id||null,custom_text:r.custom_text||null,note:r.note,group_id:r.group_id||null,sort_order:r.sort_order||0}))
-    ));
+    )))return;
   }
   await sbSave(sb.from('course_corequisites').delete().eq('course_id',uuid));
   if(coreqEdit.length){
