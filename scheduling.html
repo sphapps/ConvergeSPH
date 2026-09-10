@@ -199,12 +199,32 @@ td{padding:7px 10px;vertical-align:middle}
 .tag-row .tag-nm{flex:1}
 .tag-row .tag-note{color:var(--dgray);font-size:11px}
 .tag-row.tag-cluster{flex-wrap:wrap}
-.tag-cluster-items{flex:1;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
-.tag-and-item{display:inline-flex;align-items:center;gap:5px}
-.tag-and-item .rrm{width:20px;height:20px;font-size:11px;padding:0}
-.tag-and-lbl{font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;margin-right:2px}
-.tag-and-add{flex:0 0 auto}
-.creq-and{font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;margin:0 2px}
+.pq-cat-body,.pq-group-body{display:flex;flex-direction:column;gap:6px}
+.pq-node{border:1px solid var(--rowline);border-radius:6px;padding:6px 8px}
+.pq-node.dragging{opacity:.4}
+.pq-leaf{display:flex;align-items:center;gap:8px;font-size:12.5px;background:var(--lgray)}
+.pq-leaf .pq-nm{flex:1}
+.pq-drag-handle{flex:0 0 auto;color:var(--muted);cursor:grab;font-size:14px;user-select:none}
+.pq-group-box{border-style:dashed;padding:0;overflow:hidden}
+.pq-group-box.pq-logic-and{border-color:var(--teal)}
+.pq-group-box.pq-logic-or{border-color:var(--dgray)}
+.pq-group-hdr{display:flex;align-items:center;gap:8px;padding:4px 8px;background:var(--surface-2);font-size:11.5px}
+.pq-logic-badge{font-size:9px;font-weight:700;letter-spacing:.5px;padding:1px 6px;border-radius:10px;color:white}
+.pq-logic-and .pq-logic-badge{background:var(--teal)}
+.pq-logic-or .pq-logic-badge{background:var(--dgray)}
+.pq-group-hint{color:var(--muted);flex:1}
+.pq-group-body{padding:6px}
+.pq-empty-drop{font-size:11px;color:var(--muted);font-style:italic;border:1px dashed var(--mgray);border-radius:5px;padding:6px;text-align:center}
+.pq-group-actions{display:flex;gap:6px;padding:4px 0 0}
+.creq-clist{list-style:none;margin:0;padding:0}
+.creq-clist>li{padding:6px 0;border-top:1px solid var(--rowline);font-size:13px}
+.creq-clist>li:first-child{border-top:none}
+.creq-clist a{color:var(--teal);text-decoration:none}
+.creq-clist a:hover{text-decoration:underline}
+.creq-subgroup{border-top:1px solid var(--rowline)}
+.creq-group-label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--navytx);margin-bottom:4px}
+.creq-subgroup .creq-clist{margin-top:2px;margin-left:14px;border-left:2px solid var(--mgray);padding-left:10px}
+.creq-subgroup .creq-clist>li{border-top:none;padding:3px 0}
 .rrm{flex:0 0 auto;width:24px;height:24px;border:1px solid var(--mgray);background:var(--surface);color:var(--dgray);border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:0}
 .rrm:hover{background:var(--ltred);color:var(--red);border-color:var(--red)}
 .pc-groups{display:flex;flex-direction:column;gap:8px;margin-bottom:4px}
@@ -973,12 +993,16 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       </div>
       <div class="s2" id="cm-adv-body">
         <label>Prerequisites</label>
-        <div class="fhint">"+ Add" starts a new OR-group (e.g. "BSTA 513"). Use "+ AND" on an existing group to require it alongside that group (e.g. "BSTA 500 and BSTA 501").</div>
+        <div class="fhint">New prerequisites land in the default list below. Use "+ AND Group" / "+ OR Group" to create an empty group, then drag requirements (or other groups) into it — e.g. drag BSTA 500 and BSTA 501 into one AND group, alongside a separate BSTA 513 entry, for "(BSTA 500 and BSTA 501) or BSTA 513."</div>
         <div class="tag-add">
           <select id="cm-prereq-sel"></select>
           <input id="cm-prereq-custom" placeholder="Custom text (e.g. Consent of instructor)" style="display:none">
           <input id="cm-prereq-note" placeholder="Note (optional) — e.g. or instructor permission">
-          <button type="button" class="btn btn-s" id="cm-prereq-add">+ Add (new group)</button>
+          <button type="button" class="btn btn-s" id="cm-prereq-add">+ Add</button>
+        </div>
+        <div class="pq-group-actions" id="cm-prereq-topactions">
+          <button type="button" class="btn btn-s pq-add-group" data-logic="and" data-parent="">+ AND Group</button>
+          <button type="button" class="btn btn-s pq-add-group" data-logic="or" data-parent="">+ OR Group</button>
         </div>
         <div class="tag-list" id="cm-prereq-list"></div>
 
@@ -1272,7 +1296,7 @@ const GCOLS=['#2E75B6','#375623','#C55A11','#7B2C8C','#C00000','#1F6B75','#7F4F2
 
 /* ─── STATE ────────────────────────────────────────────────── */
 let DB={courses:[],instructors:[],offerings:[],
-  programsById:{},programCoursesByCourse:{},coursePrereqByCourse:{},courseCoreqByCourse:{},courseDocsByCourse:{}};
+  programsById:{},programCoursesByCourse:{},coursePrereqByCourse:{},coursePrereqGroupsByCourse:{},courseCoreqByCourse:{},courseDocsByCourse:{}};
 let isAdmin=false;
 /* LOCKDOWN. Read from the anon-readable app_lockdown singleton row on every
    load/sync. The actual write block lives in RLS (is_locked(), see
@@ -1293,7 +1317,8 @@ let isPD=false;
 // themselves.
 let isProgAdmin=false;
 // Course-modal editor buffers, live only while mo-crs is open.
-let prereqEdit=[], coreqEdit=[], progLinkEdit=[], docEdit=[];
+let prereqEdit=[], prereqGroups=[], coreqEdit=[], progLinkEdit=[], docEdit=[];
+let pqDrag=null;   // {type:'item',idx} | {type:'group',id} — node being dragged in the prereq tree editor
 /* Three states, not two: signed-out < signed-in (read-only) < admin.
    `signedIn` gates VISIBILITY (what an anonymous visitor may see);
    `isAdmin` gates EDITING. They are independent — a signed-in non-admin sees
@@ -1394,7 +1419,7 @@ async function loadData(){
     return {data:all,error:null};
   };
 
-  const [cR,oR,mR,dR,lR,kR,pgR,pcR,preR,coR,docR]=await Promise.all([
+  const [cR,oR,mR,dR,lR,kR,pgR,pcR,preR,pregR,coR,docR]=await Promise.all([
     fetchAll('courses'),
     fetchAll('offerings'),
     fetchAll('instructor_meta'),
@@ -1404,6 +1429,7 @@ async function loadData(){
     fetchAll('programs'),
     fetchAll('program_courses'),
     fetchAll('course_prerequisites'),
+    fetchAll('course_prerequisite_groups'),
     fetchAll('course_corequisites'),
     fetchAll('course_documents')
   ]);
@@ -1416,6 +1442,7 @@ async function loadData(){
   const programs=pgR.error?[]:(pgR.data||[]);
   const programCourses=pcR.error?[]:(pcR.data||[]);
   const coursePrereqRows=preR.error?[]:(preR.data||[]);
+  const coursePrereqGroupRows=pregR.error?[]:(pregR.data||[]);
   const courseCoreqRows=coR.error?[]:(coR.data||[]);
   const courseDocRows=docR.error?[]:(docR.data||[]);
   // Lockdown state is best-effort: a fetch hiccup here shouldn't block the
@@ -1531,6 +1558,8 @@ async function loadData(){
   programCourses.forEach(r=>{(programCoursesByCourse[r.course_id]=programCoursesByCourse[r.course_id]||[]).push(r);});
   const coursePrereqByCourse={};
   coursePrereqRows.forEach(r=>{(coursePrereqByCourse[r.course_id]=coursePrereqByCourse[r.course_id]||[]).push(r);});
+  const coursePrereqGroupsByCourse={};
+  coursePrereqGroupRows.forEach(r=>{(coursePrereqGroupsByCourse[r.course_id]=coursePrereqGroupsByCourse[r.course_id]||[]).push(r);});
   const courseCoreqByCourse={};
   courseCoreqRows.forEach(r=>{(courseCoreqByCourse[r.course_id]=courseCoreqByCourse[r.course_id]||[]).push(r);});
   const courseDocsByCourse={};
@@ -1538,7 +1567,7 @@ async function loadData(){
   Object.values(courseDocsByCourse).forEach(a=>a.sort((x,y)=>(x.sort_order??0)-(y.sort_order??0)));
 
   DB={courses,instructors,offerings,lists,
-    programsById,programCoursesByCourse,coursePrereqByCourse,courseCoreqByCourse,courseDocsByCourse};
+    programsById,programCoursesByCourse,coursePrereqByCourse,coursePrereqGroupsByCourse,courseCoreqByCourse,courseDocsByCourse};
   renderLockBanner();
   applyLockUI();
   setLM('');
@@ -2912,19 +2941,34 @@ function creqItemHTML(r,uuidKey){
   if(!tc)return `${esc(r.custom_text||targetUuid)}${noteTxt}`;
   return `<a class="clink" href="?course=${esc(encodeURIComponent(tc.id))}" data-course="${esc(tc.id)}">${esc(tc.fullName)}</a>${noteTxt}`;
 }
-function prereqCoreqHTML(rows,uuidKey){
-  // Group consecutive-by-appearance rows sharing the same and_group into a
-  // single AND'd line; different and_group values render as separate lines
-  // (i.e. alternatives / OR), same as the edit modal's grouping.
-  const clusters=[],seen=new Map();
-  rows.forEach(r=>{
-    const g=r.and_group||1;
-    if(seen.has(g))clusters[seen.get(g)].push(r);
-    else{seen.set(g,clusters.length);clusters.push([r]);}
-  });
-  return clusters.map(cl=>
-    `<div class="creq-item">${cl.map(r=>creqItemHTML(r,uuidKey)).join(' <span class="creq-and">and</span> ')}</div>`
-  ).join('');
+// Co-requisites have no group tree (course_corequisite_groups doesn't
+// exist) — each row is simply its own line, same as before.
+function coreqListHTML(rows){
+  return rows.map(r=>`<div class="creq-item">${creqItemHTML(r,'corequisite_course_id')}</div>`).join('');
+}
+// Prerequisites DO have a group tree (course_prerequisite_groups). Walk it
+// the same way program.html's public page walks program_course_groups:
+// nested <ul>s, each group labeled "All of the following:" (AND) or
+// "One of the following:" (OR).
+function preqChildren(rows,groups,parentGroupId){
+  const items=rows.filter(r=>(r.group_id||null)===(parentGroupId||null)).map(r=>({kind:'item',row:r,sort_order:r.sort_order||0}));
+  const subs=groups.filter(g=>(g.parent_group_id||null)===(parentGroupId||null)).map(g=>({kind:'group',group:g,sort_order:g.sort_order||0}));
+  return [...items,...subs].sort((a,b)=>a.sort_order-b.sort_order);
+}
+function preqLevelHTML(rows,groups,parentGroupId){
+  const lis=preqChildren(rows,groups,parentGroupId).map(ch=>{
+    if(ch.kind==='item')return `<li>${creqItemHTML(ch.row,'prerequisite_course_id')}</li>`;
+    const inner=preqLevelHTML(rows,groups,ch.group.id);
+    if(!inner)return '';
+    const label=ch.group.logic==='and'?'All of the following:':'One of the following:';
+    return `<li class="creq-subgroup"><span class="creq-group-label">${label}</span>${inner}</li>`;
+  }).filter(Boolean).join('');
+  return lis?`<ul class="creq-clist">${lis}</ul>`:'';
+}
+function prereqTreeHTML(courseUuid){
+  const rows=DB.coursePrereqByCourse[courseUuid]||[];
+  const groups=DB.coursePrereqGroupsByCourse[courseUuid]||[];
+  return preqLevelHTML(rows,groups,null);
 }
 function programLinkageHTML(c){
   const rows=DB.programCoursesByCourse[c._uuid]||[];
@@ -2980,10 +3024,10 @@ function renderCourse(code){
 
   const preRows=DB.coursePrereqByCourse[c._uuid]||[];
   if(preRows.length)
-    h+=`<div class="ccard"><h3>Prerequisites</h3><div class="creq-list">${prereqCoreqHTML(preRows,'prerequisite_course_id')}</div></div>`;
+    h+=`<div class="ccard"><h3>Prerequisites</h3>${prereqTreeHTML(c._uuid)}</div>`;
   const coRows=DB.courseCoreqByCourse[c._uuid]||[];
   if(coRows.length)
-    h+=`<div class="ccard"><h3>Co-requisites</h3><div class="creq-list">${prereqCoreqHTML(coRows,'corequisite_course_id')}</div></div>`;
+    h+=`<div class="ccard"><h3>Co-requisites</h3><div class="creq-list">${coreqListHTML(coRows)}</div></div>`;
   h+=programLinkageHTML(c);
 
   const uPsu=catalogUrl(c,'psu'), uOhsu=catalogUrl(c,'ohsu');
@@ -3423,7 +3467,8 @@ function openCM(id){
     $('cm-adv-hint').style.display='none';
     populateAdvSelects(uuidForAdv);
     populateProgSelect();
-    prereqEdit=(DB.coursePrereqByCourse[uuidForAdv]||[]).map(r=>({prerequisite_course_id:r.prerequisite_course_id,custom_text:r.custom_text,note:r.note,and_group:r.and_group||1}));
+    prereqEdit=(DB.coursePrereqByCourse[uuidForAdv]||[]).map(r=>({prerequisite_course_id:r.prerequisite_course_id,custom_text:r.custom_text,note:r.note,group_id:r.group_id||null,sort_order:r.sort_order||0}));
+    prereqGroups=(DB.coursePrereqGroupsByCourse[uuidForAdv]||[]).map(g=>({id:g.id,logic:g.logic,parent_group_id:g.parent_group_id||null,sort_order:g.sort_order||0}));
     coreqEdit=(DB.courseCoreqByCourse[uuidForAdv]||[]).map(r=>({corequisite_course_id:r.corequisite_course_id,custom_text:r.custom_text,note:r.note}));
     progLinkEdit=(DB.programCoursesByCourse[uuidForAdv]||[]).map(r=>({program_id:r.program_id,relationship_type:r.relationship_type}));
     renderPrereqList();renderCoreqList();renderProgGroups();
@@ -3434,7 +3479,7 @@ function openCM(id){
   }else{
     $('cm-adv-body').style.display='none';
     $('cm-adv-hint').style.display='';
-    prereqEdit=[];coreqEdit=[];progLinkEdit=[];
+    prereqEdit=[];prereqGroups=[];coreqEdit=[];progLinkEdit=[];
     $('cm-doc-rows').innerHTML='';
   }
   openM('mo-crs');
@@ -3457,34 +3502,139 @@ function courseNameByUuid(uuid){
   const c=DB.courses.find(x=>x._uuid===uuid);
   return c?c.fullName:uuid;
 }
-// Group prereqEdit's row-indices (in current order) into AND-clusters —
-// rows sharing the same and_group are required together; different
-// and_group values are alternatives (OR).
-function prereqClusters(){
-  const clusters=[],seen=new Map();
-  prereqEdit.forEach((r,i)=>{
-    const g=r.and_group||1;
-    if(seen.has(g))clusters[seen.get(g)].push(i);
-    else{seen.set(g,clusters.length);clusters.push([i]);}
-  });
-  return clusters;
+function pqGroupsTopoSorted(){
+  // Groups are inserted in array order under a self-referencing FK, so
+  // every parent must precede its children regardless of load/edit order.
+  const out=[],placed=new Set();
+  let remaining=prereqGroups.slice();
+  while(remaining.length){
+    const next=remaining.filter(g=>!g.parent_group_id||placed.has(g.parent_group_id));
+    if(!next.length){out.push(...remaining);break;}
+    next.forEach(g=>{out.push(g);placed.add(g.id);});
+    remaining=remaining.filter(g=>!placed.has(g.id));
+  }
+  return out;
 }
-function prereqNextAndGroup(){
-  let max=0;prereqEdit.forEach(r=>{if((r.and_group||1)>max)max=r.and_group||1;});
+function pqLabel(r){
+  return r.prerequisite_course_id?courseNameByUuid(r.prerequisite_course_id):(r.custom_text||'(custom)');
+}
+function pqGroupById(gid){return prereqGroups.find(g=>g.id===gid);}
+function pqIsSelfOrDescendant(candidateId,groupId){
+  if(!candidateId)return false;
+  if(candidateId===groupId)return true;
+  let g=pqGroupById(candidateId);
+  while(g&&g.parent_group_id){
+    if(g.parent_group_id===groupId)return true;
+    g=pqGroupById(g.parent_group_id);
+  }
+  return false;
+}
+function pqNextSort(parentGroupId){
+  let max=-1;
+  prereqEdit.forEach(r=>{if((r.group_id||null)===(parentGroupId||null)&&(r.sort_order||0)>max)max=r.sort_order||0;});
+  prereqGroups.forEach(g=>{if((g.parent_group_id||null)===(parentGroupId||null)&&(g.sort_order||0)>max)max=g.sort_order||0;});
   return max+1;
 }
-function renderPrereqList(){
-  const clusters=prereqClusters();
-  $('cm-prereq-list').innerHTML=clusters.map(cl=>{
-    const itemsHtml=cl.map((i,pos)=>{
-      const r=prereqEdit[i];
-      const nm=esc(r.prerequisite_course_id?courseNameByUuid(r.prerequisite_course_id):r.custom_text);
+function pqChildren(parentGroupId){
+  const kids=[];
+  prereqEdit.forEach((r,i)=>{if((r.group_id||null)===(parentGroupId||null))kids.push({kind:'item',idx:i,sort_order:r.sort_order||0});});
+  prereqGroups.forEach(g=>{if((g.parent_group_id||null)===(parentGroupId||null))kids.push({kind:'group',group:g,sort_order:g.sort_order||0});});
+  kids.sort((a,b)=>a.sort_order-b.sort_order);
+  return kids;
+}
+function pqRenderLevel(parentGroupId){
+  return pqChildren(parentGroupId).map(ch=>{
+    if(ch.kind==='item'){
+      const r=prereqEdit[ch.idx];
       const noteTxt=r.note?`<span class="tag-note">${esc(r.note)}</span>`:'';
-      return `<span class="tag-and-item">${pos>0?'<span class="tag-and-lbl">and</span>':''}${nm}${noteTxt}<button type="button" class="rrm" data-rm-prereq="${i}">✕</button></span>`;
-    }).join('');
-    return `<div class="tag-row tag-cluster"><span class="tag-cluster-items">${itemsHtml}</span>
-      <button type="button" class="btn btn-s tag-and-add" data-and-group="${prereqEdit[cl[0]].and_group||1}">+ AND</button></div>`;
-  }).join('')||'<div class="fhint">None yet.</div>';
+      return `<div class="pq-node pq-leaf" draggable="true" data-node-type="item" data-node-idx="${ch.idx}">
+        <span class="pq-drag-handle" title="Drag to reorder / move into a group">⠿</span>
+        <span class="pq-nm">${esc(pqLabel(r))}</span>${noteTxt}
+        <button type="button" class="rrm" data-rm-prereq="${ch.idx}" title="Remove">✕</button>
+      </div>`;
+    }
+    const g=ch.group;
+    const inner=pqRenderLevel(g.id);
+    return `<div class="pq-node pq-group-box pq-logic-${g.logic}" draggable="true" data-node-type="group" data-node-id="${g.id}">
+      <div class="pq-group-hdr">
+        <span class="pq-drag-handle" title="Drag to reorder / move into another group">⠿</span>
+        <span class="pq-logic-badge">${g.logic}</span>
+        <span class="pq-group-hint">${g.logic==='and'?'requires all of:':'any one of:'}</span>
+        <button type="button" class="rrm" data-rm-pqgroup="${g.id}" title="Remove group">✕</button>
+      </div>
+      <div class="pq-group-body" data-dropzone="group" data-group-id="${g.id}">
+        ${inner||'<div class="pq-empty-drop">Drag requirements or groups in here</div>'}
+      </div>
+      <div class="pq-group-actions">
+        <button type="button" class="btn btn-s pq-add-group" data-logic="and" data-parent="${g.id}">+ AND Group</button>
+        <button type="button" class="btn btn-s pq-add-group" data-logic="or" data-parent="${g.id}">+ OR Group</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function pqDescendantGroupIds(gid){
+  const ids=[gid];let changed=true;
+  while(changed){changed=false;
+    prereqGroups.forEach(g=>{if(g.parent_group_id&&ids.includes(g.parent_group_id)&&!ids.includes(g.id)){ids.push(g.id);changed=true;}});
+  }
+  return ids;
+}
+function pqRemoveGroup(gid){
+  const ids=pqDescendantGroupIds(gid);
+  prereqGroups=prereqGroups.filter(g=>!ids.includes(g.id));
+  prereqEdit=prereqEdit.filter(r=>!ids.includes(r.group_id));
+}
+function pqMoveNode(node,targetParentGroupId){
+  if(node.type==='item'){
+    prereqEdit[node.idx].group_id=targetParentGroupId||null;
+    prereqEdit[node.idx].sort_order=pqNextSort(targetParentGroupId);
+  }else{
+    if(targetParentGroupId&&pqIsSelfOrDescendant(targetParentGroupId,node.id))return;
+    const g=pqGroupById(node.id);if(!g)return;
+    g.parent_group_id=targetParentGroupId||null;
+    g.sort_order=pqNextSort(targetParentGroupId);
+  }
+}
+function renderPrereqList(){
+  const inner=pqRenderLevel(null);
+  $('cm-prereq-list').innerHTML=`<div class="pq-cat-body" data-dropzone="category">${inner}</div>`;
+  if(!inner)$('cm-prereq-list').insertAdjacentHTML('beforeend','<div class="fhint">None yet.</div>');
+}
+function wirePrereqEvents(){
+  const wrap=$('cm-prereq-list');
+  wrap.addEventListener('dragstart',e=>{
+    const node=e.target.closest('.pq-node[draggable="true"]');
+    if(!node)return;
+    pqDrag=node.dataset.nodeType==='item'?{type:'item',idx:+node.dataset.nodeIdx}:{type:'group',id:node.dataset.nodeId};
+    node.classList.add('dragging');
+  });
+  wrap.addEventListener('dragend',e=>{
+    const node=e.target.closest('.pq-node');
+    if(node)node.classList.remove('dragging');
+  });
+  wrap.addEventListener('dragover',e=>{
+    if(e.target.closest('[data-dropzone]'))e.preventDefault();
+  });
+  wrap.addEventListener('drop',e=>{
+    const dz=e.target.closest('[data-dropzone]');
+    if(!dz||!pqDrag)return;
+    e.preventDefault();
+    pqMoveNode(pqDrag,dz.dataset.dropzone==='group'?dz.dataset.groupId:null);
+    pqDrag=null;
+    renderPrereqList();
+  });
+  wrap.addEventListener('click',e=>{
+    const rmG=e.target.closest('[data-rm-pqgroup]');
+    if(rmG){pqRemoveGroup(rmG.dataset.rmPqgroup);renderPrereqList();return;}
+    const rm=e.target.closest('[data-rm-prereq]');
+    if(rm){prereqEdit.splice(+rm.dataset.rmPrereq,1);renderPrereqList();return;}
+  });
+  $('cm-prereq-topactions').addEventListener('click',e=>{
+    const addG=e.target.closest('.pq-add-group');
+    if(!addG)return;
+    prereqGroups.push({id:crypto.randomUUID(),logic:addG.dataset.logic,parent_group_id:addG.dataset.parent||null,sort_order:pqNextSort(addG.dataset.parent||null)});
+    renderPrereqList();
+  });
 }
 function renderCoreqList(){
   $('cm-coreq-list').innerHTML=coreqEdit.map((r,i)=>
@@ -3583,11 +3733,21 @@ async function saveCrs(){
 
   // Prerequisites / co-requisites / syllabi — gated by this app's own
   // admin/pd RLS (course_prerequisites_write etc.), same as courses itself.
-  // Delete-then-reinsert, scoped to THIS course's uuid only.
+  // Delete-then-reinsert, scoped to THIS course's uuid only. Leaf rows are
+  // deleted before the group tree (course_prerequisite_groups) so nothing
+  // is left dangling on a group about to disappear; groups are then
+  // re-inserted parent-first (self-referencing FK) before the new leaves
+  // that point at them.
   await sbSave(sb.from('course_prerequisites').delete().eq('course_id',uuid));
+  await sbSave(sb.from('course_prerequisite_groups').delete().eq('course_id',uuid));
+  if(prereqGroups.length){
+    await sbSave(sb.from('course_prerequisite_groups').insert(
+      pqGroupsTopoSorted().map(g=>({id:g.id,course_id:uuid,logic:g.logic,parent_group_id:g.parent_group_id||null,sort_order:g.sort_order||0}))
+    ));
+  }
   if(prereqEdit.length){
     await sbSave(sb.from('course_prerequisites').insert(
-      prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id||null,custom_text:r.custom_text||null,note:r.note,and_group:r.and_group||1}))
+      prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id||null,custom_text:r.custom_text||null,note:r.note,group_id:r.group_id||null,sort_order:r.sort_order||0}))
     ));
   }
   await sbSave(sb.from('course_corequisites').delete().eq('course_id',uuid));
@@ -3618,7 +3778,8 @@ async function saveCrs(){
   }
   // Refresh this course's in-memory indexes so the modal reflects the save
   // immediately if reopened before the next full reload.
-  DB.coursePrereqByCourse[uuid]=prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id,custom_text:r.custom_text,note:r.note,and_group:r.and_group||1}));
+  DB.coursePrereqByCourse[uuid]=prereqEdit.map(r=>({course_id:uuid,prerequisite_course_id:r.prerequisite_course_id,custom_text:r.custom_text,note:r.note,group_id:r.group_id||null,sort_order:r.sort_order||0}));
+  DB.coursePrereqGroupsByCourse[uuid]=prereqGroups.map(g=>({id:g.id,course_id:uuid,logic:g.logic,parent_group_id:g.parent_group_id||null,sort_order:g.sort_order||0}));
   DB.courseCoreqByCourse[uuid]=coreqEdit.map(r=>({course_id:uuid,corequisite_course_id:r.corequisite_course_id,custom_text:r.custom_text,note:r.note}));
   DB.courseDocsByCourse[uuid]=cmDocs.map((d,i)=>({course_id:uuid,category:d.category,description:d.description,doc_date:d.doc_date,sp_url:d.sp_url,sort_order:i}));
 
@@ -4394,36 +4555,18 @@ function wireEvents(){
   });
   $('cm-prereq-add').addEventListener('click',()=>{
     const sel=val('cm-prereq-sel');if(!sel)return;
-    const g=prereqNextAndGroup();
+    const sort=pqNextSort(null);
     if(sel==='__other__'){
       const txt=val('cm-prereq-custom').trim();if(!txt)return;
-      prereqEdit.push({prerequisite_course_id:null,custom_text:txt,note:val('cm-prereq-note').trim()||null,and_group:g});
+      prereqEdit.push({prerequisite_course_id:null,custom_text:txt,note:val('cm-prereq-note').trim()||null,group_id:null,sort_order:sort});
       setv('cm-prereq-custom','');
     }else{
       if(prereqEdit.some(r=>r.prerequisite_course_id===sel))return;
-      prereqEdit.push({prerequisite_course_id:sel,custom_text:null,note:val('cm-prereq-note').trim()||null,and_group:g});
+      prereqEdit.push({prerequisite_course_id:sel,custom_text:null,note:val('cm-prereq-note').trim()||null,group_id:null,sort_order:sort});
     }
     setv('cm-prereq-note','');renderPrereqList();
   });
-  $('cm-prereq-list').addEventListener('click',e=>{
-    const andBtn=e.target.closest('.tag-and-add');
-    if(andBtn){
-      const sel=val('cm-prereq-sel');if(!sel)return;
-      const g=+andBtn.dataset.andGroup;
-      if(sel==='__other__'){
-        const txt=val('cm-prereq-custom').trim();if(!txt)return;
-        prereqEdit.push({prerequisite_course_id:null,custom_text:txt,note:val('cm-prereq-note').trim()||null,and_group:g});
-        setv('cm-prereq-custom','');
-      }else{
-        if(prereqEdit.some(r=>r.prerequisite_course_id===sel&&(r.and_group||1)===g))return;
-        prereqEdit.push({prerequisite_course_id:sel,custom_text:null,note:val('cm-prereq-note').trim()||null,and_group:g});
-      }
-      setv('cm-prereq-note','');renderPrereqList();
-      return;
-    }
-    const rm=e.target.closest('[data-rm-prereq]');if(!rm)return;
-    prereqEdit.splice(+rm.dataset.rmPrereq,1);renderPrereqList();
-  });
+  wirePrereqEvents();
   $('cm-coreq-sel').addEventListener('change',()=>{
     $('cm-coreq-custom').style.display=val('cm-coreq-sel')==='__other__'?'':'none';
   });

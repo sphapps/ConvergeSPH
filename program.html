@@ -139,14 +139,23 @@ tbody tr.clickable{cursor:pointer}
 .pc-row{display:flex;align-items:center;gap:8px;padding:4px 0;font-size:13px;border-bottom:1px solid var(--rowline)}
 .pc-row:last-child{border-bottom:none}
 .pc-row .pc-nm{flex:1}
-.pc-cluster[draggable="true"]{cursor:grab}
-.pc-cluster.dragging{opacity:.4}
-.pc-cluster .drag-handle{flex:0 0 auto;color:var(--muted);cursor:grab;font-size:14px;user-select:none}
-.pc-cluster-items{flex:1;display:flex;flex-wrap:wrap;gap:4px;align-items:center}
-.pc-and-item{display:inline-flex;align-items:center;gap:5px}
-.pc-and-item .rrm{width:20px;height:20px;font-size:11px;padding:0}
-.pc-and-lbl{font-size:10px;font-weight:700;color:var(--teal);text-transform:uppercase;margin-right:2px}
-.pc-and-add{flex:0 0 auto}
+.pc-cat-body,.pc-group-body{display:flex;flex-direction:column;gap:6px}
+.pc-node{border:1px solid var(--rowline);border-radius:6px;padding:6px 8px}
+.pc-node.dragging{opacity:.4}
+.pc-leaf{display:flex;align-items:center;gap:8px;font-size:13px;background:var(--surface)}
+.pc-leaf .pc-nm{flex:1}
+.drag-handle{flex:0 0 auto;color:var(--muted);cursor:grab;font-size:14px;user-select:none}
+.pc-group-box{border-style:dashed;padding:0;overflow:hidden}
+.pc-group-box.pc-logic-and{border-color:var(--teal)}
+.pc-group-box.pc-logic-or{border-color:var(--dgray)}
+.pc-group-hdr{display:flex;align-items:center;gap:8px;padding:5px 8px;background:var(--lgray);font-size:12px}
+.pc-logic-badge{font-size:10px;font-weight:700;letter-spacing:.5px;padding:1px 7px;border-radius:10px;color:white}
+.pc-logic-and .pc-logic-badge{background:var(--teal)}
+.pc-logic-or .pc-logic-badge{background:var(--dgray)}
+.pc-group-hint{color:var(--muted);flex:1}
+.pc-group-body{padding:8px;min-height:18px}
+.pc-empty-drop{font-size:11px;color:var(--muted);font-style:italic;border:1px dashed var(--mgray);border-radius:5px;padding:8px;text-align:center}
+.pc-group-actions{display:flex;gap:6px;padding:6px 0 0}
 .empty-note{font-size:12px;color:var(--muted);font-style:italic;grid-column:1/-1}
 .hint{font-size:11px;color:var(--dgray);margin-top:4px;grid-column:1/-1}
 .status-row{display:flex;align-items:center;gap:10px;grid-column:1/-1;padding:8px 0;border-top:1px solid var(--mgray);margin-top:4px}
@@ -159,8 +168,8 @@ tbody tr.clickable{cursor:pointer}
   cursor:pointer;font-size:12px;padding:3px 7px;line-height:1}
 .row-edit-btn:hover{background:var(--lgray);color:var(--navytx);border-color:var(--teal)}
 
-/* AND/OR joiner text on the public program page */
-.pv-and{font-size:11px;font-weight:700;color:var(--teal);text-transform:uppercase;margin:0 2px}
+/* (AND/OR joins on the public program page are now shown via nested
+   .pv-clist / .pv-subgroup indentation rather than inline "and" text) */
 
 /* ═══ PROGRAM DETAIL PAGE (mirrors scheduling.html's course page) ═══ */
 .pv-scroll{flex:1;overflow:auto}
@@ -178,13 +187,16 @@ tbody tr.clickable{cursor:pointer}
 .pv-desc{font-size:14px;line-height:1.65;white-space:pre-wrap}
 .pv-gate{font-size:13px;color:var(--dgray);font-style:italic}
 .pv-complist{margin:0;padding-left:18px;font-size:13px;line-height:1.7}
-.pv-ctable{width:100%;border-collapse:collapse}
-.pv-ctable td{padding:6px 4px;border-top:1px solid var(--rowline);font-size:13px}
-.pv-ctable tr:first-child td{border-top:none}
-.pv-ctable td.pv-code{width:90px;color:var(--dgray);white-space:nowrap}
-.pv-ctable td.pv-cr{width:50px;text-align:right;color:var(--dgray);white-space:nowrap}
-.pv-ctable a{color:var(--teal);text-decoration:none}
-.pv-ctable a:hover{text-decoration:underline}
+.pv-clist{list-style:none;margin:0;padding:0}
+.pv-clist>li{padding:6px 4px;border-top:1px solid var(--rowline);font-size:13px}
+.pv-clist>li:first-child{border-top:none}
+.pv-clist a{color:var(--teal);text-decoration:none}
+.pv-clist a:hover{text-decoration:underline}
+.pv-cr-inline{color:var(--dgray);font-size:12px}
+.pv-subgroup{border-top:1px solid var(--rowline)}
+.pv-group-label{display:block;font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--navytx);margin-bottom:4px}
+.pv-subgroup .pv-clist{margin-top:2px;margin-left:14px;border-left:2px solid var(--mgray);padding-left:10px}
+.pv-subgroup .pv-clist>li{border-top:none;padding:3px 4px}
 
 #ls{position:fixed;inset:0;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:9000}
 #ls h2{font-size:18px;color:var(--navytx)}
@@ -297,9 +309,9 @@ tbody tr.clickable{cursor:pointer}
             <option value="culminating_experience">Culminating Experience</option>
             <option value="other">Other</option>
           </select>
-          <button type="button" class="btn btn-s" id="pc-add-btn">+ Add (new group)</button>
+          <button type="button" class="btn btn-s" id="pc-add-btn">+ Add Course</button>
         </div>
-        <div class="fhint">"+ Add" starts a new OR-group in the chosen category. Use the "+ AND" button on an existing group below to require it alongside that group (e.g. BSTA 500 <b>and</b> BSTA 501).</div>
+        <div class="fhint">New courses land in the category's default list below. Use "+ AND Group" / "+ OR Group" to create an empty group, then drag courses (or other groups) into it — drag the ⠿ handle to move something between groups.</div>
         <div class="pc-groups" id="pc-groups"></div>
       </div>
     </div>
@@ -408,12 +420,14 @@ let currentUserEmail=null;
 let PROGRAMS={};                   // id -> row
 let PROG_COMP={};                  // program_id -> [row,...]
 let PROG_COURSES={};               // program_id -> [row,...]
+let PROG_COURSE_GROUPS={};         // program_id -> [group-node row,...] (AND/OR tree, see program_course_groups)
 let COURSES={};                    // id -> {id,full_name,prefix}
 let CCS=[];                        // curricular_changes rows (admin/apcc only)
 let LOCKED=false,LOCK_MSG='';
 let pmId=null;                     // program being edited ('' = new)
-let pcEdit=[];                     // in-memory course-assignment rows while pm modal open: {course_id,custom_text,relationship_type,and_group}
-let dragCluster=null;              // {cat,idx} of the cluster currently being dragged in the pc-groups editor
+let pcEdit=[];                     // in-memory leaf rows while pm modal open: {course_id,custom_text,relationship_type,group_id,sort_order}
+let pcGroups=[];                   // in-memory AND/OR group nodes while pm modal open: {id,relationship_type,logic,parent_group_id,sort_order}
+let pcDrag=null;                   // {type:'item',idx,cat} | {type:'group',id,cat} — node currently being dragged in the pc editor
 let compEdit=[];                   // in-memory competency rows while pm modal open
 let ccId=null;                     // curricular change being edited (null = new)
 let progViewId=null;               // program currently shown on the detail page (null = not on it)
@@ -468,16 +482,17 @@ async function loadData(){
 
   setLM('Loading programs…');
   const noRows=Promise.resolve({data:[],error:null});
-  const [progR,compR,pcR,crsR,ccR]=await Promise.all([
+  const [progR,compR,pcR,pcgR,crsR,ccR]=await Promise.all([
     paginate(()=>sb.from('programs').select('*')),
     paginate(()=>sb.from('program_competencies').select('*')),
     paginate(()=>sb.from('program_courses').select('*')),
+    paginate(()=>sb.from('program_course_groups').select('*')),
     paginate(()=>sb.from('courses').select('id,course_code,full_name,prefix,number,title,credits,parent_id')),
     // Curricular Changes tab is disabled pending a rework — no point pulling
     // this data until the tab is reachable again.
     noRows
   ]);
-  for(const r of [progR,compR,pcR,crsR,ccR]){
+  for(const r of [progR,compR,pcR,pcgR,crsR,ccR]){
     if(r.error){setLM('');throw r.error;}
   }
 
@@ -485,6 +500,7 @@ async function loadData(){
   PROG_COMP={}; (compR.data||[]).forEach(r=>{(PROG_COMP[r.program_id]=PROG_COMP[r.program_id]||[]).push(r);});
   Object.values(PROG_COMP).forEach(a=>a.sort((x,y)=>(x.sort_order??0)-(y.sort_order??0)));
   PROG_COURSES={}; (pcR.data||[]).forEach(r=>{(PROG_COURSES[r.program_id]=PROG_COURSES[r.program_id]||[]).push(r);});
+  PROG_COURSE_GROUPS={}; (pcgR.data||[]).forEach(r=>{(PROG_COURSE_GROUPS[r.program_id]=PROG_COURSE_GROUPS[r.program_id]||[]).push(r);});
   COURSES={}; (crsR.data||[]).forEach(c=>{COURSES[c.id]=c;});
   CCS=(ccR.data||[]).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
 
@@ -569,73 +585,169 @@ function populateCourseSelect(){
     opts.map(c=>`<option value="${esc(c.id)}">${esc(c.full_name||c.prefix||c.id)}</option>`).join('')+
     '<option value="__other__">Other (custom text)…</option>';
 }
+function pcGroupsTopoSorted(){
+  // replace_program_courses inserts groups in array order via a self-
+  // referencing FK, so every parent must appear before its children —
+  // regardless of the order the DB happened to return them in, or any
+  // reordering that happened in-session.
+  const out=[],placed=new Set();
+  let remaining=pcGroups.slice();
+  while(remaining.length){
+    const next=remaining.filter(g=>!g.parent_group_id||placed.has(g.parent_group_id));
+    if(!next.length){out.push(...remaining);break;} // orphaned rows (shouldn't happen) — flush rest as-is
+    next.forEach(g=>{out.push(g);placed.add(g.id);});
+    remaining=remaining.filter(g=>!placed.has(g.id));
+  }
+  return out;
+}
 function pcLabel(r){
   if(r.course_id){const c=COURSES[r.course_id];return c?c.full_name:r.course_id;}
   return r.custom_text||'(custom)';
 }
-// Group a category's row-indices (already in current display order) into
-// AND-clusters: rows sharing the same and_group travel and render together.
-function pcClusters(idxs){
-  const clusters=[],seen=new Map();
-  idxs.forEach(i=>{
-    const g=pcEdit[i].and_group||1;
-    if(seen.has(g))clusters[seen.get(g)].push(i);
-    else{seen.set(g,clusters.length);clusters.push([i]);}
-  });
-  return clusters;
+function pcGroupById(gid){return pcGroups.find(g=>g.id===gid);}
+function pcGroupCat(gid){const g=pcGroupById(gid);return g?g.relationship_type:null;}
+// True if candidateId is groupId itself, or nested anywhere underneath it —
+// used to block dropping a group into its own descendant (would cycle).
+function pcIsSelfOrDescendant(candidateId,groupId){
+  if(!candidateId)return false;
+  if(candidateId===groupId)return true;
+  let g=pcGroupById(candidateId);
+  while(g&&g.parent_group_id){
+    if(g.parent_group_id===groupId)return true;
+    g=pcGroupById(g.parent_group_id);
+  }
+  return false;
 }
-function pcNextAndGroup(type){
-  let max=0;
-  pcEdit.forEach(r=>{if(r.relationship_type===type&&(r.and_group||1)>max)max=r.and_group||1;});
+function pcNextSort(cat,parentGroupId){
+  let max=-1;
+  pcEdit.forEach(r=>{if(r.relationship_type===cat&&(r.group_id||null)===(parentGroupId||null)&&(r.sort_order||0)>max)max=r.sort_order||0;});
+  pcGroups.forEach(g=>{if(g.relationship_type===cat&&(g.parent_group_id||null)===(parentGroupId||null)&&(g.sort_order||0)>max)max=g.sort_order||0;});
   return max+1;
+}
+// Every direct child (leaf item or nested group) of one level of the tree,
+// in display order — items and groups share one ordering space via sort_order.
+function pcChildren(cat,parentGroupId){
+  const kids=[];
+  pcEdit.forEach((r,i)=>{if(r.relationship_type===cat&&(r.group_id||null)===(parentGroupId||null))kids.push({kind:'item',idx:i,sort_order:r.sort_order||0});});
+  pcGroups.forEach(g=>{if(g.relationship_type===cat&&(g.parent_group_id||null)===(parentGroupId||null))kids.push({kind:'group',group:g,sort_order:g.sort_order||0});});
+  kids.sort((a,b)=>a.sort_order-b.sort_order);
+  return kids;
+}
+function pcRenderLevel(cat,parentGroupId,editable){
+  return pcChildren(cat,parentGroupId).map(ch=>{
+    if(ch.kind==='item'){
+      const r=pcEdit[ch.idx];
+      return `<div class="pc-node pc-leaf"${editable?` draggable="true" data-node-type="item" data-node-idx="${ch.idx}"`:''}>
+        ${editable?'<span class="drag-handle" title="Drag to reorder / move into a group">⠿</span>':''}
+        <span class="pc-nm">${esc(pcLabel(r))}</span>
+        ${editable?`<button type="button" class="rrm admin-only" data-rm-item="${ch.idx}" title="Remove">✕</button>`:''}
+      </div>`;
+    }
+    const g=ch.group;
+    const inner=pcRenderLevel(cat,g.id,editable);
+    return `<div class="pc-node pc-group-box pc-logic-${g.logic}"${editable?` draggable="true" data-node-type="group" data-node-id="${g.id}"`:''}>
+      <div class="pc-group-hdr">
+        ${editable?'<span class="drag-handle" title="Drag to reorder / move into another group">⠿</span>':''}
+        <span class="pc-logic-badge">${g.logic}</span>
+        <span class="pc-group-hint">${g.logic==='and'?'requires all of:':'any one of:'}</span>
+        ${editable?`<button type="button" class="rrm admin-only" data-rm-group="${g.id}" title="Remove group">✕</button>`:''}
+      </div>
+      <div class="pc-group-body" data-dropzone="group" data-cat="${esc(cat)}" data-group-id="${g.id}">
+        ${inner||`<div class="pc-empty-drop">Drag courses or groups in here</div>`}
+      </div>
+      ${editable?`<div class="pc-group-actions admin-only">
+        <button type="button" class="btn btn-s pc-add-group" data-logic="and" data-cat="${esc(cat)}" data-parent="${g.id}">+ AND Group</button>
+        <button type="button" class="btn btn-s pc-add-group" data-logic="or" data-cat="${esc(cat)}" data-parent="${g.id}">+ OR Group</button>
+      </div>`:''}
+    </div>`;
+  }).join('');
 }
 function renderPcGroups(){
   const wrap=$('pc-groups');
   const types=['core_required','program_required','elective','culminating_experience','other'];
   const labels={core_required:'Core Required',program_required:'Program Required',elective:'Electives',culminating_experience:'Culminating Experience',other:'Other'};
-  const groups={};types.forEach(t=>groups[t]=[]);
-  pcEdit.forEach((r,i)=>{if(groups[r.relationship_type])groups[r.relationship_type].push(i);});
   const editable=canProgWrite();
-  wrap.innerHTML=types.map(type=>{
-    const idxs=groups[type];
-    if(!idxs.length)return '';
-    const clusters=pcClusters(idxs);
-    const rows=clusters.map((cl,ci)=>{
-      const itemsHtml=cl.map((i,pos)=>
-        `<span class="pc-and-item">${pos>0?'<span class="pc-and-lbl">and</span>':''}${esc(pcLabel(pcEdit[i]))}<button type="button" class="rrm admin-only" data-rm-course="${i}" title="Remove">✕</button></span>`
-      ).join('');
-      return `<div class="pc-row pc-cluster"${editable?` draggable="true" data-cat="${esc(type)}" data-cluster="${ci}"`:''}>
-        ${editable?'<span class="drag-handle" title="Drag to reorder">⠿</span>':''}
-        <span class="pc-cluster-items">${itemsHtml}</span>
-        ${editable?`<button type="button" class="btn btn-s pc-and-add" data-and-type="${esc(type)}" data-and-group="${pcEdit[cl[0]].and_group||1}">+ AND</button>`:''}
-      </div>`;
-    }).join('');
-    return `<div class="pc-group"><h4>${labels[type]}</h4>${rows}</div>`;
-  }).join('')||'<div class="empty-note">No courses assigned yet.</div>';
-  wirePcDrag();
+  const sections=types.map(type=>{
+    const inner=pcRenderLevel(type,null,editable);
+    if(!inner)return '';
+    return `<div class="pc-group"><h4>${labels[type]}</h4>
+      <div class="pc-cat-body" data-dropzone="category" data-cat="${esc(type)}">${inner}</div>
+      ${editable?`<div class="pc-group-actions admin-only">
+        <button type="button" class="btn btn-s pc-add-group" data-logic="and" data-cat="${esc(type)}" data-parent="">+ AND Group</button>
+        <button type="button" class="btn btn-s pc-add-group" data-logic="or" data-cat="${esc(type)}" data-parent="">+ OR Group</button>
+      </div>`:''}
+    </div>`;
+  }).join('');
+  wrap.innerHTML=sections||'<div class="empty-note">No courses assigned yet.</div>';
 }
-function wirePcDrag(){
-  document.querySelectorAll('#pc-groups .pc-cluster[draggable="true"]').forEach(el=>{
-    el.addEventListener('dragstart',()=>{dragCluster={cat:el.dataset.cat,idx:+el.dataset.cluster};el.classList.add('dragging');});
-    el.addEventListener('dragend',()=>{el.classList.remove('dragging');});
-    el.addEventListener('dragover',e=>{if(dragCluster&&dragCluster.cat===el.dataset.cat)e.preventDefault();});
-    el.addEventListener('drop',e=>{
-      e.preventDefault();
-      if(!dragCluster||dragCluster.cat!==el.dataset.cat)return;
-      reorderPcCluster(el.dataset.cat,dragCluster.idx,+el.dataset.cluster);
-      dragCluster=null;
-    });
+function pcDescendantGroupIds(gid){
+  const ids=[gid];let changed=true;
+  while(changed){changed=false;
+    pcGroups.forEach(g=>{if(g.parent_group_id&&ids.includes(g.parent_group_id)&&!ids.includes(g.id)){ids.push(g.id);changed=true;}});
+  }
+  return ids;
+}
+function pcRemoveGroup(gid){
+  const ids=pcDescendantGroupIds(gid);
+  pcGroups=pcGroups.filter(g=>!ids.includes(g.id));
+  pcEdit=pcEdit.filter(r=>!ids.includes(r.group_id));
+}
+function pcMoveNode(node,targetCat,targetParentGroupId){
+  if(node.cat!==targetCat)return;            // don't reparent across categories
+  if(node.type==='item'){
+    pcEdit[node.idx].group_id=targetParentGroupId||null;
+    pcEdit[node.idx].sort_order=pcNextSort(targetCat,targetParentGroupId);
+  }else{
+    if(targetParentGroupId&&pcIsSelfOrDescendant(targetParentGroupId,node.id))return; // no cycles
+    const g=pcGroupById(node.id);if(!g)return;
+    g.parent_group_id=targetParentGroupId||null;
+    g.sort_order=pcNextSort(targetCat,targetParentGroupId);
+  }
+}
+function wirePcEvents(){
+  const wrap=$('pc-groups');
+  wrap.addEventListener('dragstart',e=>{
+    const node=e.target.closest('.pc-node[draggable="true"]');
+    if(!node)return;
+    if(node.dataset.nodeType==='item'){
+      const idx=+node.dataset.nodeIdx;
+      pcDrag={type:'item',idx,cat:pcEdit[idx].relationship_type};
+    }else{
+      const gid=node.dataset.nodeId,g=pcGroupById(gid);
+      pcDrag={type:'group',id:gid,cat:g?g.relationship_type:null};
+    }
+    node.classList.add('dragging');
   });
-}
-function reorderPcCluster(type,from,to){
-  if(from===to)return;
-  const idxs=[];pcEdit.forEach((r,i)=>{if(r.relationship_type===type)idxs.push(i);});
-  const clusters=pcClusters(idxs);
-  const moved=clusters.splice(from,1)[0];
-  clusters.splice(to,0,moved);
-  const rowsInNewOrder=clusters.flat().map(i=>pcEdit[i]);
-  idxs.forEach((posInPcEdit,k)=>{pcEdit[posInPcEdit]=rowsInNewOrder[k];});
-  renderPcGroups();
+  wrap.addEventListener('dragend',e=>{
+    const node=e.target.closest('.pc-node');
+    if(node)node.classList.remove('dragging');
+  });
+  wrap.addEventListener('dragover',e=>{
+    if(e.target.closest('[data-dropzone]'))e.preventDefault();
+  });
+  wrap.addEventListener('drop',e=>{
+    const dz=e.target.closest('[data-dropzone]');
+    if(!dz||!pcDrag)return;
+    e.preventDefault();
+    const targetCat=dz.dataset.cat;
+    const targetParent=dz.dataset.dropzone==='group'?dz.dataset.groupId:null;
+    pcMoveNode(pcDrag,targetCat,targetParent);
+    pcDrag=null;
+    renderPcGroups();
+  });
+  wrap.addEventListener('click',e=>{
+    const addG=e.target.closest('.pc-add-group');
+    if(addG){
+      pcGroups.push({id:crypto.randomUUID(),relationship_type:addG.dataset.cat,logic:addG.dataset.logic,
+        parent_group_id:addG.dataset.parent||null,sort_order:pcNextSort(addG.dataset.cat,addG.dataset.parent||null)});
+      renderPcGroups();
+      return;
+    }
+    const rmG=e.target.closest('[data-rm-group]');
+    if(rmG){pcRemoveGroup(rmG.dataset.rmGroup);renderPcGroups();return;}
+    const rmI=e.target.closest('[data-rm-item]');
+    if(rmI){pcEdit.splice(+rmI.dataset.rmItem,1);renderPcGroups();return;}
+  });
 }
 function openProg(id){
   pmId=id;
@@ -646,7 +758,8 @@ function openProg(id){
   setv('pm-culm-cr',p.culminating_credits); setv('pm-other-cr',p.other_credits);
   compEdit=(id?(PROG_COMP[id]||[]):[]).map(r=>({competency_text:r.competency_text}));
   renderCompEditor();
-  pcEdit=(id?(PROG_COURSES[id]||[]):[]).map(r=>({course_id:r.course_id,custom_text:r.custom_text,relationship_type:r.relationship_type,and_group:r.and_group||1}));
+  pcEdit=(id?(PROG_COURSES[id]||[]):[]).map(r=>({course_id:r.course_id,custom_text:r.custom_text,relationship_type:r.relationship_type,group_id:r.group_id||null,sort_order:r.sort_order||0}));
+  pcGroups=(id?(PROG_COURSE_GROUPS[id]||[]):[]).map(g=>({id:g.id,relationship_type:g.relationship_type,logic:g.logic,parent_group_id:g.parent_group_id||null,sort_order:g.sort_order||0}));
   populateCourseSelect();
   $('pc-course-custom').style.display='none';$('pc-course-custom').value='';
   renderPcGroups();
@@ -696,7 +809,8 @@ async function saveProg(){
   {
     const {error}=await sb.rpc('replace_program_courses',{
       p_program_id:progId,
-      p_rows:pcEdit.map((r,i)=>({course_id:r.course_id,custom_text:r.custom_text||null,relationship_type:r.relationship_type,and_group:r.and_group||1,sort_order:i}))
+      p_groups:pcGroupsTopoSorted().map(g=>({id:g.id,relationship_type:g.relationship_type,logic:g.logic,parent_group_id:g.parent_group_id||null,sort_order:g.sort_order||0})),
+      p_rows:pcEdit.map(r=>({course_id:r.course_id,custom_text:r.custom_text||null,relationship_type:r.relationship_type,group_id:r.group_id||null,sort_order:r.sort_order||0}))
     });
     if(error){setSS('⚠ Courses not saved — nothing changed there: '+error.message);return;}
   }
@@ -844,51 +958,45 @@ function switchTab(viewId){
 }
 
 /* ── PROGRAM DETAIL PAGE ── */
-function courseGroupRows(programId,type){
-  return (PROG_COURSES[programId]||[])
-    .filter(r=>r.relationship_type===type)
-    .sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
+// Every direct child (course/custom-text leaf, or nested group) of one
+// level of a program's course tree for a category, in display order.
+function pvChildren(programId,type,parentGroupId){
+  const items=(PROG_COURSES[programId]||[]).filter(r=>r.relationship_type===type&&(r.group_id||null)===(parentGroupId||null));
+  const groups=(PROG_COURSE_GROUPS[programId]||[]).filter(g=>g.relationship_type===type&&(g.parent_group_id||null)===(parentGroupId||null));
+  const kids=[...items.map(r=>({kind:'item',row:r,sort_order:r.sort_order||0})),
+              ...groups.map(g=>({kind:'group',group:g,sort_order:g.sort_order||0}))];
+  kids.sort((a,b)=>a.sort_order-b.sort_order);
+  return kids;
 }
-// Cluster a (sorted) list of program_courses rows into AND-groups — rows
-// sharing the same and_group are required together; different and_group
-// values are alternatives (OR) within the section.
-function pvClusters(rows){
-  const clusters=[],seen=new Map();
-  rows.forEach(r=>{
-    const g=r.and_group||1;
-    if(seen.has(g))clusters[seen.get(g)].push(r);
-    else{seen.set(g,clusters.length);clusters.push([r]);}
-  });
-  return clusters;
-}
-function pvItem(r){
+function pvItemHTML(r){
   if(r.course_id){
     const c=COURSES[r.course_id];if(!c)return null;
     const code=c.course_code||c.id;
     const label=[c.prefix,c.number].filter(Boolean).join(' ')||code;
-    return {label,credits:c.credits,html:`<a href="scheduling.html?course=${encodeURIComponent(code)}">${esc(c.title||c.full_name||label)}</a>`};
+    const cr=c.credits!=null?` <span class="pv-cr-inline">(${esc(c.credits)} cr)</span>`:'';
+    return `<a href="scheduling.html?course=${encodeURIComponent(code)}">${esc(label)} — ${esc(c.title||c.full_name||label)}</a>${cr}`;
   }
-  return {label:'',credits:null,html:esc(r.custom_text||'')};
+  return esc(r.custom_text||'');
 }
-function courseRowHTML(cluster){
-  const parts=cluster.map(pvItem).filter(Boolean);
-  if(!parts.length)return '';
-  const nameHtml=parts.map(p=>p.html).join(' <span class="pv-and">and</span> ');
-  const codeTxt=parts.length===1?parts[0].label:'';
-  const creditsTxt=parts.length===1?(parts[0].credits??'')
-    :(parts.every(p=>p.credits!=null)?parts.reduce((s,p)=>s+Number(p.credits),0):'');
-  return `<tr><td class="pv-code">${esc(codeTxt)}</td>
-    <td>${nameHtml}</td>
-    <td class="pv-cr">${creditsTxt}</td></tr>`;
+function pvLevelHTML(programId,type,parentGroupId){
+  const lis=pvChildren(programId,type,parentGroupId).map(ch=>{
+    if(ch.kind==='item'){
+      const html=pvItemHTML(ch.row);
+      return html?`<li>${html}</li>`:'';
+    }
+    const g=ch.group;
+    const inner=pvLevelHTML(programId,type,g.id);
+    if(!inner)return '';
+    const label=g.logic==='and'?'All of the following:':'One of the following:';
+    return `<li class="pv-subgroup"><span class="pv-group-label">${label}</span>${inner}</li>`;
+  }).filter(Boolean).join('');
+  return lis?`<ul class="pv-clist">${lis}</ul>`:'';
 }
 function courseSectionHTML(title,programId,type,credits){
-  const rows=courseGroupRows(programId,type);
-  if(!rows.length)return '';
-  const trs=pvClusters(rows).map(courseRowHTML).filter(Boolean).join('');
-  if(!trs)return '';
+  const inner=pvLevelHTML(programId,type,null);
+  if(!inner)return '';
   const heading=credits!=null?`${title} (${credits} Credits)`:title;
-  return `<div class="pv-card"><h3>${esc(heading)}</h3>
-    <table class="pv-ctable">${trs}</table></div>`;
+  return `<div class="pv-card"><h3>${esc(heading)}</h3>${inner}</div>`;
 }
 function renderProgramDetail(id){
   const p=PROGRAMS[id];
@@ -987,38 +1095,18 @@ function wire(){
   $('pc-add-btn').onclick=()=>{
     const sel=val('pc-course-sel'),type=val('pc-type-sel');
     if(!sel)return;
-    const g=pcNextAndGroup(type);
+    const sort=pcNextSort(type,null);
     if(sel==='__other__'){
       const txt=val('pc-course-custom').trim();if(!txt)return;
-      pcEdit.push({course_id:null,custom_text:txt,relationship_type:type,and_group:g});
+      pcEdit.push({course_id:null,custom_text:txt,relationship_type:type,group_id:null,sort_order:sort});
       setv('pc-course-custom','');
     }else{
       if(pcEdit.some(r=>r.course_id===sel&&r.relationship_type===type))return;
-      pcEdit.push({course_id:sel,custom_text:null,relationship_type:type,and_group:g});
+      pcEdit.push({course_id:sel,custom_text:null,relationship_type:type,group_id:null,sort_order:sort});
     }
     renderPcGroups();
   };
-  $('pc-groups').addEventListener('click',e=>{
-    const andBtn=e.target.closest('.pc-and-add');
-    if(andBtn){
-      const sel=val('pc-course-sel');if(!sel)return;
-      const type=andBtn.dataset.andType,g=+andBtn.dataset.andGroup;
-      if(sel==='__other__'){
-        const txt=val('pc-course-custom').trim();if(!txt)return;
-        pcEdit.push({course_id:null,custom_text:txt,relationship_type:type,and_group:g});
-        setv('pc-course-custom','');
-      }else{
-        if(pcEdit.some(r=>r.course_id===sel&&r.relationship_type===type&&(r.and_group||1)===g))return;
-        pcEdit.push({course_id:sel,custom_text:null,relationship_type:type,and_group:g});
-      }
-      renderPcGroups();
-      return;
-    }
-    const rm=e.target.closest('[data-rm-course]');
-    if(!rm)return;
-    pcEdit.splice(+rm.dataset.rmCourse,1);
-    renderPcGroups();
-  });
+  wirePcEvents();
   $('btn-save-prog').onclick=saveProg;
   $('btn-del-prog').onclick=delProg;
 
