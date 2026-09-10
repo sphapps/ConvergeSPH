@@ -3494,9 +3494,12 @@ function populateAdvSelects(excludeUuid){
   $('cm-prereq-custom').style.display='none';$('cm-prereq-custom').value='';
   $('cm-coreq-custom').style.display='none';$('cm-coreq-custom').value='';
 }
+function progLabel(p){
+  return p.name+(p.credential?' '+p.credential:'');
+}
 function populateProgSelect(){
   const progs=Object.values(DB.programsById).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')));
-  $('cm-prog-sel').innerHTML=progs.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
+  $('cm-prog-sel').innerHTML=progs.map(p=>`<option value="${esc(p.id)}">${esc(progLabel(p))}</option>`).join('');
 }
 function courseNameByUuid(uuid){
   const c=DB.courses.find(x=>x._uuid===uuid);
@@ -3695,7 +3698,7 @@ function renderProgGroups(){
     if(!rows.length)return '';
     return `<div class="pc-group"><h5>${labels[type]}</h5>`+rows.map(r=>{
       const p=DB.programsById[r.program_id];
-      return `<div class="tag-row"><span class="tag-nm">${esc(p?p.name:r.program_id)}</span>`+
+      return `<div class="tag-row"><span class="tag-nm">${esc(p?progLabel(p):r.program_id)}</span>`+
         `<button type="button" class="rrm" data-rm-prog="${r._i}"${rmHidden}>✕</button></div>`;
     }).join('')+`</div>`;
   }).join('')||'<div class="fhint">No program assignments yet.</div>';
