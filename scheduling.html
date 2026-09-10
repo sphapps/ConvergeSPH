@@ -3584,16 +3584,40 @@ function pqRemoveGroup(gid){
   prereqGroups=prereqGroups.filter(g=>!ids.includes(g.id));
   prereqEdit=prereqEdit.filter(r=>!ids.includes(r.group_id));
 }
-function pqMoveNode(node,targetParentGroupId){
-  if(node.type==='item'){
-    prereqEdit[node.idx].group_id=targetParentGroupId||null;
-    prereqEdit[node.idx].sort_order=pqNextSort(targetParentGroupId);
-  }else{
-    if(targetParentGroupId&&pqIsSelfOrDescendant(targetParentGroupId,node.id))return;
-    const g=pqGroupById(node.id);if(!g)return;
-    g.parent_group_id=targetParentGroupId||null;
-    g.sort_order=pqNextSort(targetParentGroupId);
+function pqChildRef(nodeEl){
+  return nodeEl.dataset.nodeType==='item'?{kind:'item',idx:+nodeEl.dataset.nodeIdx}:{kind:'group',id:nodeEl.dataset.nodeId};
+}
+function pqRefsEqual(a,b){
+  return a.kind===b.kind&&(a.kind==='item'?a.idx===b.idx:a.id===b.id);
+}
+// Same fix as program.html's pcMoveNode: insert at the dropped position
+// among current siblings and densely reindex the level, rather than
+// always appending via "max sort_order + 1" regardless of drop position.
+function pqMoveNode(node,targetParentGroupId,insertBeforeRef){
+  const movedRef=node.type==='item'?{kind:'item',idx:node.idx}:{kind:'group',id:node.id};
+  if(node.type==='group'&&targetParentGroupId&&pqIsSelfOrDescendant(targetParentGroupId,node.id))return;
+
+  const siblingRefs=pqChildren(targetParentGroupId)
+    .map(ch=>ch.kind==='item'?{kind:'item',idx:ch.idx}:{kind:'group',id:ch.group.id})
+    .filter(ref=>!pqRefsEqual(ref,movedRef));
+
+  let insertPos=siblingRefs.length;
+  if(insertBeforeRef){
+    const idx=siblingRefs.findIndex(ref=>pqRefsEqual(ref,insertBeforeRef));
+    if(idx>=0)insertPos=idx;
   }
+  siblingRefs.splice(insertPos,0,movedRef);
+
+  siblingRefs.forEach((ref,i)=>{
+    if(ref.kind==='item'){
+      prereqEdit[ref.idx].group_id=targetParentGroupId||null;
+      prereqEdit[ref.idx].sort_order=i;
+    }else{
+      const g=pqGroupById(ref.id);if(!g)return;
+      g.parent_group_id=targetParentGroupId||null;
+      g.sort_order=i;
+    }
+  });
 }
 function renderPrereqList(){
   const inner=pqRenderLevel(null);
@@ -3619,7 +3643,13 @@ function wirePrereqEvents(){
     const dz=e.target.closest('[data-dropzone]');
     if(!dz||!pqDrag)return;
     e.preventDefault();
-    pqMoveNode(pqDrag,dz.dataset.dropzone==='group'?dz.dataset.groupId:null);
+    let insertBeforeRef=null;
+    for(const el of dz.children){
+      if(!el.classList||!el.classList.contains('pq-node'))continue;
+      const r=el.getBoundingClientRect();
+      if(e.clientY<r.top+r.height/2){insertBeforeRef=pqChildRef(el);break;}
+    }
+    pqMoveNode(pqDrag,dz.dataset.dropzone==='group'?dz.dataset.groupId:null,insertBeforeRef);
     pqDrag=null;
     renderPrereqList();
   });

@@ -692,17 +692,47 @@ function pcRemoveGroup(gid){
   pcGroups=pcGroups.filter(g=>!ids.includes(g.id));
   pcEdit=pcEdit.filter(r=>!ids.includes(r.group_id));
 }
-function pcMoveNode(node,targetCat,targetParentGroupId){
+function pcChildRef(nodeEl){
+  return nodeEl.dataset.nodeType==='item'?{kind:'item',idx:+nodeEl.dataset.nodeIdx}:{kind:'group',id:nodeEl.dataset.nodeId};
+}
+function pcRefsEqual(a,b){
+  return a.kind===b.kind&&(a.kind==='item'?a.idx===b.idx:a.id===b.id);
+}
+// Moves `node` into (targetCat,targetParentGroupId), inserting it at the
+// position implied by `insertBeforeRef` (a {kind,idx|id} identifying the
+// sibling to land in front of, or null to append at the end) among that
+// level's CURRENT children, then densely reindexes every sibling's
+// sort_order (0..n-1) so the whole level's order stays consistent —
+// rather than always appending via "max sort_order + 1", which ignored
+// where the item was actually dropped.
+function pcMoveNode(node,targetCat,targetParentGroupId,insertBeforeRef){
   if(node.cat!==targetCat)return;            // don't reparent across categories
-  if(node.type==='item'){
-    pcEdit[node.idx].group_id=targetParentGroupId||null;
-    pcEdit[node.idx].sort_order=pcNextSort(targetCat,targetParentGroupId);
-  }else{
-    if(targetParentGroupId&&pcIsSelfOrDescendant(targetParentGroupId,node.id))return; // no cycles
-    const g=pcGroupById(node.id);if(!g)return;
-    g.parent_group_id=targetParentGroupId||null;
-    g.sort_order=pcNextSort(targetCat,targetParentGroupId);
+  const movedRef=node.type==='item'?{kind:'item',idx:node.idx}:{kind:'group',id:node.id};
+  if(node.type==='group'&&targetParentGroupId&&pcIsSelfOrDescendant(targetParentGroupId,node.id))return; // no cycles
+
+  const siblingRefs=pcChildren(targetCat,targetParentGroupId)
+    .map(ch=>ch.kind==='item'?{kind:'item',idx:ch.idx}:{kind:'group',id:ch.group.id})
+    .filter(ref=>!pcRefsEqual(ref,movedRef));
+
+  let insertPos=siblingRefs.length;
+  if(insertBeforeRef){
+    const idx=siblingRefs.findIndex(ref=>pcRefsEqual(ref,insertBeforeRef));
+    if(idx>=0)insertPos=idx;
   }
+  siblingRefs.splice(insertPos,0,movedRef);
+
+  siblingRefs.forEach((ref,i)=>{
+    if(ref.kind==='item'){
+      pcEdit[ref.idx].relationship_type=targetCat;
+      pcEdit[ref.idx].group_id=targetParentGroupId||null;
+      pcEdit[ref.idx].sort_order=i;
+    }else{
+      const g=pcGroupById(ref.id);if(!g)return;
+      g.relationship_type=targetCat;
+      g.parent_group_id=targetParentGroupId||null;
+      g.sort_order=i;
+    }
+  });
 }
 function wirePcEvents(){
   const wrap=$('pc-groups');
@@ -731,7 +761,16 @@ function wirePcEvents(){
     e.preventDefault();
     const targetCat=dz.dataset.cat;
     const targetParent=dz.dataset.dropzone==='group'?dz.dataset.groupId:null;
-    pcMoveNode(pcDrag,targetCat,targetParent);
+    // Only consider DIRECT children of this dropzone as reorder targets —
+    // a nested group's own children live in a different dropzone one level
+    // down, so they're excluded automatically by the parentElement check.
+    let insertBeforeRef=null;
+    for(const el of dz.children){
+      if(!el.classList||!el.classList.contains('pc-node'))continue;
+      const r=el.getBoundingClientRect();
+      if(e.clientY<r.top+r.height/2){insertBeforeRef=pcChildRef(el);break;}
+    }
+    pcMoveNode(pcDrag,targetCat,targetParent,insertBeforeRef);
     pcDrag=null;
     renderPcGroups();
   });
