@@ -1153,7 +1153,6 @@ function wire(){
       pcEdit.push({course_id:null,custom_text:txt,relationship_type:type,group_id:null,sort_order:sort});
       setv('pc-course-custom','');
     }else{
-      if(pcEdit.some(r=>r.course_id===sel&&r.relationship_type===type))return;
       pcEdit.push({course_id:sel,custom_text:null,relationship_type:type,group_id:null,sort_order:sort});
     }
     renderPcGroups();
