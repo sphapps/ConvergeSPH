@@ -156,6 +156,13 @@ tbody tr.clickable{cursor:pointer}
 .pc-group-body{padding:8px;min-height:18px}
 .pc-empty-drop{font-size:11px;color:var(--muted);font-style:italic;border:1px dashed var(--mgray);border-radius:5px;padding:8px;text-align:center}
 .pc-group-actions{display:flex;gap:6px;padding:6px 0 0}
+.pc-other-named{border:1px solid var(--mgray);border-radius:8px;padding:10px}
+.pc-other-named h4{margin-bottom:6px}
+.pc-other-label-input{width:100%;font-size:13px;font-weight:700;text-transform:none;letter-spacing:normal;
+  padding:6px 8px;border:1px solid var(--mgray);border-radius:5px;font-family:inherit;background:var(--surface);color:var(--text)}
+.pc-other-meta{display:flex;align-items:center;gap:10px;font-size:11px;color:var(--muted);margin-bottom:8px}
+.pc-other-cr-lbl{display:flex;align-items:center;gap:5px;margin-left:auto;font-size:11px;color:var(--dgray)}
+.pc-other-cr-lbl input{width:64px;font-size:12px;padding:3px 6px;border:1px solid var(--mgray);border-radius:4px;font-family:inherit;background:var(--surface);color:var(--text)}
 .empty-note{font-size:12px;color:var(--muted);font-style:italic;grid-column:1/-1}
 .hint{font-size:11px;color:var(--dgray);margin-top:4px;grid-column:1/-1}
 .status-row{display:flex;align-items:center;gap:10px;grid-column:1/-1;padding:8px 0;border-top:1px solid var(--mgray);margin-top:4px}
@@ -664,10 +671,10 @@ function pcRenderLevel(cat,parentGroupId,editable){
 }
 function renderPcGroups(){
   const wrap=$('pc-groups');
-  const types=['core_required','program_required','elective','culminating_experience','other'];
-  const labels={core_required:'Core Required',program_required:'Program Required',elective:'Electives',culminating_experience:'Culminating Experience',other:'Other'};
+  const types=['core_required','program_required','elective','culminating_experience'];
+  const labels={core_required:'Core Required',program_required:'Program Required',elective:'Electives',culminating_experience:'Culminating Experience'};
   const editable=canProgWrite();
-  const sections=types.map(type=>{
+  let sections=types.map(type=>{
     const inner=pcRenderLevel(type,null,editable);
     if(!inner)return '';
     return `<div class="pc-group"><h4>${labels[type]}</h4>
@@ -678,7 +685,57 @@ function renderPcGroups(){
       </div>`:''}
     </div>`;
   }).join('');
+  sections+=renderOtherSections(editable);
   wrap.innerHTML=sections||'<div class="empty-note">No courses assigned yet.</div>';
+}
+// "Other" is special: unlike the fixed categories, it can hold any number
+// of independently-NAMED groups (e.g. "Certificates", "Post-Bacc
+// Requirements"), each rendered as its own card with an editable name and
+// optional credit total. Ungrouped items (added but not dragged into a
+// named group) still fall under one generic "Other" card.
+function renderOtherSections(editable){
+  const items=[];pcEdit.forEach((r,i)=>{if(r.relationship_type==='other'&&!r.group_id)items.push(i);});
+  const topGroups=pcGroups.filter(g=>g.relationship_type==='other'&&!g.parent_group_id)
+    .sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
+  let html='';
+  if(items.length){
+    const rows=items.map(i=>{
+      const r=pcEdit[i];
+      return `<div class="pc-node pc-leaf"${editable?` draggable="true" data-node-type="item" data-node-idx="${i}"`:''}>
+        ${editable?'<span class="drag-handle" title="Drag to reorder / move into a group">⠿</span>':''}
+        <span class="pc-nm">${esc(pcLabel(r))}</span>
+        ${editable?`<button type="button" class="rrm admin-only" data-rm-item="${i}" title="Remove">✕</button>`:''}
+      </div>`;
+    }).join('');
+    html+=`<div class="pc-group"><h4>Other</h4>
+      <div class="pc-cat-body" data-dropzone="category" data-cat="other">${rows}</div>
+    </div>`;
+  }
+  topGroups.forEach(g=>{
+    const inner=pcRenderLevel('other',g.id,editable);
+    html+=`<div class="pc-group pc-other-named">
+      <h4>${editable?`<input type="text" class="pc-other-label-input" data-label-group="${g.id}" value="${esc(g.label||'')}" placeholder="Name this Other group…">`:esc(g.label&&g.label.trim()?g.label.trim():'Other')}</h4>
+      <div class="pc-other-meta">
+        <span>${g.logic==='and'?'Requires all of:':'Any one of:'}</span>
+        ${editable?`<label class="pc-other-cr-lbl">Credits <input type="number" step="0.5" class="pc-other-credits-input" data-credits-group="${g.id}" value="${g.credits??''}"></label>`
+          :(g.credits!=null?`<span>${esc(g.credits)} credits</span>`:'')}
+        ${editable?`<button type="button" class="rrm admin-only" data-rm-group="${g.id}" title="Remove group">✕</button>`:''}
+      </div>
+      <div class="pc-group-body" data-dropzone="group" data-cat="other" data-group-id="${g.id}">
+        ${inner||(editable?'<div class="pc-empty-drop">Drag courses or groups in here</div>':'')}
+      </div>
+      ${editable?`<div class="pc-group-actions admin-only">
+        <button type="button" class="btn btn-s pc-add-group" data-logic="and" data-cat="other" data-parent="${g.id}">+ AND Group</button>
+        <button type="button" class="btn btn-s pc-add-group" data-logic="or" data-cat="other" data-parent="${g.id}">+ OR Group</button>
+      </div>`:''}
+    </div>`;
+  });
+  if(editable){
+    html+=`<div class="pc-group-actions admin-only" style="padding:2px 0 10px">
+      <button type="button" class="btn btn-s pc-add-group" data-logic="and" data-cat="other" data-parent="">+ New Named Other Group</button>
+    </div>`;
+  }
+  return html;
 }
 function pcDescendantGroupIds(gid){
   const ids=[gid];let changed=true;
@@ -791,7 +848,7 @@ function wirePcEvents(){
     const addG=e.target.closest('.pc-add-group');
     if(addG){
       pcGroups.push({id:crypto.randomUUID(),relationship_type:addG.dataset.cat,logic:addG.dataset.logic,
-        parent_group_id:addG.dataset.parent||null,sort_order:pcNextSort(addG.dataset.cat,addG.dataset.parent||null)});
+        label:'',credits:null,parent_group_id:addG.dataset.parent||null,sort_order:pcNextSort(addG.dataset.cat,addG.dataset.parent||null)});
       renderPcGroups();
       return;
     }
@@ -799,6 +856,14 @@ function wirePcEvents(){
     if(rmG){pcRemoveGroup(rmG.dataset.rmGroup);renderPcGroups();return;}
     const rmI=e.target.closest('[data-rm-item]');
     if(rmI){pcEdit.splice(+rmI.dataset.rmItem,1);renderPcGroups();return;}
+  });
+  // Named-group fields (Other section name / credits) update state directly
+  // without a full re-render, so typing doesn't steal focus mid-keystroke.
+  wrap.addEventListener('input',e=>{
+    const lbl=e.target.closest('.pc-other-label-input');
+    if(lbl){const g=pcGroupById(lbl.dataset.labelGroup);if(g)g.label=lbl.value;return;}
+    const cr=e.target.closest('.pc-other-credits-input');
+    if(cr){const g=pcGroupById(cr.dataset.creditsGroup);if(g)g.credits=cr.value===''?null:Number(cr.value);}
   });
 }
 function openProg(id){
@@ -811,7 +876,7 @@ function openProg(id){
   compEdit=(id?(PROG_COMP[id]||[]):[]).map(r=>({competency_text:r.competency_text}));
   renderCompEditor();
   pcEdit=(id?(PROG_COURSES[id]||[]):[]).map(r=>({course_id:r.course_id,custom_text:r.custom_text,relationship_type:r.relationship_type,group_id:r.group_id||null,sort_order:r.sort_order||0}));
-  pcGroups=(id?(PROG_COURSE_GROUPS[id]||[]):[]).map(g=>({id:g.id,relationship_type:g.relationship_type,logic:g.logic,parent_group_id:g.parent_group_id||null,sort_order:g.sort_order||0}));
+  pcGroups=(id?(PROG_COURSE_GROUPS[id]||[]):[]).map(g=>({id:g.id,relationship_type:g.relationship_type,logic:g.logic,label:g.label||'',credits:g.credits??null,parent_group_id:g.parent_group_id||null,sort_order:g.sort_order||0}));
   populateCourseSelect();
   $('pc-course-custom').style.display='none';$('pc-course-custom').value='';
   renderPcGroups();
@@ -861,7 +926,7 @@ async function saveProg(){
   {
     const {error}=await sb.rpc('replace_program_courses',{
       p_program_id:progId,
-      p_groups:pcGroupsTopoSorted().map(g=>({id:g.id,relationship_type:g.relationship_type,logic:g.logic,parent_group_id:g.parent_group_id||null,sort_order:g.sort_order||0})),
+      p_groups:pcGroupsTopoSorted().map(g=>({id:g.id,relationship_type:g.relationship_type,logic:g.logic,label:g.label||null,credits:g.credits,parent_group_id:g.parent_group_id||null,sort_order:g.sort_order||0})),
       p_rows:pcEdit.map(r=>({course_id:r.course_id,custom_text:r.custom_text||null,relationship_type:r.relationship_type,group_id:r.group_id||null,sort_order:r.sort_order||0}))
     });
     if(error){setSS('⚠ Courses not saved — nothing changed there: '+error.message);return;}
@@ -1050,6 +1115,29 @@ function courseSectionHTML(title,programId,type,credits){
   const heading=credits!=null?`${title} (${credits} Credits)`:title;
   return `<div class="pv-card"><h3>${esc(heading)}</h3>${inner}</div>`;
 }
+// "Other" can hold any number of independently-named groups (e.g.
+// "Certificates", "Post-Bacc Requirements"), each shown as its own card —
+// plus one generic "Other" card for any items not placed in a named group.
+function otherSectionsHTML(programId,p){
+  const items=(PROG_COURSES[programId]||[]).filter(r=>r.relationship_type==='other'&&!r.group_id)
+    .sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
+  const topGroups=(PROG_COURSE_GROUPS[programId]||[]).filter(g=>g.relationship_type==='other'&&!g.parent_group_id)
+    .sort((a,b)=>(a.sort_order??0)-(b.sort_order??0));
+  let html='';
+  const lis=items.map(r=>{const h=pvItemHTML(r);return h?`<li>${h}</li>`:'';}).filter(Boolean).join('');
+  if(lis){
+    const heading=p.other_credits!=null?`Other (${p.other_credits} Credits)`:'Other';
+    html+=`<div class="pv-card"><h3>${esc(heading)}</h3><ul class="pv-clist">${lis}</ul></div>`;
+  }
+  topGroups.forEach(g=>{
+    const inner=pvLevelHTML(programId,'other',g.id);
+    if(!inner)return;
+    const name=g.label&&g.label.trim()?g.label.trim():'Other';
+    const heading=g.credits!=null?`${name} (${g.credits} Credits)`:name;
+    html+=`<div class="pv-card"><h3>${esc(heading)}</h3>${inner}</div>`;
+  });
+  return html;
+}
 function renderProgramDetail(id){
   const p=PROGRAMS[id];
   const wrap=$('pv-body');
@@ -1085,7 +1173,7 @@ function renderProgramDetail(id){
   h+=courseSectionHTML('Program Required Coursework',id,'program_required',p.program_credits);
   h+=courseSectionHTML('Elective courses from the following',id,'elective',p.elective_credits);
   h+=courseSectionHTML('Culminating Experience',id,'culminating_experience',p.culminating_credits);
-  h+=courseSectionHTML('Other',id,'other',p.other_credits);
+  h+=otherSectionsHTML(id,p);
   wrap.innerHTML=h;
   $('pv-back').onclick=closeProgramView;
   const editBtn=$('pv-edit-btn');
