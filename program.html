@@ -753,23 +753,36 @@ function wirePcEvents(){
     if(node)node.classList.remove('dragging');
   });
   wrap.addEventListener('dragover',e=>{
-    if(e.target.closest('[data-dropzone]'))e.preventDefault();
+    if(e.target.closest('[data-dropzone]')||e.target.closest('.pc-group-hdr'))e.preventDefault();
   });
   wrap.addEventListener('drop',e=>{
-    const dz=e.target.closest('[data-dropzone]');
-    if(!dz||!pcDrag)return;
+    // A group's header sits directly above its drop area and isn't itself
+    // a dropzone — dropping there (the natural spot to aim for "first in
+    // this group") would otherwise bubble up to the PARENT container. Treat
+    // it as "insert at the top of this group's body" instead.
+    const hdr=e.target.closest('.pc-group-hdr');
+    let dz,insertBeforeRef=null;
+    if(hdr){
+      dz=hdr.nextElementSibling;
+      if(!dz||dz.dataset.dropzone!=='group')return;
+      const first=[...dz.children].find(el=>el.classList&&el.classList.contains('pc-node'));
+      if(first)insertBeforeRef=pcChildRef(first);
+    }else{
+      dz=e.target.closest('[data-dropzone]');
+      if(!dz)return;
+      // Only consider DIRECT children of this dropzone as reorder targets —
+      // a nested group's own children live in a different dropzone one level
+      // down, so they're excluded automatically by the parentElement check.
+      for(const el of dz.children){
+        if(!el.classList||!el.classList.contains('pc-node'))continue;
+        const r=el.getBoundingClientRect();
+        if(e.clientY<r.top+r.height/2){insertBeforeRef=pcChildRef(el);break;}
+      }
+    }
+    if(!pcDrag)return;
     e.preventDefault();
     const targetCat=dz.dataset.cat;
     const targetParent=dz.dataset.dropzone==='group'?dz.dataset.groupId:null;
-    // Only consider DIRECT children of this dropzone as reorder targets —
-    // a nested group's own children live in a different dropzone one level
-    // down, so they're excluded automatically by the parentElement check.
-    let insertBeforeRef=null;
-    for(const el of dz.children){
-      if(!el.classList||!el.classList.contains('pc-node'))continue;
-      const r=el.getBoundingClientRect();
-      if(e.clientY<r.top+r.height/2){insertBeforeRef=pcChildRef(el);break;}
-    }
     pcMoveNode(pcDrag,targetCat,targetParent,insertBeforeRef);
     pcDrag=null;
     renderPcGroups();

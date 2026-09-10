@@ -3637,18 +3637,31 @@ function wirePrereqEvents(){
     if(node)node.classList.remove('dragging');
   });
   wrap.addEventListener('dragover',e=>{
-    if(e.target.closest('[data-dropzone]'))e.preventDefault();
+    if(e.target.closest('[data-dropzone]')||e.target.closest('.pq-group-hdr'))e.preventDefault();
   });
   wrap.addEventListener('drop',e=>{
-    const dz=e.target.closest('[data-dropzone]');
-    if(!dz||!pqDrag)return;
-    e.preventDefault();
-    let insertBeforeRef=null;
-    for(const el of dz.children){
-      if(!el.classList||!el.classList.contains('pq-node'))continue;
-      const r=el.getBoundingClientRect();
-      if(e.clientY<r.top+r.height/2){insertBeforeRef=pqChildRef(el);break;}
+    // A group's header sits directly above its drop area and isn't itself
+    // a dropzone — dropping there (the natural spot to aim for "first in
+    // this group") would otherwise bubble up to the PARENT container. Treat
+    // it as "insert at the top of this group's body" instead.
+    const hdr=e.target.closest('.pq-group-hdr');
+    let dz,insertBeforeRef=null;
+    if(hdr){
+      dz=hdr.nextElementSibling;
+      if(!dz||dz.dataset.dropzone!=='group')return;
+      const first=[...dz.children].find(el=>el.classList&&el.classList.contains('pq-node'));
+      if(first)insertBeforeRef=pqChildRef(first);
+    }else{
+      dz=e.target.closest('[data-dropzone]');
+      if(!dz)return;
+      for(const el of dz.children){
+        if(!el.classList||!el.classList.contains('pq-node'))continue;
+        const r=el.getBoundingClientRect();
+        if(e.clientY<r.top+r.height/2){insertBeforeRef=pqChildRef(el);break;}
+      }
     }
+    if(!pqDrag)return;
+    e.preventDefault();
     pqMoveNode(pqDrag,dz.dataset.dropzone==='group'?dz.dataset.groupId:null,insertBeforeRef);
     pqDrag=null;
     renderPrereqList();
