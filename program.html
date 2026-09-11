@@ -694,7 +694,7 @@ function renderPcGroups(){
 // optional credit total. Ungrouped items (added but not dragged into a
 // named group) still fall under one generic "Other" card.
 function renderOtherSections(editable){
-  const items=[];pcEdit.forEach((r,i)=>{if(r.relationship_type==='other'&&!r.group_id)items.push(i);});
+  const items=pcChildren('other',null).filter(ch=>ch.kind==='item').map(ch=>ch.idx);
   const topGroups=pcGroups.filter(g=>g.relationship_type==='other'&&!g.parent_group_id)
     .sort((a,b)=>(a.sort_order||0)-(b.sort_order||0));
   let html='';
