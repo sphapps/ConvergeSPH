@@ -4275,7 +4275,12 @@ function buildReportText(rows,from,to,actor,exSelfEmail,scopeNote){
   L.push('='.repeat(60));
   L.push('');
   let shown=0;
-  const body=[];
+  // Entries are collected per-term (rather than one flat chronological list)
+  // so the report can be grouped by term below. Each entry is an array of
+  // lines (no trailing blank); order within a term stays chronological since
+  // rows arrive ordered by created_at ascending.
+  const groups={};                                  // term code ('' = unspecified) → [ [lines...], ... ]
+  const addEntry=(term,lines)=>{ (groups[term]=groups[term]||[]).push(lines); };
   rows.forEach(r=>{
     const who=r.actor_email||'(unknown)';
     const when=_fmtTs(r.created_at);
@@ -4286,15 +4291,12 @@ function buildReportText(rows,from,to,actor,exSelfEmail,scopeNote){
     const label=name+(section?'  [Section '+section+']':'')+(term?'  ('+term+')':'');
     const tag=r.is_undo?' [UNDO]':'';
     if(r.action==='create'){
-      body.push(when+' · '+who+tag);
-      body.push('  ADDED    '+label);
-      if(a.instructor1)body.push('           instructor: '+a.instructor1+(a.instructor2?' & '+a.instructor2:''));
-      if(a.days||a.time)body.push('           '+[a.days,a.time].filter(Boolean).join('  ')+(a.modality?'  ['+a.modality+']':''));
-      body.push(''); shown++;
+      const lines=[when+' · '+who+tag,'  ADDED    '+label];
+      if(a.instructor1)lines.push('           instructor: '+a.instructor1+(a.instructor2?' & '+a.instructor2:''));
+      if(a.days||a.time)lines.push('           '+[a.days,a.time].filter(Boolean).join('  ')+(a.modality?'  ['+a.modality+']':''));
+      addEntry(term,lines); shown++;
     }else if(r.action==='delete'){
-      body.push(when+' · '+who+tag);
-      body.push('  REMOVED  '+label);
-      body.push(''); shown++;
+      addEntry(term,[when+' · '+who+tag,'  REMOVED  '+label]); shown++;
     }else{ // update
       const sup=suppress[r.offering_sid]||new Set();
       const diffs=[];
@@ -4304,15 +4306,30 @@ function buildReportText(rows,from,to,actor,exSelfEmail,scopeNote){
         if(ov!==nv)diffs.push('           '+fLabel+': "'+ov+'" → "'+nv+'"');
       });
       if(!diffs.length)return;                       // nothing left after suppression
-      body.push(when+' · '+who+tag);
-      body.push('  EDITED   '+label);
-      diffs.forEach(d=>body.push(d));
-      body.push(''); shown++;
+      const lines=[when+' · '+who+tag,'  EDITED   '+label,...diffs];
+      addEntry(term,lines); shown++;
     }
   });
   L.push('Net changes: '+shown);
   L.push('');
   if(!shown)return {text:L.concat(['No net changes in this range.']).join('\n'),count:0};
+  // Term header order follows TERM_ROWS (already academic_year, sort_order —
+  // i.e. chronological), so terms appear in real calendar order rather than
+  // alphabetically. Terms present in the report but not in TERM_ROWS (e.g. an
+  // old/retired term code) are appended after, alphabetically; entries with no
+  // term at all go last under "Unspecified Term".
+  const knownOrder=(typeof TERM_ROWS!=='undefined'?TERM_ROWS:[]).map(t=>t.code).filter(c=>groups[c]);
+  const extra=Object.keys(groups).filter(c=>c!==''&&!knownOrder.includes(c)).sort();
+  const order=[...knownOrder,...extra,...(groups['']?['']:[])];
+  const body=[];
+  order.forEach(code=>{
+    const entries=groups[code];
+    const tRow=(typeof termRow==='function')?termRow(code):null;
+    const heading=code===''?'Unspecified Term':(tRow&&tRow.label?tRow.label+'  ('+code+')':code);
+    body.push('── '+heading+'  —  '+entries.length+' change'+(entries.length!==1?'s':'')+' '+'─'.repeat(Math.max(0,50-heading.length)));
+    body.push('');
+    entries.forEach(lines=>{ lines.forEach(l=>body.push(l)); body.push(''); });
+  });
   return {text:L.concat(body).join('\n'),count:shown};
 }
 
