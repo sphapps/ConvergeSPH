@@ -383,6 +383,8 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
         </label>
         <button class="btn btn-s" id="btn-clear">Clear filters</button>
         <button class="btn btn-s signed-only" id="btn-exp-dir">⬇ CSV</button>
+        <button class="btn btn-s signed-only" id="btn-exp-email" title="Download names, emails, and categories for the faculty currently shown">✉ Email CSV</button>
+        <button class="btn btn-s signed-only" id="btn-copy-email" title="Copy emails for the faculty currently shown, semicolon-separated for Outlook To/BCC">📋 Copy emails</button>
         <button class="btn btn-p btn-s admin-only" id="btn-add">+ Add Faculty</button>
         <button class="btn btn-s admin-only" id="btn-log">📄 Change Log</button>
         <span class="ceph-legend"><sup>1</sup> CEPH Primary &middot; <sup>2</sup> CEPH Non-Primary</span>
@@ -1177,6 +1179,40 @@ function expDir(){
     rows.push(row);
   });
   dlCSV(rows,`SPH_Faculty_Directory_${new Date().toISOString().slice(0,10)}.csv`);
+}
+/* ─── EMAIL LIST ──────────────────────────────────────────────
+   Both actions use filtered(), so they follow the active filters exactly
+   like the directory CSV. Emails exist only in the viewer/admin payloads,
+   so these are signed-only and bail out for the public tier.
+   Effective email = primary, else secondary, else blank. When secondary
+   is promoted into the Email column, the Secondary Email column is left
+   blank so the same address doesn't appear twice. */
+const effEmail=f=>(N(f.email)||N(f.secondary_email)||'').trim();
+function expEmail(){
+  if(TIER==='public')return;
+  const rows=[['Last Name','First Name','Email','Secondary Email','Categories']];
+  filtered().forEach(f=>{
+    const prim=(N(f.email)||'').trim();
+    rows.push([f.last_name||'',f.first_name||'',effEmail(f),
+      prim?(N(f.secondary_email)||'').trim():'',(f.categories||[]).join('; ')]);
+  });
+  dlCSV(rows,`SPH_Faculty_Emails_${new Date().toISOString().slice(0,10)}.csv`);
+}
+async function copyEmails(){
+  if(TIER==='public')return;
+  const rows=filtered();
+  const list=[...new Set(rows.map(effEmail).filter(Boolean).map(e=>e.toLowerCase()))];
+  const missing=rows.filter(f=>!effEmail(f)).length;
+  const btn=$('btn-copy-email'),orig='📋 Copy emails';
+  if(!list.length){btn.textContent='No emails to copy';setTimeout(()=>btn.textContent=orig,2500);return;}
+  const text=list.join('; ');
+  try{await navigator.clipboard.writeText(text);}
+  catch(e){ // clipboard API blocked (e.g. non-secure context) — textarea fallback
+    const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.opacity='0';
+    document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();
+  }
+  btn.textContent=`✓ Copied ${list.length}`+(missing?` (${missing} no email)`:'');
+  setTimeout(()=>btn.textContent=orig,3000);
 }
 function dlCSV(rows,fn){
   const csv=rows.map(r=>r.map(v=>`"${String(v??'').replace(/"/g,'""')}"`).join(',')).join('\n');
@@ -2476,6 +2512,8 @@ function wire(){
     renderDir();
   };
   $('btn-exp-dir').onclick=expDir;
+  $('btn-exp-email').onclick=expEmail;
+  $('btn-copy-email').onclick=copyEmails;
   $('btn-add').onclick=()=>openFM(null);
   $('btn-log').onclick=openLog;
   $('btn-rp-gen').onclick=genFacReport;
