@@ -75,6 +75,8 @@ body.is-admin .signed-only,body.is-apcc .signed-only,body.is-viewer .signed-only
 .tab-btn.active{color:var(--navytx);border-bottom-color:var(--teal)}
 .tab-link{font-size:13px;font-weight:600;padding:10px 16px;color:var(--dgray);text-decoration:none;border-bottom:2px solid transparent}
 .tab-link:hover{color:var(--navytx);border-bottom-color:var(--mgray)}
+/* Curriculum is signed-in only — don't send public visitors to its gate. */
+body.is-public .tab-link{display:none}
 
 main{flex:1;overflow:auto;display:flex;flex-direction:column}
 .view{display:none;flex:1;flex-direction:column}
@@ -224,7 +226,7 @@ tbody tr.clickable{cursor:pointer}
   <header>
     <div><h1>ConvergeSPH</h1><div class="sub">Programs · OHSU-PSU School of Public Health</div></div>
     <div class="hsp"></div>
-    <a class="xlink" href="index.html">🏠 Home</a>
+    <a class="xlink" id="home-link" href="index.html">🏠 Home</a>
     <a class="xlink" href="scheduling.html">📅 Scheduling</a>
     <a class="xlink" href="faculty.html">👤 Faculty</a>
     <span id="auth-slot"></span>
@@ -333,7 +335,7 @@ const setLM=m=>{const e=$('lm');if(e)e.textContent=m;};
 const N=v=>{const s=String(v??'').trim();return s===''?null:s;};
 const NUM=v=>{const s=String(v??'').trim();return s===''?null:(isNaN(+s)?null:+s);};
 
-/* ── SUPABASE CONFIG — must match index.html / scheduling.html / faculty.html ── */
+/* ── SUPABASE CONFIG — must match signin.html / scheduling.html / faculty.html ── */
 const SUPABASE_URL      = 'https://igusxvvnzdpoqwizcvke.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable__F-QsLesM18cKEozFSly6g_t8dSlptY';
 const PERSIST_FLAG='sph_persist_v2';
@@ -470,8 +472,13 @@ function updateAuthBar(){
       <button class="btn btn-s" id="btn-out" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3)">Sign out</button>`;
     $('btn-out').onclick=async()=>{await sb.auth.signOut();location.href=location.pathname;};
   }else{
-    slot.innerHTML=`<a href="index.html" class="btn btn-s" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3);text-decoration:none;display:inline-flex;align-items:center">Sign in from home →</a>`;
+    // No sign-in prompt on public pages — see signin.html.
+    slot.innerHTML='';
   }
+  // Home: signed-in people go to their launcher (signin.html); everyone else
+  // to the public landing page (index.html).
+  $('home-link').href=currentUserEmail?'signin.html':'index.html';
+  document.body.classList.toggle('is-public',TIER==='public');
   const badge=$('tier-badge');
   badge.classList.toggle('on',TIER!=='public');
   badge.classList.toggle('apcc',TIER==='apcc');

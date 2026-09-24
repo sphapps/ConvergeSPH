@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ConvergeSPH — Curricular Changes</title>
+<meta name="robots" content="noindex">
 <script>
 (function(){var t=null;try{t=localStorage.getItem('sph-theme');}catch(e){}
  if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}
@@ -313,7 +314,7 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
   <header>
     <div><h1>ConvergeSPH</h1><div class="sub">Curricular Changes · OHSU-PSU School of Public Health</div></div>
     <div class="hsp"></div>
-    <a class="xlink" href="index.html">🏠 Home</a>
+    <a class="xlink" id="home-link" href="index.html">🏠 Home</a>
     <a class="xlink" href="scheduling.html">📅 Scheduling</a>
     <a class="xlink" href="faculty.html">👤 Faculty</a>
     <a class="xlink" href="program.html">🎓 Programs</a>
@@ -596,7 +597,7 @@ const N=v=>{const s=String(v??'').trim();return s===''?null:s;};
 const radioVal=name=>{const r=document.querySelector(`input[name="${name}"]:checked`);return r?r.value:'';};
 const setRadio=(name,v)=>{document.querySelectorAll(`input[name="${name}"]`).forEach(r=>{r.checked=(r.value===(v??''));});};
 
-/* ── SUPABASE CONFIG — must match index.html / scheduling.html / faculty.html / program.html ── */
+/* ── SUPABASE CONFIG — must match signin.html / scheduling.html / faculty.html / program.html ── */
 const SUPABASE_URL      = 'https://igusxvvnzdpoqwizcvke.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable__F-QsLesM18cKEozFSly6g_t8dSlptY';
 const PERSIST_FLAG='sph_persist_v2';
@@ -829,8 +830,11 @@ function updateAuthBar(){
       <button class="btn btn-s" id="btn-out" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3)">Sign out</button>`;
     $('btn-out').onclick=async()=>{await sb.auth.signOut();location.href=location.pathname;};
   }else{
-    slot.innerHTML=`<a href="index.html" class="btn btn-s" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3);text-decoration:none;display:inline-flex;align-items:center">Sign in from home</a>`;
+    slot.innerHTML='';
   }
+  // Home: signed-in people go to their launcher (signin.html); everyone else
+  // to the public landing page (index.html).
+  $('home-link').href=currentUserEmail?'signin.html':'index.html';
   const badge=$('tier-badge');
   badge.classList.toggle('on',canRead());
   badge.classList.toggle('editor',isEditor());
@@ -845,7 +849,7 @@ function showGate(){
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='v-gate'));
   $('gate-body').innerHTML=TIER==='public'
     ?`<h2>Sign in to see curricular changes</h2>
-      <p>The curricular change tracker is for SPH staff and APCC members. <a href="index.html">Sign in from the ConvergeSPH home page</a>, then come back here.</p>`
+      <p>The curricular change tracker is for people with Curriculum access. <a href="signin.html">Sign in</a>, then open Curriculum from there.</p>`
     :`<h2>Your account doesn't have Curriculum access</h2>
       <p>You're signed in as ${esc(currentUserEmail||'')}, but no Curriculum access level is set for this account. Ask an admin to add you, or email <a href="mailto:sphapps@ohsu.edu">sphapps@ohsu.edu</a>.</p>`;
 }

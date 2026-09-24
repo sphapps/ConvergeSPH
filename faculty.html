@@ -339,7 +339,7 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
   <header>
     <div><h1>ConvergeSPH</h1><div class="sub">Faculty Directory · OHSU-PSU School of Public Health</div></div>
     <div class="hsp"></div>
-    <a class="xlink" href="index.html">🏠 Home</a>
+    <a class="xlink" id="home-link" href="index.html">🏠 Home</a>
     <a class="xlink" href="scheduling.html">📅 Scheduling</a>
     <a class="xlink" href="program.html">🎓 Programs</a>
     <button id="btn-roadmap" class="signed-only" style="background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#CBD5E1;border-radius:4px;cursor:pointer;font-size:12px;padding:4px 10px;font-family:inherit;margin-right:6px" title="What's coming to ConvergeSPH">🗺 Roadmap</button>
@@ -680,12 +680,12 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
 const SUPABASE_URL      = 'https://igusxvvnzdpoqwizcvke.supabase.co';
 const SUPABASE_ANON_KEY = 'sb_publishable__F-QsLesM18cKEozFSly6g_t8dSlptY';
 
-/* Must track index.html (splash) and scheduling.html exactly: all three pages
+/* Must track signin.html (launcher) and scheduling.html exactly: all three pages
    share this flag AND storageKey 'sph_auth' on one origin, so a mismatch would
    have them disagreeing about whether the session survives the browser
-   closing. See the long note in index.html for why v1 was abandoned rather
+   closing. See the long note in scheduling.html for why v1 was abandoned rather
    than migrated. Sign-in itself, and the "shared computer" persistence
-   checkbox, now live only on the splash page (index.html) — this app has no
+   checkbox, now live only on the sign-in page (signin.html) — this app has no
    sign-in UI of its own, it just reads whatever session/persist choice was
    made there. */
 const PERSIST_FLAG='sph_persist_v2';
@@ -2399,11 +2399,14 @@ function updateAuthBar(){
       <button class="btn btn-s" id="btn-out" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3)">Sign out</button>`;
     $('btn-out').onclick=async()=>{await sb.auth.signOut();location.href=location.pathname;};
   }else{
-    // Sign-in itself now only happens on the splash page (index.html), which
-    // shares this app's storageKey/persist logic — a session created there is
-    // picked up here automatically on next load, no separate sign-in flow needed.
-    slot.innerHTML=`<a href="index.html" class="btn btn-s" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3);text-decoration:none;display:inline-flex;align-items:center">Sign in from home →</a>`;
+    // No sign-in prompt on public pages. People with access sign in at
+    // signin.html (given to them directly); it shares this app's
+    // storageKey/persist logic, so the session is picked up here on next load.
+    slot.innerHTML='';
   }
+  // Home: signed-in people go to their launcher (signin.html); everyone else
+  // to the public landing page (index.html).
+  $('home-link').href=currentUserEmail?'signin.html':'index.html';
   $('tier-badge').classList.toggle('on',isAdmin());
   document.body.classList.toggle('is-admin',isAdmin());
   renderReqBadge();

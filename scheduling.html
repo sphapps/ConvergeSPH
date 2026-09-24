@@ -485,7 +485,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
     <div><h1>ConvergeSPH</h1><div class="sub" id="hdr-sub">Course Scheduling · Academic Year 2026–27</div></div>
     <select id="ay-sel" style="display:none;font-size:12px;padding:4px 8px;border-radius:4px;border:1px solid rgba(255,255,255,.3);background:rgba(255,255,255,.12);color:white;margin-left:14px"></select>
     <div class="hsp"></div>
-    <a href="index.html" style="color:#CBD5E1;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:4px;margin-right:6px" title="ConvergeSPH home">🏠 Home</a>
+    <a href="index.html" id="home-link" style="color:#CBD5E1;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:4px;margin-right:6px" title="ConvergeSPH home">🏠 Home</a>
     <a href="faculty.html" style="color:#CBD5E1;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:4px;margin-right:6px" title="Faculty directory">👤 Faculty</a>
     <a href="program.html" style="color:#CBD5E1;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:4px;margin-right:6px" title="Programs & curricular changes">🎓 Programs</a>
     <span id="auth-slot" style="display:inline-flex;align-items:center;gap:8px;margin-right:6px"></span>
@@ -503,7 +503,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
     <button data-view="instructors" id="nav-instructors" class="auth-only">👤 Instructors</button>
     <button data-view="reporting"   id="nav-reporting"   class="admin-only" style="display:none">🗂 Reporting</button>
     <button data-view="roadmap"     id="nav-roadmap"     class="auth-only">🗺 Roadmap</button>
-    <button id="btn-admin-toggle">🔐 Admin</button>
+    <button id="btn-admin-toggle" class="auth-only">🔐 Admin</button>
     <div class="nav-dd" id="admin-tools-dd">
       <button id="btn-admin-tools" class="admin-only" style="display:none">🛠 Admin Tools ▾</button>
       <div class="nav-dd-menu" id="admin-tools-menu">
@@ -4520,7 +4520,9 @@ function wireEvents(){
   document.querySelectorAll('nav button[data-view]').forEach(b=>b.addEventListener('click',()=>switchView(b.dataset.view)));
   $('btn-admin-toggle').addEventListener('click',()=>{
     if(canEdit())showCfm('Sign out?','Sign out and return to read-only view?',()=>signOut());
-    else{const e=$('ab-email');if(e){e.focus();setSS('Sign in with the box in the header to enable admin');}}
+    // Only signed-in users see this button (.auth-only). Non-editors get a
+    // pointer to request edit access rather than a sign-in prompt.
+    else setSS('This account has view access. To request edit access, email sphapps@ohsu.edu');
   });
   // Admin Tools dropdown (Lists / Terms / Lock Down). Positioned as `fixed`,
   // computed from the button's own rect on each open — `nav` sets
@@ -4804,20 +4806,21 @@ function buildAuthBar(){
   slot.dataset.built='1';
   slot.innerHTML=
     '<span id="ab-out" style="display:inline-flex;align-items:center;gap:6px">'
-    +'<a href="index.html" class="btn btn-s" style="font-size:11px;padding:4px 10px;text-decoration:none;display:inline-flex;align-items:center">Sign in from home →</a>'
     +'</span>'
     +'<span id="ab-in" style="display:none;align-items:center;gap:6px">'
     +'<span id="ab-who" style="color:#CBD5E1;font-size:12px;white-space:nowrap"></span>'
     +'<button id="ab-signout" class="btn btn-s" style="font-size:11px;padding:4px 10px">Sign out</button>'
     +'</span>';
-  // Sign-in itself now only happens on the splash page (index.html), which
-  // shares this app's storageKey/persist logic — a session created there is
-  // picked up here automatically on next load, no separate sign-in flow needed.
+  // No sign-in prompt on public pages. Sign-in happens only on signin.html
+  // (given directly to people with access), which shares this app's
+  // storageKey/persist logic — the session is picked up here on next load.
+  // #ab-out stays (empty) so updateAuthBar's show/hide logic is unchanged.
   $('ab-signout').addEventListener('click',signOut);
 }
 function updateAuthBar(user,admin){
   const inB=$('ab-in'),outB=$('ab-out');
   if(!inB||!outB)return;
+  const hl=$('home-link');if(hl)hl.href=user?'signin.html':'index.html';
   if(user){
     outB.style.display='none';inB.style.display='inline-flex';
     $('ab-who').textContent=(user.email||'signed in')+(admin?' · scheduling admin':' · viewer');
