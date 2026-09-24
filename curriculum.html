@@ -1,0 +1,1698 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ConvergeSPH — Curricular Changes</title>
+<script>
+(function(){var t=null;try{t=localStorage.getItem('sph-theme');}catch(e){}
+ if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}
+ document.documentElement.setAttribute('data-theme',t);})();
+</script>
+<script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+<style>
+/* ═══ TOKENS (shared with scheduling.html / faculty.html / program.html) ═══ */
+:root {
+  color-scheme:light;
+  --navy:#1F3864; --teal:#2E75B6; --tealhv:#245f95; --ltblue:#D6E4F0;
+  --lgray:#F4F6F9; --mgray:#CBD5E1; --dgray:#475569; --text:#1E293B;
+  --red:#DC2626; --redhv:#b91c1c; --ltred:#FEE2E2; --ltgrn:#DCFCE7; --ltgold:#FEF3C7;
+  --surface:#FFFFFF; --surface-2:#F8FAFC; --navytx:#1F3864;
+  --rowline:#E8EDF3; --rowhover:#F8FAFD; --muted:#94A3B8;
+  --scrim:rgba(15,23,42,.5); --txgrn:#166534; --txgold:#92400E;
+  /* Curriculum: institution track colors */
+  --psu:#4D6B12; --psu-bg:#ECF3DC; --ohsu:#0B5394; --ohsu-bg:#DCEBF8;
+  --both:#6D28D9; --both-bg:#EDE7FB;
+}
+html[data-theme="dark"] {
+  color-scheme:dark;
+  --navy:#152036; --teal:#6FB2E8; --tealhv:#9BCBF2; --ltblue:#22314C;
+  --lgray:#0E1626; --mgray:#3B4A63; --dgray:#9AABC2; --text:#DDE4EE;
+  --red:#F1867F; --redhv:#F5A5A0; --ltred:#3B1D22; --ltgrn:#153322; --ltgold:#3A2D0B;
+  --surface:#18223A; --surface-2:#131B2E; --navytx:#93BAE8;
+  --rowline:#27334D; --rowhover:#202D48; --muted:#8FA0B8;
+  --scrim:rgba(0,0,0,.65); --txgrn:#7FD8A2; --txgold:#EAC77C;
+  --psu:#B7D67A; --psu-bg:#26321A; --ohsu:#8EC3F0; --ohsu-bg:#18314A;
+  --both:#C4B1F5; --both-bg:#2D2445;
+}
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Segoe UI',system-ui,sans-serif;background:var(--lgray);color:var(--text);font-size:14px}
+#app{display:flex;flex-direction:column;height:100vh;overflow:hidden}
+header{background:var(--navy);color:white;padding:0 20px;height:52px;display:flex;align-items:center;gap:16px;flex-shrink:0}
+header h1{font-size:16px;font-weight:600}
+header .sub{font-size:11px;color:var(--muted);margin-top:1px}
+.hsp{flex:1}
+header a.xlink{color:#CBD5E1;font-size:12px;text-decoration:none;border:1px solid rgba(255,255,255,.25);padding:4px 10px;border-radius:4px}
+header a.xlink:hover{background:rgba(255,255,255,.1);color:white}
+#tier-badge{display:none;background:#3B82F6;color:white;font-size:10px;font-weight:700;padding:2px 7px;border-radius:10px;letter-spacing:.5px}
+#tier-badge.on{display:inline-block}
+#tier-badge.editor{background:#7C3AED}
+#tier-badge.viewer{background:#64748B}
+#save-status{font-size:12px;color:var(--muted);min-width:90px;text-align:right}
+#auth-slot{display:inline-flex;align-items:center;gap:8px}
+#auth-slot .who{font-size:12px;color:#CBD5E1}
+#btn-theme{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#CBD5E1;
+  border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:5px 9px;font-family:inherit}
+#btn-theme:hover{background:rgba(255,255,255,.2);color:white}
+
+/* Lockdown banner — read-only reflection of app_lockdown, set from Scheduling. */
+#lockdown-banner{display:none;background:#7C2D12;color:#FEE2E2;padding:9px 16px;font-size:13px;
+  align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #991B1B;line-height:1.4}
+body.is-locked #lockdown-banner{display:flex}
+
+/* Tier visibility */
+.admin-only{display:none!important}
+body.is-admin .admin-only{display:inline-flex!important}
+.edit-only{display:none!important}
+body.is-admin .edit-only,body.is-editor .edit-only{display:inline-flex!important}
+body.is-locked .admin-only,body.is-locked .edit-only{display:none!important}
+
+/* Tabs */
+.tabs{background:var(--surface);border-bottom:1px solid var(--mgray);display:flex;gap:2px;padding:0 16px;flex-shrink:0}
+.tab-btn{font-family:inherit;font-size:13px;font-weight:600;padding:10px 16px;border:none;background:none;
+  color:var(--dgray);cursor:pointer;border-bottom:2px solid transparent;align-items:center;gap:6px}
+.tab-btn:hover{color:var(--navytx)}
+.tab-btn.active{color:var(--navytx);border-bottom-color:var(--teal)}
+.tab-badge{display:none;background:var(--red);color:white;font-size:10px;font-weight:700;border-radius:9px;padding:1px 6px;line-height:1.4}
+.tab-badge.on{display:inline-block}
+html[data-theme="dark"] .tab-badge{color:#0E1626}
+
+main{flex:1;overflow:auto;display:flex;flex-direction:column}
+.view{display:none;flex:1;flex-direction:column;min-height:0}
+.view.active{display:flex}
+
+.tb{background:var(--surface);border-bottom:1px solid var(--mgray);padding:10px 16px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;flex-shrink:0}
+.tb input,.tb select{font-size:13px;padding:6px 10px;border:1px solid var(--mgray);border-radius:5px;font-family:inherit;background:var(--surface);color:var(--text)}
+.tb input[type=search]{width:220px}
+.tb label.ck{font-size:12px;color:var(--dgray);display:inline-flex;align-items:center;gap:5px;cursor:pointer}
+.cnt{font-size:12px;color:var(--dgray);margin-left:auto}
+
+.btn{font-family:inherit;font-size:13px;padding:6px 14px;border-radius:5px;border:1px solid var(--mgray);background:var(--surface);color:var(--text);cursor:pointer;display:inline-flex;align-items:center;gap:6px}
+.btn:hover{background:var(--lgray)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.btn-p{background:var(--teal);border-color:var(--teal);color:white}
+.btn-p:hover{background:var(--tealhv)}
+.btn-d{background:var(--red);border-color:var(--red);color:white}
+.btn-d:hover{background:var(--redhv)}
+.btn-s{font-size:12px;padding:4px 10px}
+html[data-theme="dark"] .btn-p,html[data-theme="dark"] .btn-d{color:#0E1626;font-weight:600}
+
+.tw{flex:1;overflow:auto}
+table{width:100%;border-collapse:separate;border-spacing:0;background:var(--surface)}
+thead th{position:sticky;top:0;background:var(--ltblue);color:var(--navytx);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:9px 12px;text-align:left;border-bottom:2px solid var(--mgray);white-space:nowrap;z-index:2}
+tbody td{padding:9px 12px;border-bottom:1px solid var(--rowline);font-size:13px;vertical-align:top}
+tbody tr:hover td{background:var(--rowhover)}
+tbody tr.clickable{cursor:pointer}
+.nm{color:var(--navytx);font-weight:600}
+.muted{color:var(--muted)}
+.empty-row{padding:28px 20px!important;color:var(--dgray);font-size:13px;text-align:center}
+.chip{display:inline-block;background:var(--ltblue);color:var(--navytx);font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px;margin:1px 3px 1px 0;white-space:nowrap}
+.chip.link{background:var(--surface-2);color:var(--dgray);border:1px solid var(--rowline)}
+.pill{display:inline-block;font-size:10px;font-weight:700;letter-spacing:.3px;padding:2px 8px;border-radius:9px;white-space:nowrap}
+.pill.not_started{background:var(--surface-2);color:var(--dgray);border:1px solid var(--rowline)}
+.pill.in_progress{background:var(--ltblue);color:var(--navytx)}
+.pill.complete{background:var(--ltgrn);color:var(--txgrn)}
+.pill.declined{background:var(--ltred);color:var(--red)}
+.pill.on_hold{background:var(--ltgold);color:var(--txgold)}
+.pill.withdrawn{background:var(--surface-2);color:var(--muted);border:1px solid var(--rowline)}
+.pill.pending_add{background:var(--ltgold);color:var(--txgold)}
+.pill.pending_delete{background:var(--ltred);color:var(--red)}
+.pill.active{background:var(--ltgrn);color:var(--txgrn)}
+
+/* Institution badges */
+.ib{display:inline-block;font-size:9px;font-weight:700;border-radius:3px;padding:0 4px;line-height:15px;vertical-align:1px}
+.ib.inst-P{background:var(--psu-bg);color:var(--psu)}
+.ib.inst-O{background:var(--ohsu-bg);color:var(--ohsu)}
+.ib.inst-B{background:var(--both-bg);color:var(--both)}
+.ib.inst-E{background:var(--lgray);color:var(--dgray);border:1px solid var(--rowline)}
+
+/* ═══ TRACKER GRID ═══ */
+#t-table{min-width:1500px}
+#t-table th.sk,#t-table td.sk{position:sticky;left:0;width:48px;min-width:48px;z-index:1}
+#t-table th.sk2,#t-table td.sk2{position:sticky;left:48px;min-width:250px;max-width:320px;z-index:1;border-right:1px solid var(--mgray)}
+#t-table td.sk,#t-table td.sk2{background:var(--surface)}
+#t-table thead th.sk,#t-table thead th.sk2{z-index:3}
+#t-table tbody tr:hover td.sk,#t-table tbody tr:hover td.sk2{background:var(--rowhover)}
+#t-table th.stg{text-align:center;white-space:normal;min-width:66px;max-width:76px;line-height:1.25;padding:7px 4px;
+  text-transform:none;letter-spacing:0;font-size:11px;vertical-align:bottom}
+#t-table th.stg .ib{display:block;width:max-content;margin:3px auto 0}
+.seq{font-variant-numeric:tabular-nums;color:var(--dgray);font-weight:600}
+.it-title{color:var(--navytx);font-weight:600;line-height:1.35}
+.it-meta{margin-top:3px}
+td.cell{text-align:center;font-size:12px;white-space:nowrap;padding:9px 4px;font-variant-numeric:tabular-nums;border-left:1px solid var(--rowline)}
+td.cell.done{background:var(--ltgrn);color:var(--txgrn);font-weight:600}
+td.cell.na{color:var(--muted);font-size:11px}
+td.cell.dec{background:var(--ltred);color:var(--red);font-weight:700}
+td.cell.off{background:repeating-linear-gradient(135deg,transparent 0 5px,var(--rowline) 5px 6px)}
+td.cell.next{box-shadow:inset 0 0 0 2px var(--teal)}
+td.cell.next::after{content:'next';font-size:9px;font-weight:700;color:var(--teal);letter-spacing:.3px}
+td.cell.ed{cursor:pointer}
+td.cell.ed:hover{outline:2px solid var(--teal);outline-offset:-2px}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--dgray);padding:8px 16px;background:var(--surface-2);border-bottom:1px solid var(--rowline);flex-shrink:0}
+.legend span{display:inline-flex;align-items:center;gap:5px}
+.sw{display:inline-block;width:18px;height:12px;border-radius:2px;border:1px solid var(--rowline)}
+.sw.done{background:var(--ltgrn)}
+.sw.dec{background:var(--ltred)}
+.sw.off{background:repeating-linear-gradient(135deg,transparent 0 3px,var(--mgray) 3px 4px)}
+.sw.next{box-shadow:inset 0 0 0 2px var(--teal);background:var(--surface)}
+
+/* ═══ STATUS REPORT (CCSR) ═══ */
+.rpt-scroll{flex:1;overflow:auto}
+.rpt{max-width:1120px;margin:0 auto;padding:22px 24px 60px}
+.rpt-head{border-bottom:3px solid var(--navytx);padding-bottom:12px;margin-bottom:16px;display:flex;align-items:flex-end;gap:20px;flex-wrap:wrap}
+.rpt-head h2{font-size:22px;color:var(--navytx);font-weight:700;line-height:1.2}
+.rpt-head .rpt-season{font-size:15px;color:var(--text);margin-top:3px}
+.rpt-head .rpt-asof{margin-left:auto;font-size:12px;color:var(--dgray);text-align:right;line-height:1.5}
+.rpt-sum{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:18px}
+.rpt-stat{background:var(--surface);border:1px solid var(--rowline);border-radius:6px;padding:8px 14px;min-width:110px}
+.rpt-stat b{display:block;font-size:20px;color:var(--navytx);font-variant-numeric:tabular-nums}
+.rpt-stat span{font-size:11px;color:var(--dgray)}
+.rpt-dates{background:var(--surface);border:1px solid var(--rowline);border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:12.5px}
+.rpt-dates h3{font-size:13px;color:var(--navytx);margin-bottom:6px}
+.rpt-dates ul{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:3px 18px}
+.rpt-dates li b{display:inline-block;min-width:88px;font-variant-numeric:tabular-nums}
+.rpt-sec{margin-bottom:22px}
+.rpt-sec h3{font-size:14px;color:var(--navytx);display:flex;align-items:center;gap:8px;margin-bottom:6px}
+.rpt-sec h3 .n{font-size:12px;color:var(--dgray);font-weight:400}
+.rpt-sec table{border:1px solid var(--rowline);border-radius:6px;overflow:hidden;table-layout:fixed}
+.rpt-sec td{overflow-wrap:anywhere}
+.rpt-sec thead th{position:static;font-size:10px;padding:6px 10px}
+.rpt-sec tbody td{font-size:12.5px;padding:7px 10px}
+.rpt-sec td.trk{font-size:12px}
+.rpt-sec td.note{color:var(--dgray);font-size:12px}
+.rpt-empty{font-size:13px;color:var(--dgray);padding:30px 0;text-align:center}
+
+/* ═══ APPROVALS / SETUP ═══ */
+.pane-scroll{flex:1;overflow:auto}
+.pane{max-width:1000px;margin:0 auto;padding:20px 24px 60px;display:flex;flex-direction:column;gap:18px}
+.card{background:var(--surface);border:1px solid var(--mgray);border-radius:8px;overflow:hidden}
+.card>h3{font-size:14px;color:var(--navytx);padding:12px 16px;border-bottom:1px solid var(--rowline);display:flex;align-items:center;gap:10px}
+.card>h3 .sp{flex:1}
+.card .cb{padding:12px 16px}
+.card .hintline{font-size:12px;color:var(--dgray);padding:10px 16px;border-top:1px solid var(--rowline);background:var(--surface-2)}
+.card table thead th{position:static}
+.addbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;padding:12px 16px;border-top:1px solid var(--rowline);background:var(--surface-2)}
+.addbar input,.addbar select{font-size:13px;padding:6px 9px;border:1px solid var(--mgray);border-radius:5px;font-family:inherit;background:var(--surface);color:var(--text)}
+.acts{display:flex;gap:6px;flex-wrap:wrap}
+
+/* ═══ GATE ═══ */
+.gate{max-width:520px;margin:60px auto;background:var(--surface);border:1px solid var(--mgray);border-radius:8px;padding:24px 26px;line-height:1.55}
+.gate h2{font-size:18px;color:var(--navytx);margin-bottom:8px}
+.gate p{font-size:14px;color:var(--dgray)}
+.gate a{color:var(--teal)}
+
+/* ═══ MODALS ═══ */
+.mo{display:none;position:fixed;inset:0;background:var(--scrim);z-index:1000;align-items:flex-start;justify-content:center;padding:32px 16px;overflow:auto}
+.mo.open{display:flex}
+.mc{background:var(--surface);border-radius:8px;width:100%;max-width:820px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
+.mc.sm{max-width:440px}
+.mh{padding:14px 20px;border-bottom:1px solid var(--mgray);display:flex;align-items:center;gap:10px}
+.mh h3{font-size:15px;color:var(--navytx);font-weight:600}
+.mh .x{margin-left:auto;background:none;border:none;font-size:20px;color:var(--dgray);cursor:pointer;line-height:1}
+.mb{padding:18px 20px;max-height:70vh;overflow:auto}
+.mf{padding:12px 20px;border-top:1px solid var(--mgray);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap;align-items:center}
+.mf .lft{margin-right:auto}
+.fg{display:grid;grid-template-columns:1fr 1fr;gap:12px 14px}
+.fg .full{grid-column:1/-1}
+.f label{display:block;font-size:11px;font-weight:600;color:var(--dgray);margin-bottom:3px}
+.f input,.f select,.f textarea{width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--mgray);border-radius:5px;font-family:inherit;background:var(--surface);color:var(--text)}
+.f textarea{min-height:60px;resize:vertical}
+.f input:disabled,.f select:disabled,.f textarea:disabled{background:var(--surface-2);color:var(--dgray)}
+.f input[type=radio],.f input[type=checkbox]{width:auto}
+.sect{grid-column:1/-1;font-size:12px;font-weight:700;color:var(--navytx);border-bottom:1px solid var(--mgray);padding-bottom:5px;margin-top:8px}
+.hint{font-size:11.5px;color:var(--dgray);margin-top:4px}
+.merr{display:none;grid-column:1/-1;background:var(--ltred);color:var(--red);font-size:13px;padding:8px 12px;border-radius:5px}
+.titlerow{display:flex;gap:8px}
+.titlerow input{flex:1}
+.seg{display:inline-flex;border:1px solid var(--mgray);border-radius:6px;overflow:hidden}
+.seg label{margin:0;display:flex;align-items:center;gap:0;cursor:pointer;font-size:13px;font-weight:500;color:var(--text)}
+.seg input{position:absolute;opacity:0;pointer-events:none}
+.seg span{padding:6px 14px;border-right:1px solid var(--mgray)}
+.seg label:last-child span{border-right:none}
+.seg input:checked+span{background:var(--teal);color:white}
+html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
+.seg input:disabled+span{opacity:.45;cursor:not-allowed}
+.seg input:focus-visible+span{outline:2px solid var(--teal);outline-offset:-3px}
+.newcrs{display:flex;gap:8px}
+.newcrs input:first-child{max-width:110px}
+.facets{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px}
+.facets label{display:flex;align-items:flex-start;gap:7px;font-size:12.5px;font-weight:400;color:var(--text);margin:0;cursor:pointer;line-height:1.35}
+.facets input{margin-top:2px;flex:0 0 auto}
+.stg-ed{grid-column:1/-1;display:flex;flex-direction:column;border:1px solid var(--rowline);border-radius:6px;overflow:hidden}
+.srow{display:grid;grid-template-columns:minmax(170px,1.3fr) 110px 140px 1.2fr;gap:6px;align-items:center;padding:5px 8px;border-bottom:1px solid var(--rowline)}
+.srow:last-child{border-bottom:none}
+.srow .sl{font-size:12.5px;display:flex;align-items:center;gap:6px}
+.srow.off .sl{color:var(--muted)}
+.srow.off .sl::after{content:'not required';font-size:10px;color:var(--muted);font-style:italic}
+.srow select,.srow input{font-size:12px;padding:4px 6px}
+.srow.st-done{background:color-mix(in srgb,var(--ltgrn) 55%,transparent)}
+.srow.st-declined{background:color-mix(in srgb,var(--ltred) 55%,transparent)}
+.lnk-list{grid-column:1/-1;display:flex;flex-direction:column;gap:4px}
+.lrow{display:flex;align-items:center;gap:8px;font-size:13px;padding:4px 0;border-bottom:1px solid var(--rowline)}
+.lrow .lrel{font-size:11px;font-weight:600;color:var(--dgray);min-width:118px}
+.lrow .lnm{flex:1}
+.lnk-add{grid-column:1/-1;display:flex;gap:8px;flex-wrap:wrap}
+.lnk-add select:first-child{flex:0 0 160px}
+.lnk-add select:nth-child(2){flex:1;min-width:200px}
+.rrm{flex:0 0 auto;width:26px;height:26px;border:1px solid var(--mgray);background:var(--surface);color:var(--dgray);border-radius:5px;cursor:pointer;font-size:13px;line-height:1}
+.rrm:hover{background:var(--ltred);color:var(--red);border-color:var(--red)}
+.hist{grid-column:1/-1;font-size:12px}
+.hist .h{display:grid;grid-template-columns:150px 90px 1fr;gap:8px;padding:5px 0;border-bottom:1px solid var(--rowline)}
+.hist .h .t{color:var(--dgray);font-variant-numeric:tabular-nums}
+.statusline{display:flex;align-items:center;gap:8px;font-size:12px;color:var(--dgray)}
+.sg-states{display:flex;gap:6px;flex-wrap:wrap;margin-bottom:12px}
+.sg-states label{display:flex;align-items:center;gap:5px;font-size:13px;font-weight:500;color:var(--text);border:1px solid var(--mgray);border-radius:5px;padding:5px 10px;cursor:pointer;margin:0}
+.sg-states label:has(input:checked){border-color:var(--teal);background:var(--ltblue)}
+
+#ls{position:fixed;inset:0;background:var(--surface);display:flex;flex-direction:column;align-items:center;justify-content:center;gap:12px;z-index:9000}
+#ls h2{font-size:18px;color:var(--navytx)}
+#ls p{font-size:13px;color:var(--dgray)}
+.spin{width:36px;height:36px;border:3px solid var(--ltblue);border-top-color:var(--teal);border-radius:50%;animation:sp .8s linear infinite}
+@keyframes sp{to{transform:rotate(360deg)}}
+@media (prefers-reduced-motion:reduce){.spin{animation-duration:3s}}
+#cfm-msg{font-size:13px;line-height:1.5}
+:focus-visible{outline:2px solid var(--teal);outline-offset:2px}
+
+@media (max-width:700px){
+  .fg,.facets{grid-template-columns:1fr}
+  .srow{grid-template-columns:1fr 1fr}
+  header .sub,header a.xlink{display:none}
+}
+
+/* ═══ PRINT — prints the active view; forces light colors ═══ */
+@media print{
+  html[data-theme="dark"]{
+    color-scheme:light;
+    --navy:#1F3864; --teal:#2E75B6; --ltblue:#D6E4F0; --lgray:#F4F6F9; --mgray:#CBD5E1; --dgray:#475569; --text:#1E293B;
+    --red:#DC2626; --ltred:#FEE2E2; --ltgrn:#DCFCE7; --ltgold:#FEF3C7; --surface:#FFFFFF; --surface-2:#F8FAFC; --navytx:#1F3864;
+    --rowline:#E8EDF3; --rowhover:#FFFFFF; --muted:#94A3B8; --txgrn:#166534; --txgold:#92400E;
+    --psu:#4D6B12; --psu-bg:#ECF3DC; --ohsu:#0B5394; --ohsu-bg:#DCEBF8; --both:#6D28D9; --both-bg:#EDE7FB;
+  }
+  body{background:#fff}
+  #app{height:auto;overflow:visible;display:block!important}
+  header,.tabs,#lockdown-banner,.tb,.legend,.no-print,.mo{display:none!important}
+  main{overflow:visible;display:block}
+  .view{display:none!important}
+  .view.active{display:block!important}
+  .tw,.rpt-scroll,.pane-scroll{overflow:visible}
+  .rpt{padding:0;max-width:none}
+  thead th{position:static}
+  #t-table th.sk,#t-table td.sk,#t-table th.sk2,#t-table td.sk2{position:static}
+  tr{break-inside:avoid}
+  .rpt-sec h3{break-after:avoid}
+  *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
+}
+</style>
+</head>
+<body>
+
+<div id="ls"><div class="spin"></div><h2>ConvergeSPH</h2><p id="lm">Loading…</p></div>
+
+<div id="app" style="display:none">
+  <div id="lockdown-banner"></div>
+  <header>
+    <div><h1>ConvergeSPH</h1><div class="sub">Curricular Changes · OHSU-PSU School of Public Health</div></div>
+    <div class="hsp"></div>
+    <a class="xlink" href="index.html">🏠 Home</a>
+    <a class="xlink" href="scheduling.html">📅 Scheduling</a>
+    <a class="xlink" href="faculty.html">👤 Faculty</a>
+    <a class="xlink" href="program.html">🎓 Programs</a>
+    <span id="auth-slot"></span>
+    <button id="btn-theme" title="Switch to dark mode" aria-label="Switch to dark mode">🌙</button>
+    <span id="tier-badge">ADMIN</span>
+    <span id="save-status">Ready</span>
+  </header>
+
+  <div class="tabs" id="tabs">
+    <button class="tab-btn active" id="tab-track" data-view="v-track">Tracker</button>
+    <button class="tab-btn" id="tab-report" data-view="v-report">Status report (CCSR)</button>
+    <button class="tab-btn admin-only" id="tab-appr" data-view="v-appr">Approvals <span class="tab-badge" id="appr-badge">0</span></button>
+    <button class="tab-btn admin-only" id="tab-setup" data-view="v-setup">Season setup</button>
+  </div>
+
+  <main>
+    <!-- ── GATE (no curriculum access) ───────────────────────── -->
+    <section class="view" id="v-gate">
+      <div class="gate" id="gate-body"></div>
+    </section>
+
+    <!-- ── TRACKER ───────────────────────────────────────────── -->
+    <section class="view active" id="v-track">
+      <div class="tb">
+        <select id="t-season" aria-label="Season"></select>
+        <input type="search" id="t-q" placeholder="Search changes, courses, people…">
+        <select id="t-level" aria-label="Level">
+          <option value="">All levels</option><option value="GR">Graduate</option><option value="UG">Undergraduate</option>
+        </select>
+        <select id="t-status" aria-label="Status">
+          <option value="all">All statuses</option>
+          <option value="open">Open</option>
+          <option value="not_started">Not started</option>
+          <option value="in_progress">In progress</option>
+          <option value="complete">Complete</option>
+          <option value="declined">Declined</option>
+          <option value="on_hold">On hold</option>
+          <option value="withdrawn">Withdrawn</option>
+        </select>
+        <select id="t-prog" aria-label="Program"></select>
+        <button class="btn btn-s" id="btn-t-clear">Clear</button>
+        <button class="btn btn-p btn-s edit-only" id="btn-add">+ Add change</button>
+        <span class="cnt" id="t-cnt"></span>
+      </div>
+      <div class="legend">
+        <span><i class="sw done"></i>Done (date)</span>
+        <span><i class="sw next"></i>Next step on that track</span>
+        <span><i class="sw off"></i>Not required for this change</span>
+        <span><i class="sw dec"></i>Declined</span>
+        <span><span class="ib inst-P">P</span> PSU</span>
+        <span><span class="ib inst-O">O</span> OHSU</span>
+        <span><span class="ib inst-E">E</span> Either</span>
+        <span><span class="ib inst-B">B</span> Both</span>
+        <span class="edit-only">Click a stage cell to record it.</span>
+      </div>
+      <div class="tw">
+        <table id="t-table">
+          <thead id="t-head"></thead>
+          <tbody id="t-body"></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ── STATUS REPORT (CCSR) ──────────────────────────────── -->
+    <section class="view" id="v-report">
+      <div class="tb">
+        <select id="r-season" aria-label="Season"></select>
+        <select id="r-level" aria-label="Level">
+          <option value="">Graduate and undergraduate</option><option value="GR">Graduate only</option><option value="UG">Undergraduate only</option>
+        </select>
+        <label class="ck"><input type="checkbox" id="r-done" checked> Include completed</label>
+        <label class="ck"><input type="checkbox" id="r-closed"> Include on hold / withdrawn</label>
+        <button class="btn btn-p btn-s" id="btn-print" style="margin-left:auto">🖨 Print / save as PDF</button>
+      </div>
+      <div class="rpt-scroll"><div class="rpt" id="r-body"></div></div>
+    </section>
+
+    <!-- ── APPROVALS (admin) ─────────────────────────────────── -->
+    <section class="view" id="v-appr">
+      <div class="pane-scroll"><div class="pane">
+        <div class="card">
+          <h3>Waiting for your approval</h3>
+          <table>
+            <thead><tr><th>Season</th><th>#</th><th>Change</th><th>Request</th><th>Entered</th><th></th></tr></thead>
+            <tbody id="a-body"></tbody>
+          </table>
+          <div class="hintline">Editors' new changes and deletion requests land here. Approving an addition makes it a normal change; rejecting it deletes it.</div>
+        </div>
+      </div></div>
+    </section>
+
+    <!-- ── SEASON SETUP (admin) ──────────────────────────────── -->
+    <section class="view" id="v-setup">
+      <div class="pane-scroll"><div class="pane">
+        <div class="card">
+          <h3>Seasons</h3>
+          <table>
+            <thead><tr><th>Season</th><th>Stages</th><th>Changes</th><th>Dates</th><th></th></tr></thead>
+            <tbody id="ss-body"></tbody>
+          </table>
+          <div class="addbar">
+            <input id="ss-new-label" placeholder="e.g. AY27-28" style="width:140px">
+            <button class="btn btn-s" id="btn-ss-add">Add season</button>
+            <span class="hint" style="margin:0">New seasons copy the current season's stage list.</span>
+          </div>
+        </div>
+
+        <div class="card">
+          <h3>APCC meetings &amp; deadlines <span class="sp"></span><select id="sc-season" aria-label="Season" style="font-size:12px;padding:4px 8px;border:1px solid var(--mgray);border-radius:5px;background:var(--surface);color:var(--text)"></select></h3>
+          <table>
+            <thead><tr><th>Date</th><th>Type</th><th>Label</th><th>Level</th><th>Institution</th><th></th></tr></thead>
+            <tbody id="sc-body"></tbody>
+          </table>
+          <div class="addbar">
+            <input type="date" id="sc-date" aria-label="Date">
+            <select id="sc-kind" aria-label="Type"><option value="apcc_meeting">APCC meeting</option><option value="deadline">Deadline</option></select>
+            <input id="sc-label" placeholder="Label, e.g. Final GR submissions" style="flex:1;min-width:200px">
+            <select id="sc-level" aria-label="Level"><option value="">Any level</option><option value="GR">GR</option><option value="UG">UG</option><option value="both">Both</option></select>
+            <select id="sc-inst" aria-label="Institution"><option value="">Any</option><option value="P">PSU</option><option value="O">OHSU</option><option value="E">SPH / either</option></select>
+            <button class="btn btn-s btn-p" id="btn-sc-add">Add date</button>
+          </div>
+          <div class="hintline">APCC meetings appear as choices on each change and on the status report. Deadlines appear on the status report.</div>
+        </div>
+
+        <div class="card">
+          <h3>Stages in this season</h3>
+          <table>
+            <thead><tr><th>Order</th><th>Stage</th><th>Track</th><th>What it means</th></tr></thead>
+            <tbody id="sst-body"></tbody>
+          </table>
+          <div class="hintline">Stage lists are fixed per season so past seasons keep displaying correctly. Changing them is a database edit for now.</div>
+        </div>
+      </div></div>
+    </section>
+  </main>
+</div>
+
+<!-- ── ITEM MODAL ─────────────────────────────────────────────── -->
+<div class="mo" id="mo-item">
+  <div class="mc">
+    <div class="mh"><h3 id="im-heading">Curricular change</h3><span id="im-pill" class="pill"></span><button class="x" data-close="mo-item" aria-label="Close">×</button></div>
+    <div class="mb f">
+      <div class="fg" id="im-form">
+        <div class="merr" id="im-err"></div>
+
+        <div class="full"><label for="im-title">Title</label>
+          <div class="titlerow"><input id="im-title" placeholder="Leave blank to generate from the fields below"><button type="button" class="btn btn-s" id="im-suggest">Suggest</button></div>
+        </div>
+        <div><label for="im-season">Season</label><select id="im-season"></select></div>
+        <div><label>Number</label><input id="im-seq" disabled placeholder="Assigned on save"></div>
+
+        <div class="sect">The change</div>
+        <div><label>Action</label>
+          <div class="seg">
+            <label><input type="radio" name="im-action" id="im-act-add" value="add"><span>Add</span></label>
+            <label><input type="radio" name="im-action" id="im-act-edit" value="edit"><span>Change</span></label>
+            <label><input type="radio" name="im-action" id="im-act-remove" value="remove"><span>Remove</span></label>
+          </div>
+        </div>
+        <div><label>Applies to</label>
+          <div class="seg">
+            <label><input type="radio" name="im-target" id="im-tgt-course" value="course"><span>Course</span></label>
+            <label><input type="radio" name="im-target" id="im-tgt-prog" value="program"><span>Program</span></label>
+          </div>
+        </div>
+        <div class="full" id="im-course-wrap"><label for="im-course">Course</label><select id="im-course"></select></div>
+        <div class="full" id="im-new-wrap"><label for="im-new-prefix">New course prefix and number</label>
+          <div class="newcrs"><input id="im-new-prefix" placeholder="PUBH"><input id="im-new-number" placeholder="511"></div>
+        </div>
+        <div class="full" id="im-prog-wrap"><label for="im-prog">Program</label><select id="im-prog"></select>
+          <div class="hint">New programs aren't tracked here yet.</div>
+        </div>
+        <div class="full" id="im-assoc-wrap"><label for="im-assoc">Associated program</label><select id="im-assoc"></select></div>
+        <div class="full" id="im-facets-wrap"><label>What's changing</label><div class="facets" id="im-facets"></div></div>
+
+        <div class="sect">Classification</div>
+        <div><label for="im-level">Level</label>
+          <select id="im-level"><option value="GR">Graduate</option><option value="UG">Undergraduate</option><option value="both">Both</option></select>
+        </div>
+        <div><label for="im-cat">OHSU category</label>
+          <select id="im-cat"><option value="">NA</option><option value="1">Total (1)</option><option value="2">Major (2)</option><option value="3">Minor (3)</option></select>
+        </div>
+        <div class="full"><label for="im-inst">Approval tracks</label>
+          <select id="im-inst"><option value="both">PSU and OHSU</option><option value="PSU">PSU only</option><option value="OHSU">OHSU only</option></select>
+          <div class="hint">Sets which stages this change goes through. Set automatically from level until you change it.</div>
+        </div>
+
+        <div class="sect">People and dates</div>
+        <div><label for="im-fac">Initiated by</label><select id="im-fac"></select>
+          <input id="im-fac-other" placeholder="Name" style="margin-top:6px;display:none">
+        </div>
+        <div><label for="im-date">Initiated on</label><input type="date" id="im-date"></div>
+        <div class="full"><label for="im-apcc">APCC meeting</label><select id="im-apcc"></select></div>
+
+        <div class="sect">Details</div>
+        <div class="full"><label for="im-desc">Summary of the change</label><textarea id="im-desc" placeholder="What is changing, in a sentence or two"></textarea></div>
+        <div class="full"><label for="im-just">Justification</label><textarea id="im-just"></textarea></div>
+        <div class="full"><label for="im-note">Status notes</label><textarea id="im-note" placeholder="Running notes on where this stands"></textarea></div>
+        <div><label for="im-disp">Disposition</label>
+          <select id="im-disp"><option value="active">Active</option><option value="on_hold">On hold</option><option value="withdrawn">Withdrawn</option></select>
+        </div>
+
+        <div class="sect">Stages</div>
+        <div class="stg-ed" id="im-stages"></div>
+
+        <div class="sect">Linked changes</div>
+        <div class="lnk-list" id="im-links"></div>
+        <div class="lnk-add" id="im-link-add-row">
+          <select id="im-link-rel" aria-label="Relationship">
+            <option value="part_of">Part of</option>
+            <option value="includes">Includes</option>
+            <option value="slash_pair">Slash pair with</option>
+            <option value="cross_list">Cross-listed with</option>
+          </select>
+          <select id="im-link-item" aria-label="Linked change"></select>
+          <button type="button" class="btn btn-s" id="im-link-add">Add link</button>
+        </div>
+
+        <div class="sect" id="im-hist-sect">History</div>
+        <div class="full" id="im-hist-wrap"><button type="button" class="btn btn-s" id="im-hist-btn">Show history</button></div>
+        <div class="hist" id="im-hist"></div>
+      </div>
+    </div>
+    <div class="mf">
+      <span class="statusline lft" id="im-hint"></span>
+      <button class="btn" id="btn-im-reqdel">Request deletion</button>
+      <button class="btn btn-d" id="btn-im-harddel">Delete permanently</button>
+      <button class="btn" id="btn-im-restore">Keep (restore)</button>
+      <button class="btn btn-p" id="btn-im-approve">Approve</button>
+      <button class="btn" data-close="mo-item">Cancel</button>
+      <button class="btn btn-p" id="btn-im-save">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── STAGE CELL MODAL ───────────────────────────────────────── -->
+<div class="mo" id="mo-stage">
+  <div class="mc sm">
+    <div class="mh"><h3 id="sg-title">Stage</h3><button class="x" data-close="mo-stage" aria-label="Close">×</button></div>
+    <div class="mb f">
+      <p id="sg-item" style="font-size:13px;color:var(--dgray);margin-bottom:12px"></p>
+      <div class="sg-states">
+        <label><input type="radio" name="sg-state" value=""> Pending</label>
+        <label><input type="radio" name="sg-state" value="done"> Done</label>
+        <label><input type="radio" name="sg-state" value="na"> N/A</label>
+        <label><input type="radio" name="sg-state" value="declined"> Declined</label>
+      </div>
+      <div style="margin-bottom:10px"><label for="sg-date">Date</label><input type="date" id="sg-date"></div>
+      <div><label for="sg-note">Note</label><textarea id="sg-note"></textarea></div>
+    </div>
+    <div class="mf">
+      <button class="btn" data-close="mo-stage">Cancel</button>
+      <button class="btn btn-p" id="btn-sg-save">Save stage</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CONFIRM MODAL ─────────────────────────────────────────── -->
+<div class="mo" id="mo-cfm">
+  <div class="mc sm">
+    <div class="mh"><h3 id="cfm-title">Confirm</h3><button class="x" data-close="mo-cfm" aria-label="Close">×</button></div>
+    <div class="mb"><p id="cfm-msg"></p></div>
+    <div class="mf">
+      <button class="btn" id="cfm-no" data-close="mo-cfm">Cancel</button>
+      <button class="btn btn-d" id="cfm-ok">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script>
+'use strict';
+const $=id=>document.getElementById(id);
+const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const val=id=>($(id)?$(id).value:'');
+const setv=(id,v)=>{const e=$(id);if(e)e.value=v??'';};
+const setSS=m=>{const e=$('save-status');if(e)e.textContent=m;};
+const setLM=m=>{const e=$('lm');if(e)e.textContent=m;};
+const N=v=>{const s=String(v??'').trim();return s===''?null:s;};
+const radioVal=name=>{const r=document.querySelector(`input[name="${name}"]:checked`);return r?r.value:'';};
+const setRadio=(name,v)=>{document.querySelectorAll(`input[name="${name}"]`).forEach(r=>{r.checked=(r.value===(v??''));});};
+
+/* ── SUPABASE CONFIG — must match index.html / scheduling.html / faculty.html / program.html ── */
+const SUPABASE_URL      = 'https://igusxvvnzdpoqwizcvke.supabase.co';
+const SUPABASE_ANON_KEY = 'sb_publishable__F-QsLesM18cKEozFSly6g_t8dSlptY';
+const PERSIST_FLAG='sph_persist_v2';
+const PERSIST_FLAG_LEGACY='sph_persist';
+function wantPersist(){
+  try{
+    localStorage.removeItem(PERSIST_FLAG_LEGACY);
+    return localStorage.getItem(PERSIST_FLAG)!=='0';
+  }catch(e){return true;}
+}
+let sb=null,authSub=null,onAuthChange=null;
+function initSupabase(){
+  const persist=wantPersist();
+  try{ if(authSub&&authSub.unsubscribe)authSub.unsubscribe(); }catch(e){}
+  authSub=null;
+  sb=window.supabase.createClient(SUPABASE_URL,SUPABASE_ANON_KEY,{
+    auth:{persistSession:persist,autoRefreshToken:persist,
+          storage:persist?window.localStorage:undefined,storageKey:'sph_auth'}
+  });
+  if(onAuthChange){
+    const {data}=sb.auth.onAuthStateChange((evt,session)=>onAuthChange(evt,session));
+    authSub=(data&&data.subscription)||null;
+  }
+  return sb;
+}
+
+/* ── STATE ── */
+let TIER='public';          // 'public' (signed out) | 'none' (signed in, no curriculum access) | 'viewer' | 'editor' | 'admin'
+let MY_UID=null,currentUserEmail=null;
+let SEASONS=[];             // cc_seasons rows, newest label first
+let STAGES={};              // stage id -> row
+let SEASON_STAGES={};       // season id -> [cc_season_stages rows sorted]
+let CAL=[];                 // cc_calendar rows sorted by date
+let FACETS=[],FACET_BY_KEY={};
+let ITEMS=[],ITEM_BY_ID={};
+let EVENTS={};              // item id -> {stage id -> event row}
+let LINKS=[];               // cc_item_links rows
+let PROG={};                // item id -> cc_item_progress row
+let PROGRAMS={},COURSES={},FACULTY={};
+let LOCKED=false,LOCK_MSG='';
+let SEASON_ID=null;         // season shown on Tracker + Report
+let SETUP_SEASON_ID=null;   // season shown in Season setup → calendar
+let itemId=null;            // item open in modal (null = new)
+let imFacets=new Set();     // facet keys checked in modal
+let stageEdit={};           // stage id -> {state,event_date,note} while modal open
+let linkEdit=[];            // [{parent_id,child_id,link_type}] while modal open; '__new__' = this unsaved item
+let instTouched=false;      // approval-tracks select edited by hand
+let cellCtx=null;           // {itemId,stageId} for the stage-cell modal
+let cfmCb=null;
+let pollTimer=null;
+
+const isAdmin=()=>TIER==='admin';
+const isEditor=()=>TIER==='editor';
+const canRead=()=>TIER==='admin'||TIER==='editor'||TIER==='viewer';
+const canCreate=()=>!LOCKED&&(isAdmin()||isEditor());
+const canEditItem=r=>!LOCKED&&!!r&&(isAdmin()||(isEditor()&&r.created_by===MY_UID));
+
+/* ── LABELS ── */
+const CAT_LBL={1:'Total (1)',2:'Major (2)',3:'Minor (3)'};
+const STATUS_LBL={not_started:'Not started',in_progress:'In progress',complete:'Complete',declined:'Declined',on_hold:'On hold',withdrawn:'Withdrawn'};
+const APPROVAL_LBL={active:'Active',pending_add:'Awaiting approval',pending_delete:'Deletion requested'};
+const INST_NAME={P:'PSU',O:'OHSU',E:'Either institution',B:'Both institutions'};
+const STAGE_SHORT={
+  initial_approval:'Brad',ocms_entry:'OCMS',ohsu_forms:'OHSU forms',apcc_materials:'APCC materials',
+  apcc_approval:'APCC',ocms_stage3:'OCMS stage 3',ohsu_forms_signed:'Forms signed',sent_to_ohsu:'Sent to OHSU',
+  psu_council:'UG/GR council',faculty_senate:'Faculty Senate',ohsu_approval:'OHSU approval',
+  share_assessment:'Lydia',reconciliation:'Reconciled'
+};
+const FACET_SHORT={
+  course_number:'number',course_title:'title',course_description:'description',credit_hours:'credits',
+  cross_listing:'cross-listing',prerequisites:'prerequisites',corequisites:'corequisites',repeatability:'repeatability',
+  grading:'grading',instructional_method:'instructional method',course_other:'other',
+  prog_requirements:'requirements',prog_title:'name',prog_description:'description',prog_new_courses:'new courses',
+  prog_cbe_50:'competency-based',prog_credit_variance:'credit variance',prog_cbe_initial:'competency-based',
+  prog_under_one_year:'duration',prog_length_25:'length',prog_closure:'closure',prog_other:'other'
+};
+const FIELD_LBL={
+  title:'title',season_id:'season',seq:'number',action:'action',target_kind:'target',course_id:'course',program_id:'program',
+  proposed_prefix:'new prefix',proposed_number:'new number',change_facets:"what's changing",student_level:'level',
+  ohsu_category:'OHSU category',institutions:'approval tracks',initiated_by_name:'initiated by',initiated_by_faculty_id:'initiated by',
+  initiated_on:'initiated on',apcc_meeting_id:'APCC meeting',description:'summary',justification:'justification',
+  status_note:'status notes',disposition:'disposition',approval_state:'approval',created_by:'owner'
+};
+const shortStage=s=>STAGE_SHORT[s.key]||s.label;
+
+/* ── DATES ── */
+function todayISO(){const d=new Date();return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');}
+function parseISO(s){if(!s)return null;const [y,m,d]=String(s).slice(0,10).split('-').map(Number);return new Date(y,m-1,d);}
+function fmtShort(s){const d=parseISO(s);return d?(d.getMonth()+1)+'/'+d.getDate():'';}
+function fmtMonDay(s){const d=parseISO(s);return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric'}):'';}
+function fmtLong(s){const d=parseISO(s);return d?d.toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'}):'';}
+
+/* ── DOMAIN HELPERS ── */
+function stageApplies(stageInst,itemInst){
+  if(stageInst==='P')return itemInst==='PSU'||itemInst==='both';
+  if(stageInst==='O')return itemInst==='OHSU'||itemInst==='both';
+  if(stageInst==='B')return itemInst==='both';
+  return true;
+}
+function seasonStages(sid){return (SEASON_STAGES[sid]||[]).map(r=>STAGES[r.stage_id]).filter(Boolean);}
+function seasonLabel(sid){const s=SEASONS.find(x=>x.id===sid);return s?s.label:'—';}
+function courseCode(c){
+  if(!c)return '';
+  return [c.prefix,c.number].filter(Boolean).join(' ')||c.course_code||c.full_name||String(c.id);
+}
+function courseLabel(c){
+  if(!c)return '';
+  const code=courseCode(c);
+  const t=c.title||'';
+  return t?`${code} — ${t}`:(c.full_name||code);
+}
+function targetLabel(r){
+  if(r.target_kind==='course'){
+    if(r.action==='add')return [r.proposed_prefix,r.proposed_number].filter(Boolean).join(' ');
+    return courseCode(COURSES[r.course_id]);
+  }
+  return PROGRAMS[r.program_id]?.name||'';
+}
+function programLabel(id){
+  if(id==null||id==='')return 'Other';
+  return PROGRAMS[id]?.name||'Other';
+}
+function kindLabel(r){
+  if(r.target_kind==='course')return r.action==='add'?'New course':r.action==='remove'?'Remove course':'Course change';
+  return r.action==='add'?'New program':r.action==='remove'?'Remove program':'Program change';
+}
+function facName(f){return [f.first_name,f.last_name].filter(Boolean).join(' ');}
+function initiatorShort(r){
+  const f=FACULTY[r.initiated_by_faculty_id];
+  if(f)return [(f.first_name||'')[0]?(f.first_name[0]+'.'):'',f.last_name||''].filter(Boolean).join(' ');
+  return r.initiated_by_name||'';
+}
+function itemStatus(r){return (PROG[r.id]&&PROG[r.id].progress_status)||'not_started';}
+function seqLabel(n){return n==null?'—':String(n).padStart(2,'0');}
+function itemRef(r){return r?`#${seqLabel(r.seq)} ${r.title}`:'(removed)';}
+function parentsOf(id){return LINKS.filter(l=>l.link_type==='part_of'&&l.child_id===id).map(l=>ITEM_BY_ID[l.parent_id]).filter(Boolean);}
+function childrenOf(id){return LINKS.filter(l=>l.link_type==='part_of'&&l.parent_id===id).map(l=>ITEM_BY_ID[l.child_id]).filter(Boolean);}
+function pairsOf(id,type){return LINKS.filter(l=>l.link_type===type&&(l.parent_id===id||l.child_id===id)).map(l=>ITEM_BY_ID[l.parent_id===id?l.child_id:l.parent_id]).filter(Boolean);}
+function apccLabel(id){const c=CAL.find(x=>x.id===id);return c?fmtMonDay(c.event_date):'';}
+
+async function sbSave(q,okMsg){
+  const {error}=await q;
+  if(error){setSS('⚠ '+error.message);return false;}
+  if(okMsg)setSS(okMsg);
+  return true;
+}
+
+/* Paginated fetch — Supabase caps a bare select at ~1000 rows. */
+async function paginate(makeQuery){
+  const PAGE=1000; let from=0; const all=[];
+  for(;;){
+    const {data,error}=await makeQuery().range(from,from+PAGE-1);
+    if(error)return {data:null,error};
+    all.push(...(data||[]));
+    if(!data||data.length<PAGE)break;
+    from+=PAGE;
+  }
+  return {data:all,error:null};
+}
+
+/* ── LOAD ── */
+async function resolveTier(){
+  const {data:{session}}=await sb.auth.getSession();
+  if(!session){TIER='public';MY_UID=null;currentUserEmail=null;return;}
+  MY_UID=session.user?.id||null;
+  currentUserEmail=session.user?.email||null;
+  TIER='none';
+  try{
+    const {data,error}=await sb.from('app_access').select('level').eq('app','curriculum').maybeSingle();
+    if(!error&&data&&['admin','editor','viewer'].includes(data.level))TIER=data.level;
+  }catch(e){}
+}
+async function loadLock(){
+  try{
+    const {data,error}=await sb.from('app_lockdown').select('*').eq('id',1).maybeSingle();
+    if(!error&&data){LOCKED=!!data.locked;LOCK_MSG=data.message||'';}
+    else if(!error){LOCKED=false;}
+  }catch(e){}
+  $('lockdown-banner').innerHTML=LOCKED?('🔒 Editing is locked. '+esc(LOCK_MSG||'')):'';
+  document.body.classList.toggle('is-locked',LOCKED);
+}
+async function loadData(){
+  setLM('Connecting…');
+  if(!sb)initSupabase();
+  await resolveTier();
+  await loadLock();
+  if(!canRead())return;
+
+  setLM('Loading curricular changes…');
+  const q=(t,cols)=>paginate(()=>sb.from(t).select(cols||'*'));
+  const [seR,stR,ssR,calR,fcR,itR,evR,lkR,pgR,prR,crR]=await Promise.all([
+    q('cc_seasons'),q('cc_stages'),q('cc_season_stages'),q('cc_calendar'),q('cc_facets'),
+    q('cc_items'),q('cc_stage_events'),q('cc_item_links'),q('cc_item_progress'),
+    q('programs'),q('courses','id,course_code,full_name,prefix,number,title,parent_id')
+  ]);
+  for(const r of [seR,stR,ssR,calR,fcR,itR,evR,lkR,pgR,prR,crR]){if(r.error)throw r.error;}
+  // Faculty names are a nicety — the app still works if this view is unavailable.
+  const fR=await q('faculty_directory');
+
+  SEASONS=(seR.data||[]).sort((a,b)=>String(b.label).localeCompare(String(a.label)));
+  STAGES={}; (stR.data||[]).forEach(s=>{STAGES[s.id]=s;});
+  SEASON_STAGES={}; (ssR.data||[]).forEach(r=>{(SEASON_STAGES[r.season_id]=SEASON_STAGES[r.season_id]||[]).push(r);});
+  Object.values(SEASON_STAGES).forEach(a=>a.sort((x,y)=>x.sort-y.sort));
+  CAL=(calR.data||[]).sort((a,b)=>String(a.event_date).localeCompare(String(b.event_date)));
+  FACETS=(fcR.data||[]).filter(f=>f.active!==false).sort((a,b)=>a.sort-b.sort);
+  FACET_BY_KEY={}; FACETS.forEach(f=>{FACET_BY_KEY[f.key]=f;});
+  ITEMS=itR.data||[];
+  ITEM_BY_ID={}; ITEMS.forEach(r=>{ITEM_BY_ID[r.id]=r;});
+  EVENTS={}; (evR.data||[]).forEach(e=>{(EVENTS[e.item_id]=EVENTS[e.item_id]||{})[e.stage_id]=e;});
+  LINKS=lkR.data||[];
+  PROG={}; (pgR.data||[]).forEach(p=>{PROG[p.item_id]=p;});
+  PROGRAMS={}; (prR.data||[]).forEach(p=>{PROGRAMS[p.id]=p;});
+  COURSES={}; (crR.data||[]).forEach(c=>{COURSES[c.id]=c;});
+  FACULTY={}; if(!fR.error)(fR.data||[]).forEach(f=>{if(!f.is_placeholder)FACULTY[f.id]=f;});
+
+  if(!SEASON_ID||!SEASONS.some(s=>s.id===SEASON_ID))
+    SEASON_ID=(SEASONS.find(s=>s.is_current)||SEASONS[0]||{}).id||null;
+  if(!SETUP_SEASON_ID||!SEASONS.some(s=>s.id===SETUP_SEASON_ID))SETUP_SEASON_ID=SEASON_ID;
+}
+async function reload(){
+  await loadData();
+  renderAll();
+}
+
+/* ── AUTH BAR / GATE ── */
+function updateAuthBar(){
+  const slot=$('auth-slot');
+  if(currentUserEmail){
+    slot.innerHTML=`<span class="who">${esc(currentUserEmail)}</span>
+      <button class="btn btn-s" id="btn-out" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3)">Sign out</button>`;
+    $('btn-out').onclick=async()=>{await sb.auth.signOut();location.href=location.pathname;};
+  }else{
+    slot.innerHTML=`<a href="index.html" class="btn btn-s" style="background:rgba(255,255,255,.1);color:white;border-color:rgba(255,255,255,.3);text-decoration:none;display:inline-flex;align-items:center">Sign in from home</a>`;
+  }
+  const badge=$('tier-badge');
+  badge.classList.toggle('on',canRead());
+  badge.classList.toggle('editor',isEditor());
+  badge.classList.toggle('viewer',TIER==='viewer');
+  badge.textContent=TIER.toUpperCase();
+  document.body.classList.toggle('is-admin',isAdmin());
+  document.body.classList.toggle('is-editor',isEditor());
+  document.body.classList.toggle('is-viewer',TIER==='viewer');
+}
+function showGate(){
+  $('tabs').style.display='none';
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id==='v-gate'));
+  $('gate-body').innerHTML=TIER==='public'
+    ?`<h2>Sign in to see curricular changes</h2>
+      <p>The curricular change tracker is for SPH staff and APCC members. <a href="index.html">Sign in from the ConvergeSPH home page</a>, then come back here.</p>`
+    :`<h2>Your account doesn't have Curriculum access</h2>
+      <p>You're signed in as ${esc(currentUserEmail||'')}, but no Curriculum access level is set for this account. Ask an admin to add you, or email <a href="mailto:sphapps@ohsu.edu">sphapps@ohsu.edu</a>.</p>`;
+}
+
+/* ── RENDER ALL ── */
+function renderAll(){
+  fillSeasonSelects();
+  fillProgFilter();
+  renderTracker();
+  renderReport();
+  if(isAdmin()){renderApprovals();renderSetup();}
+  updateApprovalBadge();
+}
+function seasonOptionsHTML(selected){
+  return SEASONS.map(s=>`<option value="${esc(s.id)}"${s.id===selected?' selected':''}>${esc(s.label)}${s.is_current?' (current)':''}</option>`).join('')
+    ||'<option value="">No seasons</option>';
+}
+function fillSeasonSelects(){
+  $('t-season').innerHTML=seasonOptionsHTML(SEASON_ID);
+  $('r-season').innerHTML=seasonOptionsHTML(SEASON_ID);
+  $('sc-season').innerHTML=seasonOptionsHTML(SETUP_SEASON_ID);
+}
+function sortedPrograms(){
+  return Object.values(PROGRAMS).sort((a,b)=>(a.sort_order??0)-(b.sort_order??0)||String(a.name||'').localeCompare(String(b.name||'')));
+}
+function fillProgFilter(){
+  const cur=val('t-prog');
+  $('t-prog').innerHTML='<option value="">All programs</option>'+
+    sortedPrograms().map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('')+
+    '<option value="__none__">Other / none</option>';
+  setv('t-prog',cur);
+}
+
+/* ── TRACKER ── */
+function trackerRows(){
+  const q=(val('t-q')||'').trim().toLowerCase(),lvl=val('t-level'),st=val('t-status'),pg=val('t-prog');
+  return ITEMS.filter(r=>r.season_id===SEASON_ID).filter(r=>{
+    const s=itemStatus(r);
+    if(st==='open'&&!(s==='not_started'||s==='in_progress'))return false;
+    if(st&&st!=='all'&&st!=='open'&&s!==st)return false;
+    if(lvl&&r.student_level!==lvl&&r.student_level!=='both')return false;
+    if(pg==='__none__'&&r.program_id!=null)return false;
+    if(pg&&pg!=='__none__'&&String(r.program_id)!==pg)return false;
+    if(q){
+      const hay=[r.title,r.description,r.status_note,targetLabel(r),programLabel(r.program_id),initiatorShort(r),'#'+seqLabel(r.seq)].join(' ').toLowerCase();
+      if(!hay.includes(q))return false;
+    }
+    return true;
+  }).sort((a,b)=>(a.seq??0)-(b.seq??0));
+}
+function stageCellHTML(r,s){
+  const ev=(EVENTS[r.id]||{})[s.id];
+  const ap=stageApplies(s.institution,r.institutions);
+  const p=PROG[r.id]||{};
+  const status=itemStatus(r);
+  let cls='cell',txt='',tip=s.label;
+  if(ev){
+    if(ev.state==='done'){cls+=' done';txt=ev.event_date?fmtShort(ev.event_date):'✓';tip+=': done'+(ev.event_date?' '+fmtLong(ev.event_date):'');}
+    else if(ev.state==='na'){cls+=' na';txt='n/a';tip+=': not applicable';}
+    else{cls+=' dec';txt='✕';tip+=': declined'+(ev.event_date?' '+fmtLong(ev.event_date):'');}
+    if(ev.note)tip+=' — '+ev.note;
+  }else if(!ap){cls+=' off';tip+=': not required for this change';}
+  else if((status==='in_progress'||status==='not_started')&&(s.id===p.next_psu_stage_id||s.id===p.next_ohsu_stage_id)){
+    cls+=' next';tip+=': next step';
+  }else{tip+=': pending';}
+  const ed=canEditItem(r);
+  return `<td class="${cls}${ed?' ed':''}"${ed?` data-cell="${esc(r.id)}|${esc(s.id)}"`:''} title="${esc(tip)}">${esc(txt)}</td>`;
+}
+function renderTracker(){
+  const stages=seasonStages(SEASON_ID);
+  $('t-head').innerHTML=`<tr>
+    <th class="sk">#</th><th class="sk2">Change</th><th>Program</th><th>Level</th><th>Cat.</th><th>Initiated</th><th>APCC</th>
+    ${stages.map(s=>`<th class="stg" title="${esc(s.label)} — ${esc(INST_NAME[s.institution]||'')}${s.description?': '+esc(s.description):''}">${esc(shortStage(s))}<span class="ib inst-${esc(s.institution)}">${esc(s.institution)}</span></th>`).join('')}
+    <th>Status</th></tr>`;
+  const rows=trackerRows();
+  const seasonItems=ITEMS.filter(r=>r.season_id===SEASON_ID).length;
+  $('t-body').innerHTML=rows.map(r=>{
+    const st=itemStatus(r);
+    const parents=parentsOf(r.id),kids=childrenOf(r.id),slash=pairsOf(r.id,'slash_pair'),xl=pairsOf(r.id,'cross_list');
+    const meta=[`<span class="chip">${esc(kindLabel(r))}</span>`];
+    if(r.approval_state!=='active')meta.push(`<span class="pill ${esc(r.approval_state)}">${esc(APPROVAL_LBL[r.approval_state])}</span>`);
+    if(parents.length)meta.push(`<span class="chip link" title="${esc(parents.map(itemRef).join('\n'))}">part of ${parents.map(p=>'#'+seqLabel(p.seq)).join(', ')}</span>`);
+    if(kids.length)meta.push(`<span class="chip link" title="${esc(kids.map(itemRef).join('\n'))}">includes ${kids.length}</span>`);
+    if(slash.length)meta.push(`<span class="chip link">slash ${slash.map(p=>'#'+seqLabel(p.seq)).join(', ')}</span>`);
+    if(xl.length)meta.push(`<span class="chip link">cross-list ${xl.map(p=>'#'+seqLabel(p.seq)).join(', ')}</span>`);
+    return `<tr class="clickable" data-id="${esc(r.id)}">
+      <td class="sk seq">${seqLabel(r.seq)}</td>
+      <td class="sk2"><div class="it-title" title="${esc(r.status_note||r.description||'')}">${esc(r.title)}</div><div class="it-meta">${meta.join('')}</div></td>
+      <td>${esc(programLabel(r.program_id))}</td>
+      <td>${esc(r.student_level)}</td>
+      <td>${r.ohsu_category?esc(r.ohsu_category):'<span class="muted">NA</span>'}</td>
+      <td title="${esc(r.initiated_on?fmtLong(r.initiated_on):'')}">${esc(initiatorShort(r)||'—')}</td>
+      <td style="white-space:nowrap">${esc(apccLabel(r.apcc_meeting_id)||'—')}</td>
+      ${stages.map(s=>stageCellHTML(r,s)).join('')}
+      <td><span class="pill ${esc(st)}">${esc(STATUS_LBL[st]||st)}</span></td>
+    </tr>`;
+  }).join('')||`<tr><td class="empty-row" colspan="${8+stages.length}">${
+    !SEASON_ID?'No seasons exist yet. An admin can add one in Season setup.':
+    seasonItems?'No changes match these filters.':
+    (canCreate()?'No changes recorded for this season yet. Use “+ Add change” to enter the first one.':'No changes recorded for this season yet.')
+  }</td></tr>`;
+  $('t-cnt').textContent=rows.length+' of '+seasonItems+' change'+(seasonItems===1?'':'s');
+}
+
+/* ── STAGE CELL MODAL ── */
+function openCell(iid,sid){
+  const r=ITEM_BY_ID[iid],s=STAGES[sid];
+  if(!r||!s||!canEditItem(r))return;
+  cellCtx={itemId:iid,stageId:sid};
+  const ev=(EVENTS[iid]||{})[sid];
+  $('sg-title').textContent=s.label;
+  $('sg-item').textContent=itemRef(r)+(stageApplies(s.institution,r.institutions)?'':' · this stage is not normally required for this change');
+  setRadio('sg-state',ev?ev.state:'');
+  setv('sg-date',ev?ev.event_date:'');
+  setv('sg-note',ev?ev.note:'');
+  openM('mo-stage');
+}
+async function saveCell(){
+  if(!cellCtx)return;
+  const {itemId:iid,stageId:sid}=cellCtx;
+  const st=radioVal('sg-state');
+  let ok;
+  if(!st){
+    ok=await sbSave(sb.from('cc_stage_events').delete().match({item_id:iid,stage_id:sid}),'● Stage cleared');
+  }else{
+    const row={item_id:iid,stage_id:sid,state:st,event_date:N(val('sg-date')),note:N(val('sg-note'))};
+    ok=await sbSave(sb.from('cc_stage_events').upsert(row,{onConflict:'item_id,stage_id'}),'● Stage saved');
+  }
+  if(!ok)return;
+  closeM('mo-stage');
+  await reload();
+}
+
+/* ── ITEM MODAL ── */
+function fillItemSelects(r){
+  $('im-season').innerHTML=seasonOptionsHTML(r?r.season_id:SEASON_ID);
+  const courses=Object.values(COURSES).filter(c=>!c.parent_id).sort((a,b)=>courseCode(a).localeCompare(courseCode(b)));
+  $('im-course').innerHTML='<option value="">— choose a course —</option>'+
+    courses.map(c=>`<option value="${esc(c.id)}">${esc(courseLabel(c))}</option>`).join('');
+  const progs=sortedPrograms();
+  $('im-prog').innerHTML='<option value="">— choose a program —</option>'+
+    progs.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}${p.credential?' ('+esc(p.credential)+')':''}</option>`).join('');
+  $('im-assoc').innerHTML='<option value="">Other / none</option>'+
+    progs.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}${p.credential?' ('+esc(p.credential)+')':''}</option>`).join('');
+  const fac=Object.values(FACULTY).sort((a,b)=>String(a.last_name||'').localeCompare(String(b.last_name||''))||String(a.first_name||'').localeCompare(String(b.first_name||'')));
+  // If the stored initiator isn't in the loaded directory (placeholder, or the
+  // view failed to load), keep a stand-in option so saving doesn't erase it.
+  const keep=r&&r.initiated_by_faculty_id&&!FACULTY[r.initiated_by_faculty_id]
+    ?`<option value="${esc(r.initiated_by_faculty_id)}">(faculty record not in directory)</option>`:'';
+  $('im-fac').innerHTML='<option value="">—</option>'+keep+
+    fac.map(f=>`<option value="${esc(f.id)}">${esc([f.last_name,f.first_name].filter(Boolean).join(', '))}</option>`).join('')+
+    '<option value="__other__">Someone else (type a name)…</option>';
+}
+function fillApccSelect(sid,selected){
+  const mtgs=CAL.filter(c=>c.season_id===sid&&c.kind==='apcc_meeting');
+  $('im-apcc').innerHTML=`<option value="">${mtgs.length?'Not scheduled / not going to APCC':'No APCC meetings set up for this season'}</option>`+
+    mtgs.map(c=>`<option value="${esc(c.id)}">${esc(fmtLong(c.event_date))} — ${esc(c.label)}</option>`).join('');
+  setv('im-apcc',mtgs.some(c=>c.id===selected)?selected:'');
+}
+function fillLinkItemSelect(){
+  const sid=val('im-season');
+  const opts=ITEMS.filter(x=>x.season_id===sid&&x.id!==itemId).sort((a,b)=>(a.seq??0)-(b.seq??0));
+  $('im-link-item').innerHTML=opts.length
+    ?opts.map(x=>`<option value="${esc(x.id)}">${esc(itemRef(x))}</option>`).join('')
+    :'<option value="">No other changes in this season</option>';
+}
+function renderFacets(){
+  const tgt=radioVal('im-target');
+  const list=FACETS.filter(f=>f.target_kind===tgt);
+  $('im-facets').innerHTML=list.map(f=>`<label><input type="checkbox" value="${esc(f.key)}"${imFacets.has(f.key)?' checked':''}> ${esc(f.label)}</label>`).join('')
+    ||'<span class="muted" style="font-size:12px">No options configured.</span>';
+}
+function imSync(){
+  const tgt=radioVal('im-target');
+  let act=radioVal('im-action');
+  // New programs are out of scope for this module (for now).
+  const addBox=$('im-act-add');
+  if(tgt==='program'){
+    if(act==='add'){setRadio('im-action','edit');act='edit';}
+    addBox.disabled=true;
+  }else if(!imReadOnly){addBox.disabled=false;}
+  $('im-course-wrap').style.display=(tgt==='course'&&act!=='add')?'':'none';
+  $('im-new-wrap').style.display=(tgt==='course'&&act==='add')?'':'none';
+  $('im-prog-wrap').style.display=tgt==='program'?'':'none';
+  $('im-assoc-wrap').style.display=tgt==='course'?'':'none';
+  $('im-facets-wrap').style.display=act==='edit'?'':'none';
+  // Drop facets that belong to the other target kind.
+  [...imFacets].forEach(k=>{if(FACET_BY_KEY[k]&&FACET_BY_KEY[k].target_kind!==tgt)imFacets.delete(k);});
+  renderFacets();
+  if(imReadOnly)$('im-facets').querySelectorAll('input').forEach(i=>{i.disabled=true;});
+}
+function autoInst(){
+  if(instTouched)return;
+  setv('im-inst',val('im-level')==='UG'?'PSU':'both');
+  readStages();renderStages();
+}
+function readStages(){
+  $('im-stages').querySelectorAll('.srow[data-stage]').forEach(row=>{
+    stageEdit[row.dataset.stage]={
+      state:row.querySelector('.s-state').value,
+      event_date:N(row.querySelector('.s-date').value),
+      note:N(row.querySelector('.s-note').value)
+    };
+  });
+}
+function renderStages(){
+  const stages=seasonStages(val('im-season'));
+  const inst=val('im-inst');
+  $('im-stages').innerHTML=stages.map(s=>{
+    const e=stageEdit[s.id]||{state:''};
+    const ap=stageApplies(s.institution,inst);
+    return `<div class="srow${ap?'':' off'}${e.state?' st-'+esc(e.state):''}" data-stage="${esc(s.id)}">
+      <span class="sl"><span class="ib inst-${esc(s.institution)}">${esc(s.institution)}</span>${esc(s.label)}</span>
+      <select class="s-state" aria-label="${esc(s.label)} status">
+        <option value=""${!e.state?' selected':''}>Pending</option>
+        <option value="done"${e.state==='done'?' selected':''}>Done</option>
+        <option value="na"${e.state==='na'?' selected':''}>N/A</option>
+        <option value="declined"${e.state==='declined'?' selected':''}>Declined</option>
+      </select>
+      <input type="date" class="s-date" aria-label="${esc(s.label)} date" value="${esc(e.event_date||'')}">
+      <input class="s-note" aria-label="${esc(s.label)} note" placeholder="Note" value="${esc(e.note||'')}">
+    </div>`;
+  }).join('')||'<div class="muted" style="padding:10px;font-size:12px">This season has no stages.</div>';
+  if(imReadOnly)$('im-stages').querySelectorAll('select,input').forEach(i=>{i.disabled=true;});
+}
+function linkDesc(l,me){
+  if(l.link_type==='part_of'){
+    return l.child_id===me?{rel:'Part of',other:l.parent_id}:{rel:'Includes',other:l.child_id};
+  }
+  return {rel:l.link_type==='slash_pair'?'Slash pair with':'Cross-listed with',other:l.parent_id===me?l.child_id:l.parent_id};
+}
+function renderLinks(){
+  const me=itemId||'__new__';
+  $('im-links').innerHTML=linkEdit.map((l,i)=>{
+    const d=linkDesc(l,me);
+    return `<div class="lrow"><span class="lrel">${esc(d.rel)}</span><span class="lnm">${esc(itemRef(ITEM_BY_ID[d.other]))}</span>
+      ${imReadOnly?'':`<button type="button" class="rrm" data-rm-link="${i}" aria-label="Remove link">✕</button>`}</div>`;
+  }).join('')||'<span class="muted" style="font-size:12px">Not linked to any other change.</span>';
+}
+function addLink(){
+  const other=val('im-link-item');if(!other)return;
+  const rel=val('im-link-rel');const me=itemId||'__new__';
+  let l;
+  if(rel==='part_of')l={parent_id:other,child_id:me,link_type:'part_of'};
+  else if(rel==='includes')l={parent_id:me,child_id:other,link_type:'part_of'};
+  else l={parent_id:me,child_id:other,link_type:rel};
+  const dup=linkEdit.some(x=>x.link_type===l.link_type&&(
+    (x.parent_id===l.parent_id&&x.child_id===l.child_id)||
+    (l.link_type!=='part_of'&&x.parent_id===l.child_id&&x.child_id===l.parent_id)));
+  if(dup)return;
+  linkEdit.push(l);
+  renderLinks();
+}
+
+let imReadOnly=false;
+function openItem(id){
+  const r=id?ITEM_BY_ID[id]:null;
+  if(id&&!r)return;
+  if(!r&&!canCreate())return;
+  itemId=r?r.id:null;
+  imReadOnly=r?!canEditItem(r):false;
+  $('im-err').style.display='none';
+  fillItemSelects(r);
+
+  $('im-heading').textContent=r?(imReadOnly?'Curricular change':'Edit curricular change'):'Add curricular change';
+  setv('im-title',r?r.title:'');
+  setv('im-seq',r?seqLabel(r.seq):'');
+  setRadio('im-action',r?r.action:'edit');
+  setRadio('im-target',r?r.target_kind:'course');
+  setv('im-course',r?r.course_id:'');
+  setv('im-new-prefix',r?r.proposed_prefix:'');
+  setv('im-new-number',r?r.proposed_number:'');
+  setv('im-prog',r&&r.target_kind==='program'?r.program_id:'');
+  setv('im-assoc',r&&r.target_kind==='course'?r.program_id:'');
+  imFacets=new Set(r?(r.change_facets||[]):[]);
+  setv('im-level',r?r.student_level:'GR');
+  setv('im-cat',r&&r.ohsu_category?String(r.ohsu_category):'');
+  setv('im-inst',r?r.institutions:'both');
+  instTouched=!!r;
+  if(r&&r.initiated_by_faculty_id){setv('im-fac',r.initiated_by_faculty_id);setv('im-fac-other','');}
+  else if(r&&r.initiated_by_name){setv('im-fac','__other__');setv('im-fac-other',r.initiated_by_name);}
+  else{setv('im-fac','');setv('im-fac-other','');}
+  $('im-fac-other').style.display=val('im-fac')==='__other__'?'':'none';
+  setv('im-date',r?r.initiated_on:todayISO());
+  fillApccSelect(val('im-season'),r?r.apcc_meeting_id:null);
+  setv('im-desc',r?r.description:'');
+  setv('im-just',r?r.justification:'');
+  setv('im-note',r?r.status_note:'');
+  setv('im-disp',r?r.disposition:'active');
+
+  stageEdit={};
+  if(r){Object.values(EVENTS[r.id]||{}).forEach(e=>{stageEdit[e.stage_id]={state:e.state,event_date:e.event_date,note:e.note};});}
+  linkEdit=r?LINKS.filter(l=>l.parent_id===r.id||l.child_id===r.id).map(l=>({parent_id:l.parent_id,child_id:l.child_id,link_type:l.link_type})):[];
+
+  // Read-only mode for viewers, other editors' items, and lockdown.
+  $('im-form').querySelectorAll('input,select,textarea,button').forEach(el=>{
+    if(el.id==='im-hist-btn'||el.id==='im-seq')return;
+    el.disabled=imReadOnly;
+  });
+  $('im-link-add-row').style.display=imReadOnly?'none':'';
+  $('im-suggest').style.display=imReadOnly?'none':'';
+
+  imSync();
+  renderStages();
+  renderLinks();
+  fillLinkItemSelect();
+
+  // History (admins + editors can read the audit trail)
+  const showHist=!!r&&(isAdmin()||isEditor());
+  $('im-hist-sect').style.display=showHist?'':'none';
+  $('im-hist-wrap').style.display=showHist?'':'none';
+  $('im-hist').innerHTML='';
+
+  // Status pill + footer
+  const pill=$('im-pill');
+  if(r){pill.style.display='';pill.className='pill '+r.approval_state;pill.textContent=APPROVAL_LBL[r.approval_state]||r.approval_state;
+    if(r.approval_state==='active'){const st=itemStatus(r);pill.className='pill '+st;pill.textContent=STATUS_LBL[st]||st;}}
+  else pill.style.display='none';
+  const hint=[];
+  if(!r&&isEditor())hint.push('New changes wait for an admin to approve them.');
+  if(r&&imReadOnly&&!LOCKED)hint.push(TIER==='viewer'?'View only.':'Only the person who entered this change (or an admin) can edit it.');
+  if(LOCKED)hint.push('Editing is locked.');
+  if(r&&r.created_by===MY_UID)hint.push('You entered this change.');
+  $('im-hint').textContent=hint.join(' ');
+
+  const own=r&&r.created_by===MY_UID;
+  $('btn-im-save').style.display=imReadOnly?'none':'';
+  $('btn-im-approve').style.display=(r&&isAdmin()&&!LOCKED&&r.approval_state==='pending_add')?'':'none';
+  $('btn-im-restore').style.display=(r&&isAdmin()&&!LOCKED&&r.approval_state==='pending_delete')?'':'none';
+  $('btn-im-harddel').style.display=(r&&isAdmin()&&!LOCKED)?'':'none';
+  $('btn-im-reqdel').style.display=(r&&isEditor()&&own&&!LOCKED&&r.approval_state!=='pending_delete')?'':'none';
+  openM('mo-item');
+}
+function readForm(){
+  const act=radioVal('im-action'),tgt=radioVal('im-target');
+  const p={
+    season_id:N(val('im-season')),action:act,target_kind:tgt,
+    course_id:null,proposed_prefix:null,proposed_number:null,program_id:null,
+    change_facets:act==='edit'?[...imFacets].filter(k=>FACET_BY_KEY[k]&&FACET_BY_KEY[k].target_kind===tgt):[],
+    student_level:val('im-level')||'GR',
+    ohsu_category:val('im-cat')?Number(val('im-cat')):null,
+    institutions:val('im-inst')||'both',
+    initiated_by_faculty_id:null,initiated_by_name:null,
+    initiated_on:N(val('im-date')),
+    apcc_meeting_id:N(val('im-apcc')),
+    description:N(val('im-desc')),justification:N(val('im-just')),status_note:N(val('im-note')),
+    disposition:val('im-disp')||'active'
+  };
+  if(tgt==='course'){
+    if(act==='add'){
+      const px=N(val('im-new-prefix'));
+      p.proposed_prefix=px?px.toUpperCase():null;
+      p.proposed_number=N(val('im-new-number'));
+    }else p.course_id=N(val('im-course'));
+    p.program_id=N(val('im-assoc'));
+  }else p.program_id=N(val('im-prog'));
+  const f=val('im-fac');
+  if(f==='__other__')p.initiated_by_name=N(val('im-fac-other'));
+  else if(f)p.initiated_by_faculty_id=f;
+  return p;
+}
+function suggestTitle(p){
+  const words=[...new Set((p.change_facets||[]).map(k=>FACET_SHORT[k]||(FACET_BY_KEY[k]?FACET_BY_KEY[k].label.toLowerCase():k)))];
+  const tail=words.length?' ('+words.join(', ')+')':'';
+  if(p.target_kind==='course'){
+    const code=p.action==='add'?[p.proposed_prefix,p.proposed_number].filter(Boolean).join(' '):courseCode(COURSES[p.course_id]);
+    if(p.action==='add')return (code||'Course')+' – New course';
+    if(p.action==='remove')return (code||'Course')+' – Remove course';
+    return (code||'Course')+' – Course change'+tail;
+  }
+  const pn=(PROGRAMS[p.program_id]&&PROGRAMS[p.program_id].name)||'Program';
+  if(p.action==='remove')return pn+' – Remove program';
+  return pn+' – Program change'+tail;
+}
+function imError(m){
+  const e=$('im-err');e.textContent=m||'';e.style.display=m?'block':'none';
+  if(m)e.scrollIntoView({block:'nearest'});
+}
+async function saveItem(){
+  if(imReadOnly)return;
+  imError('');
+  readStages();
+  const p=readForm();
+  if(!p.season_id)return imError('Choose a season.');
+  if(!p.action||!p.target_kind)return imError('Choose an action and whether it applies to a course or a program.');
+  if(p.target_kind==='course'&&p.action==='add'&&(!p.proposed_prefix||!p.proposed_number))return imError("Enter the new course's prefix and number.");
+  if(p.target_kind==='course'&&p.action!=='add'&&!p.course_id)return imError('Choose the course this change applies to.');
+  if(p.target_kind==='program'&&!p.program_id)return imError('Choose the program this change applies to.');
+  if(val('im-fac')==='__other__'&&!p.initiated_by_name)return imError('Type the name of the person who initiated this change.');
+  p.title=N(val('im-title'))||suggestTitle(p);
+  setv('im-title',p.title);
+
+  const btn=$('btn-im-save');btn.disabled=true;setSS('Saving…');
+  try{
+    let id=itemId;
+    if(id){
+      const {error}=await sb.from('cc_items').update(p).eq('id',id);
+      if(error)return imError(error.message);
+    }else{
+      const {data,error}=await sb.from('cc_items').insert(p).select('id,approval_state').single();
+      if(error)return imError(error.message);
+      id=data.id;
+    }
+    const problems=[];
+
+    // Stage events: upsert changed, delete cleared.
+    const have=EVENTS[id]||{};
+    const ups=[],dels=[];
+    new Set([...Object.keys(have),...Object.keys(stageEdit)]).forEach(sid=>{
+      const want=stageEdit[sid]||{state:''};
+      const h=have[sid];
+      if(!want.state){if(h)dels.push(sid);return;}
+      if(!h||h.state!==want.state||(h.event_date||null)!==(want.event_date||null)||(h.note||null)!==(want.note||null))
+        ups.push({item_id:id,stage_id:sid,state:want.state,event_date:want.event_date||null,note:want.note||null});
+    });
+    if(ups.length){const {error}=await sb.from('cc_stage_events').upsert(ups,{onConflict:'item_id,stage_id'});if(error)problems.push('stages: '+error.message);}
+    if(dels.length){const {error}=await sb.from('cc_stage_events').delete().eq('item_id',id).in('stage_id',dels);if(error)problems.push('stages: '+error.message);}
+
+    // Links: diff against what's stored.
+    const fix=x=>x==='__new__'?id:x;
+    const want=linkEdit.map(l=>({parent_id:fix(l.parent_id),child_id:fix(l.child_id),link_type:l.link_type}));
+    const stored=itemId?LINKS.filter(l=>l.parent_id===itemId||l.child_id===itemId):[];
+    const key=l=>l.parent_id+'|'+l.child_id+'|'+l.link_type;
+    const wantK=new Set(want.map(key)),haveK=new Set(stored.map(key));
+    const addL=want.filter(l=>!haveK.has(key(l)));
+    const rmL=stored.filter(l=>!wantK.has(key(l)));
+    if(addL.length){const {error}=await sb.from('cc_item_links').insert(addL);if(error)problems.push('links: '+error.message);}
+    for(const l of rmL){
+      const {error}=await sb.from('cc_item_links').delete().match({parent_id:l.parent_id,child_id:l.child_id,link_type:l.link_type});
+      if(error){problems.push('links: '+error.message);break;}
+    }
+
+    closeM('mo-item');
+    await reload();
+    if(problems.length)setSS('⚠ Change saved, but '+problems.join('; '));
+    else setSS(!itemId&&isEditor()?'● Added — waiting for admin approval':(itemId?'● Saved':'● Added'));
+  }finally{btn.disabled=false;}
+}
+async function setApproval(id,state,msg){
+  const ok=await sbSave(sb.from('cc_items').update({approval_state:state}).eq('id',id),msg);
+  if(ok){closeM('mo-item');await reload();}
+}
+function hardDelete(id,{reject=false}={}){
+  const r=ITEM_BY_ID[id];if(!r)return;
+  showCfm(reject?'Reject this addition?':'Delete permanently?',
+    `${itemRef(r)} will be deleted along with its stage dates and links. This can't be undone.`,
+    async()=>{
+      const ok=await sbSave(sb.from('cc_items').delete().eq('id',id),reject?'● Rejected':'● Deleted');
+      if(ok){closeM('mo-item');await reload();}
+    });
+}
+function requestDelete(id){
+  const r=ITEM_BY_ID[id];if(!r)return;
+  showCfm('Request deletion?',`An admin will review the request to delete ${itemRef(r)}. It stays in the tracker until then.`,
+    ()=>setApproval(id,'pending_delete','● Deletion requested'));
+}
+
+/* ── HISTORY ── */
+async function loadHistory(){
+  if(!itemId)return;
+  const box=$('im-hist');box.textContent='Loading…';
+  const {data,error}=await sb.from('cc_audit').select('*').eq('item_id',itemId).order('at',{ascending:false}).limit(150);
+  if(error){box.textContent='⚠ '+error.message;return;}
+  if(!data||!data.length){box.innerHTML='<span class="muted">No history recorded.</span>';return;}
+  box.innerHTML=data.map(h=>{
+    const who=h.actor==null?'Database':(h.actor===MY_UID?'You':'Another user');
+    return `<div class="h"><span class="t">${esc(new Date(h.at).toLocaleString('en-US',{month:'short',day:'numeric',year:'numeric',hour:'numeric',minute:'2-digit'}))}</span><span>${esc(who)}</span><span>${esc(histText(h))}</span></div>`;
+  }).join('');
+}
+function histText(h){
+  const o=h.old_row||{},n=h.new_row||{};
+  if(h.table_name==='cc_items'){
+    if(h.action==='INSERT')return 'Entered the change';
+    if(h.action==='DELETE')return 'Deleted the change';
+    if(o.approval_state!==n.approval_state)return 'Approval: '+(APPROVAL_LBL[o.approval_state]||o.approval_state)+' → '+(APPROVAL_LBL[n.approval_state]||n.approval_state);
+    const skip=new Set(['updated_at','updated_by','created_at']);
+    const keys=Object.keys(n).filter(k=>!skip.has(k)&&JSON.stringify(o[k])!==JSON.stringify(n[k]));
+    return keys.length?'Changed '+[...new Set(keys.map(k=>FIELD_LBL[k]||k))].join(', '):'Saved (no field changes)';
+  }
+  if(h.table_name==='cc_stage_events'){
+    const row=h.action==='DELETE'?o:n;
+    const s=STAGES[row.stage_id];const nm=s?s.label:'Stage';
+    if(h.action==='DELETE')return nm+': cleared';
+    const st={done:'done',na:'n/a',declined:'declined'}[n.state]||n.state;
+    return nm+': '+st+(n.event_date?' '+fmtLong(n.event_date):'')+(n.note?' — '+n.note:'');
+  }
+  if(h.table_name==='cc_item_links'){
+    const row=h.action==='DELETE'?o:n;
+    const d=linkDesc(row,itemId);
+    return (h.action==='DELETE'?'Unlinked: ':'Linked: ')+d.rel.toLowerCase()+' '+itemRef(ITEM_BY_ID[d.other]);
+  }
+  return h.table_name+' '+h.action.toLowerCase();
+}
+
+/* ── STATUS REPORT (CCSR), organized by current stage ── */
+function trackCell(r,inst){
+  const involved=inst==='P'?r.institutions!=='OHSU':r.institutions!=='PSU';
+  if(!involved)return '<span class="muted">Not required</span>';
+  const p=PROG[r.id]||{};
+  const sid=inst==='P'?p.next_psu_stage_id:p.next_ohsu_stage_id;
+  if(!sid)return '✓ Done';
+  return esc(STAGES[sid]?STAGES[sid].label:'—');
+}
+function reportRow(r){
+  const p=PROG[r.id]||{};
+  const parents=parentsOf(r.id);
+  const extras=[];
+  if(parents.length)extras.push('Part of '+parents.map(x=>'#'+seqLabel(x.seq)).join(', '));
+  const kids=childrenOf(r.id);
+  if(kids.length)extras.push('Includes '+kids.map(x=>'#'+seqLabel(x.seq)).join(', '));
+  if(r.approval_state==='pending_add')extras.push('Awaiting admin approval');
+  const note=[r.status_note,extras.join('; ')].filter(Boolean).join(' · ');
+  return `<tr>
+    <td class="seq">${seqLabel(r.seq)}</td>
+    <td><div class="nm">${esc(r.title)}</div>${r.description?`<div style="font-size:12px;color:var(--dgray);margin-top:2px">${esc(r.description)}</div>`:''}</td>
+    <td>${esc(programLabel(r.program_id))}</td>
+    <td>${esc(r.student_level)}${r.ohsu_category?' · Cat '+esc(r.ohsu_category):''}</td>
+    <td class="trk">${trackCell(r,'P')}</td>
+    <td class="trk">${trackCell(r,'O')}</td>
+    <td style="white-space:nowrap">${p.last_event_date?esc(fmtLong(p.last_event_date)):'—'}</td>
+    <td class="note">${esc(note)}</td>
+  </tr>`;
+}
+function reportTable(rows){
+  return `<table class="rpt-t"><colgroup><col style="width:44px"><col style="width:27%"><col style="width:13%"><col style="width:9%"><col style="width:12%"><col style="width:12%"><col style="width:10%"><col></colgroup><thead><tr><th>#</th><th>Change</th><th>Program</th><th>Level</th><th>PSU next</th><th>OHSU next</th><th>Last activity</th><th>Notes</th></tr></thead>
+    <tbody>${rows.sort((a,b)=>(a.seq??0)-(b.seq??0)).map(reportRow).join('')}</tbody></table>`;
+}
+function renderReport(){
+  const sid=SEASON_ID;
+  const box=$('r-body');
+  const season=SEASONS.find(s=>s.id===sid);
+  if(!season){box.innerHTML='<div class="rpt-empty">No season selected.</div>';return;}
+  const lvl=val('r-level'),incDone=$('r-done').checked,incClosed=$('r-closed').checked;
+  const items=ITEMS.filter(r=>r.season_id===sid&&r.approval_state!=='pending_delete')
+    .filter(r=>!lvl||r.student_level===lvl||r.student_level==='both');
+  const stages=seasonStages(sid);
+  const byStage={},complete=[],declined=[],closed=[];
+  items.forEach(r=>{
+    const s=itemStatus(r);
+    if(s==='on_hold'||s==='withdrawn'){closed.push(r);return;}
+    if(s==='declined'){declined.push(r);return;}
+    if(s==='complete'){complete.push(r);return;}
+    const k=(PROG[r.id]||{}).next_stage_id||'__none__';
+    (byStage[k]=byStage[k]||[]).push(r);
+  });
+  const openCount=Object.values(byStage).reduce((n,a)=>n+a.length,0);
+  const lvlTxt=lvl==='GR'?'Graduate changes':lvl==='UG'?'Undergraduate changes':'Graduate and undergraduate changes';
+  const today=todayISO();
+  const upcoming=CAL.filter(c=>c.season_id===sid&&c.event_date>=today&&(!lvl||!c.level||c.level===lvl||c.level==='both'));
+
+  let h=`<div class="rpt-head">
+    <div><h2>Curricular Change Status Report</h2><div class="rpt-season">${esc(season.label)} · ${esc(lvlTxt)}</div></div>
+    <div class="rpt-asof">As of ${esc(fmtLong(today))}<br>OHSU-PSU School of Public Health</div>
+  </div>
+  <div class="rpt-sum">
+    <div class="rpt-stat"><b>${openCount}</b><span>In process</span></div>
+    <div class="rpt-stat"><b>${complete.length}</b><span>Complete</span></div>
+    <div class="rpt-stat"><b>${declined.length}</b><span>Declined</span></div>
+    <div class="rpt-stat"><b>${closed.length}</b><span>On hold or withdrawn</span></div>
+  </div>`;
+  if(upcoming.length){
+    h+=`<div class="rpt-dates"><h3>Coming up</h3><ul>${upcoming.map(c=>
+      `<li><b>${esc(fmtLong(c.event_date))}</b>${esc(c.label)}${c.level&&!lvl?' ('+esc(c.level)+')':''}</li>`).join('')}</ul></div>`;
+  }
+  if(!items.length){
+    h+='<div class="rpt-empty">No curricular changes recorded for this season yet.</div>';
+    box.innerHTML=h;return;
+  }
+  stages.forEach(s=>{
+    const rows=byStage[s.id];if(!rows||!rows.length)return;
+    h+=`<div class="rpt-sec"><h3>Waiting on: ${esc(s.label)} <span class="ib inst-${esc(s.institution)}">${esc(INST_NAME[s.institution]||s.institution)}</span><span class="n">${rows.length} change${rows.length===1?'':'s'}</span></h3>${reportTable(rows)}</div>`;
+  });
+  if(byStage.__none__&&byStage.__none__.length){
+    h+=`<div class="rpt-sec"><h3>No stage information <span class="n">${byStage.__none__.length}</span></h3>${reportTable(byStage.__none__)}</div>`;
+  }
+  if(declined.length)h+=`<div class="rpt-sec"><h3>Declined <span class="n">${declined.length}</span></h3>${reportTable(declined)}</div>`;
+  if(incDone&&complete.length)h+=`<div class="rpt-sec"><h3>Complete <span class="n">${complete.length}</span></h3>${reportTable(complete)}</div>`;
+  if(incClosed&&closed.length)h+=`<div class="rpt-sec"><h3>On hold or withdrawn <span class="n">${closed.length}</span></h3>${reportTable(closed)}</div>`;
+  box.innerHTML=h;
+}
+
+/* ── APPROVALS (admin) ── */
+function renderApprovals(){
+  const rows=ITEMS.filter(r=>r.approval_state!=='active').sort((a,b)=>String(a.updated_at).localeCompare(String(b.updated_at)));
+  $('a-body').innerHTML=rows.map(r=>{
+    const add=r.approval_state==='pending_add';
+    return `<tr>
+      <td>${esc(seasonLabel(r.season_id))}</td>
+      <td class="seq">${seqLabel(r.seq)}</td>
+      <td><a href="#" class="nm" data-a="open" data-id="${esc(r.id)}" style="text-decoration:none">${esc(r.title)}</a></td>
+      <td><span class="pill ${esc(r.approval_state)}">${add?'Add':'Delete'}</span></td>
+      <td>${r.created_at?esc(new Date(r.created_at).toLocaleDateString()):'—'}</td>
+      <td><div class="acts">${add
+        ?`<button class="btn btn-s btn-p" data-a="approve" data-id="${esc(r.id)}">Approve</button><button class="btn btn-s" data-a="reject" data-id="${esc(r.id)}">Reject</button>`
+        :`<button class="btn btn-s btn-d" data-a="delete" data-id="${esc(r.id)}">Delete</button><button class="btn btn-s" data-a="restore" data-id="${esc(r.id)}">Keep</button>`}</div></td>
+    </tr>`;
+  }).join('')||'<tr><td class="empty-row" colspan="6">Nothing waiting. Editors’ additions and deletion requests will appear here.</td></tr>';
+}
+function setBadge(n){const b=$('appr-badge');b.textContent=n;b.classList.toggle('on',n>0);}
+function updateApprovalBadge(){if(isAdmin())setBadge(ITEMS.filter(r=>r.approval_state!=='active').length);}
+async function poll(){
+  if(!canRead())return;
+  const wasLocked=LOCKED;
+  await loadLock();
+  if(wasLocked!==LOCKED){renderTracker();}
+  if(isAdmin()){
+    const {count,error}=await sb.from('cc_items').select('id',{count:'exact',head:true}).neq('approval_state','active');
+    if(!error&&count!=null)setBadge(count);
+  }
+}
+
+/* ── SEASON SETUP (admin) ── */
+function renderSetup(){
+  $('ss-body').innerHTML=SEASONS.map(s=>{
+    const nSt=(SEASON_STAGES[s.id]||[]).length,nIt=ITEMS.filter(r=>r.season_id===s.id).length,nCal=CAL.filter(c=>c.season_id===s.id).length;
+    return `<tr><td class="nm">${esc(s.label)}${s.is_current?' <span class="pill active">Current</span>':''}</td>
+      <td>${nSt}</td><td>${nIt}</td><td>${nCal}</td>
+      <td>${s.is_current?'':`<button class="btn btn-s" data-make-current="${esc(s.id)}">Make current</button>`}</td></tr>`;
+  }).join('')||'<tr><td class="empty-row" colspan="5">No seasons yet.</td></tr>';
+
+  const sid=SETUP_SEASON_ID;
+  const cal=CAL.filter(c=>c.season_id===sid);
+  $('sc-body').innerHTML=cal.map(c=>`<tr>
+    <td style="white-space:nowrap">${esc(fmtLong(c.event_date))}</td>
+    <td>${c.kind==='apcc_meeting'?'APCC meeting':'Deadline'}</td>
+    <td>${esc(c.label)}</td>
+    <td>${esc(c.level||'Any')}</td>
+    <td>${c.institution?`<span class="ib inst-${esc(c.institution)}">${esc(INST_NAME[c.institution]||c.institution)}</span>`:'Any'}</td>
+    <td><button class="rrm" data-del-cal="${esc(c.id)}" aria-label="Delete date">✕</button></td>
+  </tr>`).join('')||'<tr><td class="empty-row" colspan="6">No dates for this season yet. Add APCC meetings and submission deadlines below.</td></tr>';
+
+  $('sst-body').innerHTML=seasonStages(sid).map((s,i)=>`<tr>
+    <td class="seq">${i+1}</td><td class="nm">${esc(s.label)}</td>
+    <td><span class="ib inst-${esc(s.institution)}">${esc(INST_NAME[s.institution]||s.institution)}</span></td>
+    <td style="font-size:12.5px;color:var(--dgray)">${esc(s.description||'')}</td></tr>`).join('')
+    ||'<tr><td class="empty-row" colspan="4">No stages attached to this season.</td></tr>';
+}
+async function addSeason(){
+  const label=N(val('ss-new-label'));
+  if(!label){setSS('⚠ Type a season label first');return;}
+  if(SEASONS.some(s=>s.label.toLowerCase()===label.toLowerCase())){setSS('⚠ That season already exists');return;}
+  const cur=SEASONS.find(s=>s.is_current);
+  const src=cur&&(SEASON_STAGES[cur.id]||[]).length
+    ?SEASON_STAGES[cur.id].map(r=>({stage_id:r.stage_id,sort:r.sort}))
+    :Object.values(STAGES).filter(s=>s.active!==false).map(s=>({stage_id:s.id,sort:s.sort}));
+  const {data,error}=await sb.from('cc_seasons').insert({label}).select('id').single();
+  if(error){setSS('⚠ '+error.message);return;}
+  if(src.length){
+    const {error:e2}=await sb.from('cc_season_stages').insert(src.map(r=>({season_id:data.id,stage_id:r.stage_id,sort:r.sort})));
+    if(e2){setSS('⚠ Season added, but stages failed: '+e2.message);await reload();return;}
+  }
+  setv('ss-new-label','');
+  setSS('● Season added');
+  await reload();
+}
+async function makeCurrent(id){
+  const s=SEASONS.find(x=>x.id===id);if(!s)return;
+  showCfm('Make '+s.label+' the current season?','The tracker and status report open on the current season by default.',async()=>{
+    const {error:e1}=await sb.from('cc_seasons').update({is_current:false}).eq('is_current',true);
+    if(e1){setSS('⚠ '+e1.message);return;}
+    const ok=await sbSave(sb.from('cc_seasons').update({is_current:true}).eq('id',id),'● '+s.label+' is now current');
+    SEASON_ID=id;
+    await reload();
+    if(!ok)setSS('⚠ No season is marked current — try again');
+  });
+}
+async function addCal(){
+  const row={season_id:SETUP_SEASON_ID,kind:val('sc-kind'),label:N(val('sc-label')),event_date:N(val('sc-date')),
+    level:N(val('sc-level')),institution:N(val('sc-inst'))};
+  if(!row.season_id){setSS('⚠ Choose a season');return;}
+  if(!row.event_date||!row.label){setSS('⚠ A date needs both a date and a label');return;}
+  const ok=await sbSave(sb.from('cc_calendar').insert(row),'● Date added');
+  if(ok){setv('sc-label','');setv('sc-date','');await reload();}
+}
+function delCal(id){
+  const c=CAL.find(x=>x.id===id);if(!c)return;
+  const used=ITEMS.filter(r=>r.apcc_meeting_id===id).length;
+  showCfm('Delete this date?',`${fmtLong(c.event_date)} — ${c.label}.`+(used?` ${used} change${used===1?' is':'s are'} assigned to this meeting and will become unscheduled.`:''),
+    async()=>{const ok=await sbSave(sb.from('cc_calendar').delete().eq('id',id),'● Date deleted');if(ok)await reload();});
+}
+
+/* ── MODAL PLUMBING ── */
+function openM(id){$(id).classList.add('open');}
+function closeM(id){$(id).classList.remove('open');if(id==='mo-cfm')cfmCb=null;if(id==='mo-stage')cellCtx=null;}
+function showCfm(title,msg,onOk){
+  $('cfm-title').textContent=title;$('cfm-msg').textContent=msg;
+  cfmCb=onOk||null;openM('mo-cfm');
+}
+
+/* ── TABS ── */
+function switchTab(viewId){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===viewId));
+  document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===viewId));
+}
+function setSeason(id){
+  SEASON_ID=id||null;
+  setv('t-season',SEASON_ID);setv('r-season',SEASON_ID);
+  renderTracker();renderReport();
+}
+
+/* ── WIRING ── */
+function wire(){
+  document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.view)));
+
+  // Tracker
+  $('t-season').addEventListener('change',()=>setSeason(val('t-season')));
+  ['t-q'].forEach(id=>$(id).addEventListener('input',renderTracker));
+  ['t-level','t-status','t-prog'].forEach(id=>$(id).addEventListener('change',renderTracker));
+  $('btn-t-clear').onclick=()=>{setv('t-q','');setv('t-level','');setv('t-status','all');setv('t-prog','');renderTracker();};
+  $('btn-add').onclick=()=>openItem(null);
+  $('t-body').addEventListener('click',e=>{
+    const cell=e.target.closest('[data-cell]');
+    if(cell){const [iid,sid]=cell.dataset.cell.split('|');openCell(iid,sid);return;}
+    const tr=e.target.closest('tr[data-id]');
+    if(tr)openItem(tr.dataset.id);
+  });
+
+  // Report
+  $('r-season').addEventListener('change',()=>setSeason(val('r-season')));
+  ['r-level','r-done','r-closed'].forEach(id=>$(id).addEventListener('change',renderReport));
+  $('btn-print').onclick=()=>window.print();
+
+  // Item modal
+  document.querySelectorAll('input[name="im-action"],input[name="im-target"]').forEach(r=>r.addEventListener('change',imSync));
+  $('im-facets').addEventListener('change',e=>{
+    const cb=e.target.closest('input[type=checkbox]');if(!cb)return;
+    if(cb.checked)imFacets.add(cb.value);else imFacets.delete(cb.value);
+  });
+  $('im-level').addEventListener('change',autoInst);
+  $('im-inst').addEventListener('change',()=>{instTouched=true;readStages();renderStages();});
+  $('im-season').addEventListener('change',()=>{
+    readStages();renderStages();
+    fillApccSelect(val('im-season'),val('im-apcc'));
+    fillLinkItemSelect();
+  });
+  $('im-fac').addEventListener('change',()=>{$('im-fac-other').style.display=val('im-fac')==='__other__'?'':'none';});
+  $('im-stages').addEventListener('change',e=>{
+    const sel=e.target.closest('.s-state');if(!sel)return;
+    const row=sel.closest('.srow');
+    const d=row.querySelector('.s-date');
+    if((sel.value==='done'||sel.value==='declined')&&!d.value)d.value=todayISO();
+    row.classList.remove('st-done','st-declined','st-na');
+    if(sel.value)row.classList.add('st-'+sel.value);
+  });
+  $('im-suggest').onclick=()=>setv('im-title',suggestTitle(readForm()));
+  $('im-link-add').onclick=addLink;
+  $('im-links').addEventListener('click',e=>{
+    const b=e.target.closest('[data-rm-link]');if(!b)return;
+    linkEdit.splice(Number(b.dataset.rmLink),1);renderLinks();
+  });
+  $('im-hist-btn').onclick=loadHistory;
+  $('btn-im-save').onclick=saveItem;
+  $('btn-im-approve').onclick=()=>itemId&&setApproval(itemId,'active','● Approved');
+  $('btn-im-restore').onclick=()=>itemId&&setApproval(itemId,'active','● Kept');
+  $('btn-im-harddel').onclick=()=>itemId&&hardDelete(itemId,{reject:ITEM_BY_ID[itemId]?.approval_state==='pending_add'});
+  $('btn-im-reqdel').onclick=()=>itemId&&requestDelete(itemId);
+
+  // Stage cell modal
+  document.querySelectorAll('input[name="sg-state"]').forEach(r=>r.addEventListener('change',()=>{
+    const v=radioVal('sg-state');
+    if((v==='done'||v==='declined')&&!val('sg-date'))setv('sg-date',todayISO());
+  }));
+  $('btn-sg-save').onclick=saveCell;
+
+  // Approvals
+  $('a-body').addEventListener('click',e=>{
+    const b=e.target.closest('[data-a]');if(!b)return;
+    e.preventDefault();
+    const id=b.dataset.id,a=b.dataset.a;
+    if(a==='open')openItem(id);
+    else if(a==='approve')setApproval(id,'active','● Approved');
+    else if(a==='restore')setApproval(id,'active','● Kept');
+    else if(a==='reject')hardDelete(id,{reject:true});
+    else if(a==='delete')hardDelete(id);
+  });
+
+  // Season setup
+  $('btn-ss-add').onclick=addSeason;
+  $('ss-body').addEventListener('click',e=>{const b=e.target.closest('[data-make-current]');if(b)makeCurrent(b.dataset.makeCurrent);});
+  $('sc-season').addEventListener('change',()=>{SETUP_SEASON_ID=val('sc-season')||null;renderSetup();});
+  $('btn-sc-add').onclick=addCal;
+  $('sc-body').addEventListener('click',e=>{const b=e.target.closest('[data-del-cal]');if(b)delCal(b.dataset.delCal);});
+
+  // Modals
+  $('cfm-ok').onclick=()=>{const cb=cfmCb;closeM('mo-cfm');if(cb)cb();};
+  document.querySelectorAll('[data-close]').forEach(b=>{b.onclick=()=>closeM(b.dataset.close);});
+  document.querySelectorAll('.mo').forEach(o=>{
+    o.addEventListener('click',e=>{if(e.target===o&&o.id!=='mo-item')closeM(o.id);});
+  });
+  document.addEventListener('keydown',e=>{
+    if(e.key!=='Escape')return;
+    // Close only the topmost modal (confirm sits above the item modal).
+    const open=[...document.querySelectorAll('.mo.open')];
+    if(open.length)closeM(open[open.length-1].id);
+  });
+}
+
+/* ── BOOT ── */
+(async function boot(){
+  wire();
+  onAuthChange=()=>{};
+  initSupabase();
+  try{
+    await loadData();
+  }catch(e){
+    $('ls').style.display='none';
+    $('app').style.display='flex';
+    setSS('⚠ Load failed: '+(e.message||e));
+    updateAuthBar();
+    return;
+  }
+  updateAuthBar();
+  $('ls').style.display='none';
+  $('app').style.display='flex';
+  if(!canRead()){showGate();setSS(TIER==='public'?'Signed out':'No curriculum access');return;}
+  renderAll();
+  // Deep link: curriculum.html?item=<uuid> opens that change.
+  const deep=new URL(window.location).searchParams.get('item');
+  if(deep&&ITEM_BY_ID[deep]){SEASON_ID=ITEM_BY_ID[deep].season_id;setSeason(SEASON_ID);openItem(deep);}
+  setSS(isAdmin()?'Ready · admin':isEditor()?'Ready · editor':'Ready · view only');
+  pollTimer=setInterval(poll,45000);
+})();
+
+/* ── THEME TOGGLE ── */
+(function(){
+  const KEY='sph-theme', root=document.documentElement, btn=$('btn-theme');
+  const stored=()=>{try{return localStorage.getItem(KEY);}catch(e){return null;}};
+  function sync(){
+    if(!btn)return;
+    const dark=root.getAttribute('data-theme')==='dark';
+    btn.textContent=dark?'☀':'🌙';
+    const t=dark?'Switch to light mode':'Switch to dark mode';
+    btn.title=t; btn.setAttribute('aria-label',t);
+  }
+  if(btn)btn.addEventListener('click',()=>{
+    const next=root.getAttribute('data-theme')==='dark'?'light':'dark';
+    root.setAttribute('data-theme',next);
+    try{localStorage.setItem(KEY,next);}catch(e){}
+    sync();
+  });
+  if(window.matchMedia){
+    const mq=window.matchMedia('(prefers-color-scheme:dark)');
+    const onSys=e=>{const s=stored();if(s!=='dark'&&s!=='light'){root.setAttribute('data-theme',e.matches?'dark':'light');sync();}};
+    mq.addEventListener?mq.addEventListener('change',onSys):mq.addListener(onSys);
+  }
+  sync();
+})();
+</script>
+</body>
+</html>

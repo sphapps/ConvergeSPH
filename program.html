@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>ConvergeSPH — Programs &amp; Curricular Changes</title>
+<title>ConvergeSPH — Programs</title>
 <script>
 (function(){var t=null;try{t=localStorage.getItem('sph-theme');}catch(e){}
  if(t!=='dark'&&t!=='light'){t=(window.matchMedia&&window.matchMedia('(prefers-color-scheme:dark)').matches)?'dark':'light';}
@@ -73,6 +73,8 @@ body.is-admin .signed-only,body.is-apcc .signed-only,body.is-viewer .signed-only
   color:var(--dgray);cursor:pointer;border-bottom:2px solid transparent}
 .tab-btn:hover{color:var(--navytx)}
 .tab-btn.active{color:var(--navytx);border-bottom-color:var(--teal)}
+.tab-link{font-size:13px;font-weight:600;padding:10px 16px;color:var(--dgray);text-decoration:none;border-bottom:2px solid transparent}
+.tab-link:hover{color:var(--navytx);border-bottom-color:var(--mgray)}
 
 main{flex:1;overflow:auto;display:flex;flex-direction:column}
 .view{display:none;flex:1;flex-direction:column}
@@ -220,7 +222,7 @@ tbody tr.clickable{cursor:pointer}
 <div id="app" style="display:none">
   <div id="lockdown-banner"></div>
   <header>
-    <div><h1>ConvergeSPH</h1><div class="sub">Programs &amp; Curricular Changes · OHSU-PSU School of Public Health</div></div>
+    <div><h1>ConvergeSPH</h1><div class="sub">Programs · OHSU-PSU School of Public Health</div></div>
     <div class="hsp"></div>
     <a class="xlink" href="index.html">🏠 Home</a>
     <a class="xlink" href="scheduling.html">📅 Scheduling</a>
@@ -233,7 +235,7 @@ tbody tr.clickable{cursor:pointer}
 
   <div class="tabs">
     <button class="tab-btn active" id="tab-prog" data-view="v-prog">Programs</button>
-    <button class="tab-btn" id="tab-cc" disabled>Curricular Changes <span class="tab-soon">Coming soon</span></button>
+    <a class="tab-link" href="curriculum.html" title="Curricular changes live in the Curriculum app">Curricular Changes ↗</a>
   </div>
 
   <main>
@@ -252,28 +254,6 @@ tbody tr.clickable{cursor:pointer}
             <th>Core CR</th><th>Program CR</th><th>Elective CR</th><th>Culm. CR</th><th></th>
           </tr></thead>
           <tbody id="p-tb"></tbody>
-        </table>
-      </div>
-    </section>
-
-    <!-- ── CURRICULAR CHANGES ───────────────────────────────── -->
-    <section class="view" id="v-cc">
-      <div class="tb">
-        <select id="cc-status-filter">
-          <option value="">All statuses</option>
-          <option value="proposed">Proposed</option>
-          <option value="approved">Approved</option>
-          <option value="pending_delete">Pending delete</option>
-        </select>
-        <button class="btn btn-p btn-s" id="btn-cc-add">+ Add Curricular Change</button>
-        <span class="cnt" id="cc-cnt"></span>
-      </div>
-      <div class="tw">
-        <table>
-          <thead><tr>
-            <th>Target</th><th>Type</th><th>Status</th><th>Effective Term</th><th>Created</th>
-          </tr></thead>
-          <tbody id="cc-tb"></tbody>
         </table>
       </div>
     </section>
@@ -326,47 +306,6 @@ tbody tr.clickable{cursor:pointer}
       <button class="btn btn-d lft admin-only" id="btn-del-prog">Delete</button>
       <button class="btn" data-close="mo-prog">Close</button>
       <button class="btn btn-p admin-only" id="btn-save-prog">Save</button>
-    </div>
-  </div>
-</div>
-
-<!-- ── CURRICULAR CHANGE MODAL ─────────────────────────────────── -->
-<div class="mo" id="mo-cc">
-  <div class="mc">
-    <div class="mh"><h3 id="ccm-title">Curricular Change</h3><button class="x" data-close="mo-cc">×</button></div>
-    <div class="mb f">
-      <div class="fg">
-        <div class="sect">Target</div>
-        <div class="target-radio">
-          <label><input type="radio" name="cc-target" id="cc-target-prog" value="program" checked> Program</label>
-          <label><input type="radio" name="cc-target" id="cc-target-crs" value="course"> Course</label>
-        </div>
-        <div class="full" id="ccm-prog-wrap"><label>Program</label><select id="ccm-prog"></select></div>
-        <div class="full" id="ccm-crs-wrap" style="display:none"><label>Course</label><select id="ccm-crs"></select></div>
-
-        <div class="sect">Change</div>
-        <div><label>Change Type</label>
-          <select id="ccm-type">
-            <option>New Course</option><option>Prereq Update</option><option>Credit Change</option>
-            <option>Program Revision</option><option>Course Removal</option><option>Other</option>
-          </select>
-        </div>
-        <div><label>Effective Term</label><input id="ccm-term" placeholder="e.g. Fall27"></div>
-        <div class="full"><label>Description</label><textarea id="ccm-desc"></textarea></div>
-
-        <div class="status-row">
-          <span class="lbl">Status:</span><span id="ccm-status-pill" class="pill">—</span>
-          <span class="hint" id="ccm-status-hint" style="margin:0"></span>
-        </div>
-      </div>
-    </div>
-    <div class="mf">
-      <button class="btn btn-d lft" id="btn-cc-request-delete">Request Deletion</button>
-      <button class="btn btn-d lft admin-only" id="btn-cc-harddelete">Delete Permanently</button>
-      <button class="btn admin-only" id="btn-cc-restore">Restore</button>
-      <button class="btn btn-p admin-only" id="btn-cc-approve">Approve</button>
-      <button class="btn" data-close="mo-cc">Cancel</button>
-      <button class="btn btn-p" id="btn-save-cc">Save</button>
     </div>
   </div>
 </div>
@@ -429,14 +368,12 @@ let PROG_COMP={};                  // program_id -> [row,...]
 let PROG_COURSES={};               // program_id -> [row,...]
 let PROG_COURSE_GROUPS={};         // program_id -> [group-node row,...] (AND/OR tree, see program_course_groups)
 let COURSES={};                    // id -> {id,full_name,prefix}
-let CCS=[];                        // curricular_changes rows (admin/apcc only)
 let LOCKED=false,LOCK_MSG='';
 let pmId=null;                     // program being edited ('' = new)
 let pcEdit=[];                     // in-memory leaf rows while pm modal open: {course_id,custom_text,relationship_type,group_id,sort_order}
 let pcGroups=[];                   // in-memory AND/OR group nodes while pm modal open: {id,relationship_type,logic,parent_group_id,sort_order}
 let pcDrag=null;                   // {type:'item',idx,cat} | {type:'group',id,cat} — node currently being dragged in the pc editor
 let compEdit=[];                   // in-memory competency rows while pm modal open
-let ccId=null;                     // curricular change being edited (null = new)
 let progViewId=null;               // program currently shown on the detail page (null = not on it)
 let progReturnView='v-prog';       // tab to restore when the detail page is dismissed
 let cfmCb=null;
@@ -444,7 +381,6 @@ let cfmCb=null;
 const isAdmin=()=>TIER==='admin';
 const isApcc=()=>TIER==='apcc';
 const canProgWrite=()=>isAdmin();
-const canCCWrite=()=>isAdmin()||isApcc();
 
 async function sbSave(q,okMsg){
   const {error}=await q;
@@ -488,18 +424,15 @@ async function loadData(){
   await resolveTier();
 
   setLM('Loading programs…');
-  const noRows=Promise.resolve({data:[],error:null});
-  const [progR,compR,pcR,pcgR,crsR,ccR]=await Promise.all([
+  const [progR,compR,pcR,pcgR,crsR]=await Promise.all([
     paginate(()=>sb.from('programs').select('*')),
     paginate(()=>sb.from('program_competencies').select('*')),
     paginate(()=>sb.from('program_courses').select('*')),
     paginate(()=>sb.from('program_course_groups').select('*')),
-    paginate(()=>sb.from('courses').select('id,course_code,full_name,prefix,number,title,credits,parent_id')),
-    // Curricular Changes tab is disabled pending a rework — no point pulling
-    // this data until the tab is reachable again.
-    noRows
+    paginate(()=>sb.from('courses').select('id,course_code,full_name,prefix,number,title,credits,parent_id'))
+    // Curricular changes moved to curriculum.html (cc_* tables).
   ]);
-  for(const r of [progR,compR,pcR,pcgR,crsR,ccR]){
+  for(const r of [progR,compR,pcR,pcgR,crsR]){
     if(r.error){setLM('');throw r.error;}
   }
 
@@ -509,7 +442,6 @@ async function loadData(){
   PROG_COURSES={}; (pcR.data||[]).forEach(r=>{(PROG_COURSES[r.program_id]=PROG_COURSES[r.program_id]||[]).push(r);});
   PROG_COURSE_GROUPS={}; (pcgR.data||[]).forEach(r=>{(PROG_COURSE_GROUPS[r.program_id]=PROG_COURSE_GROUPS[r.program_id]||[]).push(r);});
   COURSES={}; (crsR.data||[]).forEach(c=>{COURSES[c.id]=c;});
-  CCS=(ccR.data||[]).sort((a,b)=>String(b.created_at||'').localeCompare(String(a.created_at||'')));
 
   try{
     const {data,error}=await sb.from('app_lockdown').select('*').eq('id',1).maybeSingle();
@@ -527,7 +459,6 @@ function renderLockBanner(){
 async function reload(){
   await loadData();
   renderProgTable();
-  renderCCTable();
   if(progViewId&&PROGRAMS[progViewId])renderProgramDetail(progViewId);
 }
 
@@ -943,118 +874,6 @@ function delProg(){
   });
 }
 
-/* ── CURRICULAR CHANGES: LIST ── */
-function ccTargetLabel(r){
-  if(r.program_id)return 'Program: '+(PROGRAMS[r.program_id]?.name||r.program_id);
-  if(r.course_id)return 'Course: '+(COURSES[r.course_id]?.full_name||r.course_id);
-  return '—';
-}
-function ccList(){
-  const st=val('cc-status-filter');
-  return CCS.filter(r=>!st||r.status===st);
-}
-function renderCCTable(){
-  const rows=ccList();
-  $('cc-tb').innerHTML=rows.map(r=>`
-    <tr class="clickable" data-id="${esc(r.id)}">
-      <td class="nm">${esc(ccTargetLabel(r))}</td>
-      <td>${esc(r.change_type||'—')}</td>
-      <td><span class="pill ${esc(r.status)}">${esc((r.status||'').replace('_',' '))}</span></td>
-      <td>${esc(r.effective_term||'—')}</td>
-      <td>${r.created_at?new Date(r.created_at).toLocaleDateString():'—'}</td>
-    </tr>`).join('')||`<tr><td colspan="5" class="muted" style="padding:20px">No curricular changes.</td></tr>`;
-  $('cc-cnt').textContent=rows.length+' change'+(rows.length===1?'':'s');
-}
-
-/* ── CURRICULAR CHANGES: MODAL ── */
-function populateProgSelect(){
-  const sel=$('ccm-prog');
-  sel.innerHTML=Object.values(PROGRAMS).sort((a,b)=>String(a.name||'').localeCompare(String(b.name||'')))
-    .map(p=>`<option value="${esc(p.id)}">${esc(p.name)}</option>`).join('');
-}
-function populateCrsSelect(){
-  const sel=$('ccm-crs');
-  sel.innerHTML=Object.values(COURSES).sort((a,b)=>String(a.full_name||'').localeCompare(String(b.full_name||'')))
-    .map(c=>`<option value="${esc(c.id)}">${esc(c.full_name||c.id)}</option>`).join('');
-}
-function ccTargetToggle(){
-  const isProg=$('cc-target-prog').checked;
-  $('ccm-prog-wrap').style.display=isProg?'':'none';
-  $('ccm-crs-wrap').style.display=isProg?'none':'';
-}
-function openCC(id){
-  ccId=id;
-  const r=id?CCS.find(x=>x.id===id):null;
-  $('ccm-title').textContent=id?'Edit Curricular Change':(isApcc()?'Propose Curricular Change':'Add Curricular Change');
-  populateProgSelect(); populateCrsSelect();
-  if(r&&r.course_id){$('cc-target-crs').checked=true;} else {$('cc-target-prog').checked=true;}
-  ccTargetToggle();
-  if(r&&r.program_id)setv('ccm-prog',r.program_id);
-  if(r&&r.course_id)setv('ccm-crs',r.course_id);
-  setv('ccm-type',r?.change_type||'New Course');
-  setv('ccm-term',r?.effective_term);
-  setv('ccm-desc',r?.description);
-  const status=r?.status||(isApcc()?'proposed':'approved');
-  $('ccm-status-pill').textContent=status.replace('_',' ');
-  $('ccm-status-pill').className='pill '+status;
-  $('ccm-status-hint').textContent=isApcc()&&!r?'Submitted as Proposed — requires admin approval before it takes effect.':'';
-  $('btn-cc-approve').style.display=(isAdmin()&&r&&r.status==='proposed')?'inline-flex':'none';
-  $('btn-cc-restore').style.display=(isAdmin()&&r&&r.status==='pending_delete')?'inline-flex':'none';
-  $('btn-cc-harddelete').style.display=(isAdmin()&&r)?'inline-flex':'none';
-  $('btn-cc-request-delete').style.display=(r&&r.status!=='pending_delete'&&canCCWrite())?'inline-flex':'none';
-  openM('mo-cc');
-}
-function ccPayloadFromForm(){
-  const isProg=$('cc-target-prog').checked;
-  return {
-    program_id:isProg?(val('ccm-prog')||null):null,
-    course_id:isProg?null:(val('ccm-crs')||null),
-    change_type:N(val('ccm-type')),
-    effective_term:N(val('ccm-term')),
-    description:N(val('ccm-desc'))
-  };
-}
-async function saveCC(){
-  const payload=ccPayloadFromForm();
-  if(!payload.program_id&&!payload.course_id){setSS('⚠ Pick a Program or a Course');return;}
-  if(ccId){
-    const ok=await sbSave(sb.from('curricular_changes').update(payload).eq('id',ccId),'● Saved');
-    if(!ok)return;
-  }else{
-    payload.status=isApcc()?'proposed':'approved';
-    const ok=await sbSave(sb.from('curricular_changes').insert(payload),
-      isApcc()?'● Proposed — pending admin approval':'● Added');
-    if(!ok)return;
-  }
-  closeM('mo-cc');
-  await reload();
-}
-async function approveCC(){
-  if(!ccId||!isAdmin())return;
-  const {data:{session}}=await sb.auth.getSession();
-  await sbSave(sb.from('curricular_changes').update({
-    status:'approved',approved_by:session?.user?.id||null,approved_at:new Date().toISOString()
-  }).eq('id',ccId),'● Approved');
-  closeM('mo-cc'); await reload();
-}
-async function requestDeleteCC(){
-  if(!ccId)return;
-  await sbSave(sb.from('curricular_changes').update({status:'pending_delete'}).eq('id',ccId),'● Marked pending delete');
-  closeM('mo-cc'); await reload();
-}
-async function restoreCC(){
-  if(!ccId||!isAdmin())return;
-  await sbSave(sb.from('curricular_changes').update({status:'approved'}).eq('id',ccId),'● Restored');
-  closeM('mo-cc'); await reload();
-}
-function hardDeleteCC(){
-  if(!ccId||!isAdmin())return;
-  showCfm('Delete permanently?','This cannot be undone.',async()=>{
-    const ok=await sbSave(sb.from('curricular_changes').delete().eq('id',ccId),'● Deleted');
-    if(ok){closeM('mo-cc');await reload();}
-  });
-}
-
 /* ── MODAL PLUMBING ── */
 function openM(id){$(id).classList.add('open');}
 function closeM(id){$(id).classList.remove('open');if(id==='mo-cfm')cfmCb=null;}
@@ -1249,21 +1068,10 @@ function wire(){
   $('btn-save-prog').onclick=saveProg;
   $('btn-del-prog').onclick=delProg;
 
-  $('cc-status-filter').addEventListener('change',renderCCTable);
-  $('btn-cc-add').onclick=()=>openCC(null);
-  $('cc-tb').addEventListener('click',e=>{const tr=e.target.closest('tr[data-id]');if(tr)openCC(tr.dataset.id);});
-  $('cc-target-prog').addEventListener('change',ccTargetToggle);
-  $('cc-target-crs').addEventListener('change',ccTargetToggle);
-  $('btn-save-cc').onclick=saveCC;
-  $('btn-cc-approve').onclick=approveCC;
-  $('btn-cc-request-delete').onclick=requestDeleteCC;
-  $('btn-cc-restore').onclick=restoreCC;
-  $('btn-cc-harddelete').onclick=hardDeleteCC;
-
   $('cfm-ok').onclick=()=>{const cb=cfmCb;closeM('mo-cfm');if(cb)cb();};
   document.querySelectorAll('[data-close]').forEach(b=>{b.onclick=()=>closeM(b.dataset.close);});
   document.querySelectorAll('.mo').forEach(o=>{
-    o.addEventListener('click',e=>{if(e.target===o&&o.id!=='mo-prog'&&o.id!=='mo-cc')closeM(o.id);});
+    o.addEventListener('click',e=>{if(e.target===o&&o.id!=='mo-prog')closeM(o.id);});
   });
   document.addEventListener('keydown',e=>{
     if(e.key==='Escape')document.querySelectorAll('.mo.open').forEach(o=>closeM(o.id));
@@ -1286,7 +1094,6 @@ function wire(){
   }
   updateAuthBar();
   renderProgTable();
-  renderCCTable();
   handleProgramDeepLink();
   $('ls').style.display='none';
   $('app').style.display='flex';
