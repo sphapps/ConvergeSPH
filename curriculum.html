@@ -235,6 +235,9 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
 .seg input:disabled+span{opacity:.45;cursor:not-allowed}
 .seg input:focus-visible+span{outline:2px solid var(--teal);outline-offset:-3px}
 .newcrs{display:flex;gap:8px}
+.extbox{display:none;flex-direction:column;gap:6px;margin-top:8px;padding:10px;border:1px dashed var(--mgray);border-radius:6px;background:var(--surface-2)}
+.extbox.on{display:flex}
+.chip.ext{background:var(--ltgold);color:var(--txgold)}
 .newcrs input:first-child{max-width:110px}
 .facets{display:grid;grid-template-columns:1fr 1fr;gap:4px 14px}
 .facets label{display:flex;align-items:flex-start;gap:7px;font-size:12.5px;font-weight:400;color:var(--text);margin:0;cursor:pointer;line-height:1.35}
@@ -481,11 +484,21 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
             <label><input type="radio" name="im-target" id="im-tgt-prog" value="program"><span>Program</span></label>
           </div>
         </div>
-        <div class="full" id="im-course-wrap"><label for="im-course">Course</label><select id="im-course"></select></div>
+        <div class="full" id="im-course-wrap"><label for="im-course">Course</label><select id="im-course"></select>
+          <div class="extbox" id="im-ext-course">
+            <div class="newcrs"><input id="im-ext-prefix" placeholder="Prefix, e.g. PAH" aria-label="Non-SPH course prefix"><input id="im-ext-number" placeholder="Number, e.g. 570" aria-label="Non-SPH course number"></div>
+            <input id="im-ext-ctitle" placeholder="Course title (optional)" aria-label="Non-SPH course title">
+            <div class="hint">For a course outside the SPH catalog. It won't be linked to a course record.</div>
+          </div>
+        </div>
         <div class="full" id="im-new-wrap"><label for="im-new-prefix">New course prefix and number</label>
           <div class="newcrs"><input id="im-new-prefix" placeholder="PUBH"><input id="im-new-number" placeholder="511"></div>
         </div>
         <div class="full" id="im-prog-wrap"><label for="im-prog">Program</label><select id="im-prog"></select>
+          <div class="extbox" id="im-ext-prog">
+            <input id="im-ext-pname" placeholder="Program name, e.g. Public Administration MPA" aria-label="Non-SPH program name">
+            <div class="hint">For a program outside SPH. It won't be linked to a program record.</div>
+          </div>
           <div class="hint">New programs aren't tracked here yet.</div>
         </div>
         <div class="full" id="im-assoc-wrap"><label for="im-assoc">Associated program</label><select id="im-assoc"></select></div>
@@ -679,7 +692,8 @@ const FIELD_LBL={
   proposed_prefix:'new prefix',proposed_number:'new number',change_facets:"what's changing",student_level:'level',
   ohsu_category:'OHSU category',institutions:'approval tracks',initiated_by_name:'initiated by',initiated_by_faculty_id:'initiated by',
   initiated_on:'initiated on',apcc_meeting_id:'APCC meeting',description:'summary',justification:'justification',
-  status_note:'status notes',disposition:'disposition',approval_state:'approval',created_by:'owner'
+  status_note:'status notes',disposition:'disposition',approval_state:'approval',created_by:'owner',
+  is_external:'non-SPH target',external_name:'non-SPH name'
 };
 const shortStage=s=>STAGE_SHORT[s.key]||s.label;
 
@@ -711,10 +725,16 @@ function courseLabel(c){
 }
 function targetLabel(r){
   if(r.target_kind==='course'){
-    if(r.action==='add')return [r.proposed_prefix,r.proposed_number].filter(Boolean).join(' ');
+    if(r.action==='add'||r.is_external)return [r.proposed_prefix,r.proposed_number].filter(Boolean).join(' ');
     return courseCode(COURSES[r.course_id]);
   }
+  if(r.is_external)return r.external_name||'';
   return PROGRAMS[r.program_id]?.name||'';
+}
+// Program column for an item: a non-SPH program change shows its typed name.
+function itemProgramLabel(r){
+  if(r.target_kind==='program'&&r.is_external)return (r.external_name||'Program')+' (non-SPH)';
+  return programLabel(r.program_id);
 }
 function programLabel(id){
   if(id==null||id==='')return 'Other';
@@ -894,7 +914,7 @@ function trackerRows(){
     if(pg==='__none__'&&r.program_id!=null)return false;
     if(pg&&pg!=='__none__'&&String(r.program_id)!==pg)return false;
     if(q){
-      const hay=[r.title,r.description,r.status_note,targetLabel(r),programLabel(r.program_id),initiatorShort(r),'#'+seqLabel(r.seq)].join(' ').toLowerCase();
+      const hay=[r.title,r.description,r.status_note,targetLabel(r),itemProgramLabel(r),r.external_name,initiatorShort(r),'#'+seqLabel(r.seq),r.is_external?'non-sph':''].join(' ').toLowerCase();
       if(!hay.includes(q))return false;
     }
     return true;
@@ -930,6 +950,7 @@ function renderTracker(){
     const st=itemStatus(r);
     const parents=parentsOf(r.id),kids=childrenOf(r.id),slash=pairsOf(r.id,'slash_pair'),xl=pairsOf(r.id,'cross_list');
     const meta=[`<span class="chip">${esc(kindLabel(r))}</span>`];
+    if(r.is_external)meta.push('<span class="chip ext">Non-SPH</span>');
     if(r.approval_state!=='active')meta.push(`<span class="pill ${esc(r.approval_state)}">${esc(APPROVAL_LBL[r.approval_state])}</span>`);
     if(parents.length)meta.push(`<span class="chip link" title="${esc(parents.map(itemRef).join('\n'))}">part of ${parents.map(p=>'#'+seqLabel(p.seq)).join(', ')}</span>`);
     if(kids.length)meta.push(`<span class="chip link" title="${esc(kids.map(itemRef).join('\n'))}">includes ${kids.length}</span>`);
@@ -938,7 +959,7 @@ function renderTracker(){
     return `<tr class="clickable" data-id="${esc(r.id)}">
       <td class="sk seq">${seqLabel(r.seq)}</td>
       <td class="sk2"><div class="it-title" title="${esc(r.status_note||r.description||'')}">${esc(r.title)}</div><div class="it-meta">${meta.join('')}</div></td>
-      <td>${esc(programLabel(r.program_id))}</td>
+      <td>${esc(itemProgramLabel(r))}</td>
       <td>${esc(r.student_level)}</td>
       <td>${r.ohsu_category?esc(r.ohsu_category):'<span class="muted">NA</span>'}</td>
       <td title="${esc(r.initiated_on?fmtLong(r.initiated_on):'')}">${esc(initiatorShort(r)||'—')}</td>
@@ -988,10 +1009,12 @@ function fillItemSelects(r){
   $('im-season').innerHTML=seasonOptionsHTML(r?r.season_id:SEASON_ID);
   const courses=Object.values(COURSES).filter(c=>!c.parent_id).sort((a,b)=>courseCode(a).localeCompare(courseCode(b)));
   $('im-course').innerHTML='<option value="">— choose a course —</option>'+
-    courses.map(c=>`<option value="${esc(c.id)}">${esc(courseLabel(c))}</option>`).join('');
+    courses.map(c=>`<option value="${esc(c.id)}">${esc(courseLabel(c))}</option>`).join('')+
+    '<option value="__ext__">Other (non-SPH course)…</option>';
   const progs=sortedPrograms();
   $('im-prog').innerHTML='<option value="">— choose a program —</option>'+
-    progs.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}${p.credential?' ('+esc(p.credential)+')':''}</option>`).join('');
+    progs.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}${p.credential?' ('+esc(p.credential)+')':''}</option>`).join('')+
+    '<option value="__ext__">Other (non-SPH program)…</option>';
   $('im-assoc').innerHTML='<option value="">Other / none</option>'+
     progs.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}${p.credential?' ('+esc(p.credential)+')':''}</option>`).join('');
   const fac=Object.values(FACULTY).sort((a,b)=>String(a.last_name||'').localeCompare(String(b.last_name||''))||String(a.first_name||'').localeCompare(String(b.first_name||'')));
@@ -1036,6 +1059,8 @@ function imSync(){
   $('im-prog-wrap').style.display=tgt==='program'?'':'none';
   $('im-assoc-wrap').style.display=tgt==='course'?'':'none';
   $('im-facets-wrap').style.display=act==='edit'?'':'none';
+  $('im-ext-course').classList.toggle('on',tgt==='course'&&act!=='add'&&val('im-course')==='__ext__');
+  $('im-ext-prog').classList.toggle('on',tgt==='program'&&val('im-prog')==='__ext__');
   // Drop facets that belong to the other target kind.
   [...imFacets].forEach(k=>{if(FACET_BY_KEY[k]&&FACET_BY_KEY[k].target_kind!==tgt)imFacets.delete(k);});
   renderFacets();
@@ -1119,10 +1144,16 @@ function openItem(id){
   setv('im-seq',r?seqLabel(r.seq):'');
   setRadio('im-action',r?r.action:'edit');
   setRadio('im-target',r?r.target_kind:'course');
-  setv('im-course',r?r.course_id:'');
-  setv('im-new-prefix',r?r.proposed_prefix:'');
-  setv('im-new-number',r?r.proposed_number:'');
-  setv('im-prog',r&&r.target_kind==='program'?r.program_id:'');
+  const extC=!!(r&&r.is_external&&r.target_kind==='course');
+  const extP=!!(r&&r.is_external&&r.target_kind==='program');
+  setv('im-course',extC?'__ext__':(r?r.course_id:''));
+  setv('im-new-prefix',r&&!extC?r.proposed_prefix:'');
+  setv('im-new-number',r&&!extC?r.proposed_number:'');
+  setv('im-ext-prefix',extC?r.proposed_prefix:'');
+  setv('im-ext-number',extC?r.proposed_number:'');
+  setv('im-ext-ctitle',extC?r.external_name:'');
+  setv('im-ext-pname',extP?r.external_name:'');
+  setv('im-prog',extP?'__ext__':(r&&r.target_kind==='program'?r.program_id:''));
   setv('im-assoc',r&&r.target_kind==='course'?r.program_id:'');
   imFacets=new Set(r?(r.change_facets||[]):[]);
   setv('im-level',r?r.student_level:'GR');
@@ -1188,6 +1219,7 @@ function readForm(){
   const p={
     season_id:N(val('im-season')),action:act,target_kind:tgt,
     course_id:null,proposed_prefix:null,proposed_number:null,program_id:null,
+    is_external:false,external_name:null,
     change_facets:act==='edit'?[...imFacets].filter(k=>FACET_BY_KEY[k]&&FACET_BY_KEY[k].target_kind===tgt):[],
     student_level:val('im-level')||'GR',
     ohsu_category:val('im-cat')?Number(val('im-cat')):null,
@@ -1203,8 +1235,17 @@ function readForm(){
       const px=N(val('im-new-prefix'));
       p.proposed_prefix=px?px.toUpperCase():null;
       p.proposed_number=N(val('im-new-number'));
+    }else if(val('im-course')==='__ext__'){
+      const px=N(val('im-ext-prefix'));
+      p.is_external=true;
+      p.proposed_prefix=px?px.toUpperCase():null;
+      p.proposed_number=N(val('im-ext-number'));
+      p.external_name=N(val('im-ext-ctitle'));
     }else p.course_id=N(val('im-course'));
     p.program_id=N(val('im-assoc'));
+  }else if(val('im-prog')==='__ext__'){
+    p.is_external=true;
+    p.external_name=N(val('im-ext-pname'));
   }else p.program_id=N(val('im-prog'));
   const f=val('im-fac');
   if(f==='__other__')p.initiated_by_name=N(val('im-fac-other'));
@@ -1215,12 +1256,12 @@ function suggestTitle(p){
   const words=[...new Set((p.change_facets||[]).map(k=>FACET_SHORT[k]||(FACET_BY_KEY[k]?FACET_BY_KEY[k].label.toLowerCase():k)))];
   const tail=words.length?' ('+words.join(', ')+')':'';
   if(p.target_kind==='course'){
-    const code=p.action==='add'?[p.proposed_prefix,p.proposed_number].filter(Boolean).join(' '):courseCode(COURSES[p.course_id]);
+    const code=(p.action==='add'||p.is_external)?[p.proposed_prefix,p.proposed_number].filter(Boolean).join(' '):courseCode(COURSES[p.course_id]);
     if(p.action==='add')return (code||'Course')+' – New course';
     if(p.action==='remove')return (code||'Course')+' – Remove course';
     return (code||'Course')+' – Course change'+tail;
   }
-  const pn=(PROGRAMS[p.program_id]&&PROGRAMS[p.program_id].name)||'Program';
+  const pn=(p.is_external?p.external_name:(PROGRAMS[p.program_id]&&PROGRAMS[p.program_id].name))||'Program';
   if(p.action==='remove')return pn+' – Remove program';
   return pn+' – Program change'+tail;
 }
@@ -1236,8 +1277,10 @@ async function saveItem(){
   if(!p.season_id)return imError('Choose a season.');
   if(!p.action||!p.target_kind)return imError('Choose an action and whether it applies to a course or a program.');
   if(p.target_kind==='course'&&p.action==='add'&&(!p.proposed_prefix||!p.proposed_number))return imError("Enter the new course's prefix and number.");
-  if(p.target_kind==='course'&&p.action!=='add'&&!p.course_id)return imError('Choose the course this change applies to.');
-  if(p.target_kind==='program'&&!p.program_id)return imError('Choose the program this change applies to.');
+  if(p.target_kind==='course'&&p.action!=='add'&&p.is_external&&(!p.proposed_prefix||!p.proposed_number))return imError("Enter the non-SPH course's prefix and number.");
+  if(p.target_kind==='course'&&p.action!=='add'&&!p.is_external&&!p.course_id)return imError('Choose the course this change applies to.');
+  if(p.target_kind==='program'&&p.is_external&&!p.external_name)return imError("Enter the non-SPH program's name.");
+  if(p.target_kind==='program'&&!p.is_external&&!p.program_id)return imError('Choose the program this change applies to.');
   if(val('im-fac')==='__other__'&&!p.initiated_by_name)return imError('Type the name of the person who initiated this change.');
   p.title=N(val('im-title'))||suggestTitle(p);
   setv('im-title',p.title);
@@ -1365,7 +1408,7 @@ function reportRow(r){
   return `<tr>
     <td class="seq">${seqLabel(r.seq)}</td>
     <td><div class="nm">${esc(r.title)}</div>${r.description?`<div style="font-size:12px;color:var(--dgray);margin-top:2px">${esc(r.description)}</div>`:''}</td>
-    <td>${esc(programLabel(r.program_id))}</td>
+    <td>${esc(itemProgramLabel(r))}</td>
     <td>${esc(r.student_level)}${r.ohsu_category?' · Cat '+esc(r.ohsu_category):''}</td>
     <td class="trk">${trackCell(r,'P')}</td>
     <td class="trk">${trackCell(r,'O')}</td>
@@ -1574,6 +1617,8 @@ function wire(){
 
   // Item modal
   document.querySelectorAll('input[name="im-action"],input[name="im-target"]').forEach(r=>r.addEventListener('change',imSync));
+  $('im-course').addEventListener('change',imSync);
+  $('im-prog').addEventListener('change',imSync);
   $('im-facets').addEventListener('change',e=>{
     const cb=e.target.closest('input[type=checkbox]');if(!cb)return;
     if(cb.checked)imFacets.add(cb.value);else imFacets.delete(cb.value);
