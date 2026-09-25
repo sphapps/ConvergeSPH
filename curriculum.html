@@ -196,6 +196,86 @@ td.cell.ed:hover{outline:2px solid var(--teal);outline-offset:-2px}
 .addbar input,.addbar select{font-size:13px;padding:6px 9px;border:1px solid var(--mgray);border-radius:5px;font-family:inherit;background:var(--surface);color:var(--text)}
 .acts{display:flex;gap:6px;flex-wrap:wrap}
 
+/* ═══ CCR EDITOR ═══ */
+.mc.xl{max-width:1000px}
+.ccr-tabs{display:flex;gap:4px;flex-wrap:wrap;padding:10px 20px 0;border-bottom:1px solid var(--mgray);background:var(--surface-2)}
+.ccr-tab{font-family:inherit;font-size:12.5px;font-weight:600;padding:7px 12px;border:1px solid var(--mgray);border-bottom:none;
+  border-radius:6px 6px 0 0;background:var(--surface-2);color:var(--dgray);cursor:pointer;display:inline-flex;align-items:center;gap:6px;margin-bottom:-1px}
+.ccr-tab.active{background:var(--surface);color:var(--navytx);border-bottom:1px solid var(--surface)}
+.ccr-tab .prog{font-size:10px;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.ccr-intro{font-size:12.5px;color:var(--dgray);margin-bottom:14px;line-height:1.5}
+.ccr-sec{border:1px solid var(--rowline);border-radius:7px;margin-bottom:14px;overflow:hidden}
+.ccr-sec>h4{font-size:12.5px;font-weight:700;color:var(--navytx);background:var(--surface-2);padding:8px 12px;border-bottom:1px solid var(--rowline);text-transform:uppercase;letter-spacing:.3px}
+.ccr-sec .sb{padding:4px 12px 10px}
+.ccr-f{padding:9px 0;border-bottom:1px dashed var(--rowline)}
+.ccr-f:last-child{border-bottom:none}
+.ccr-f>label{display:flex;gap:7px;align-items:baseline;font-size:12.5px;font-weight:600;color:var(--text);margin-bottom:5px;line-height:1.4}
+.ccr-num{flex:0 0 auto;font-size:10.5px;font-weight:700;color:var(--navytx);background:var(--ltblue);border-radius:4px;padding:0 5px;line-height:17px;font-variant-numeric:tabular-nums}
+.ccr-f input,.ccr-f select,.ccr-f textarea{width:100%;font-size:13px;padding:7px 9px;border:1px solid var(--mgray);border-radius:5px;font-family:inherit;background:var(--surface);color:var(--text)}
+.ccr-f textarea{min-height:72px;resize:vertical}
+.ccr-f input:disabled,.ccr-f select:disabled,.ccr-f textarea:disabled{background:var(--surface-2);color:var(--dgray)}
+.ccr-f select{max-width:520px}
+.ccr-f input[type=number],.ccr-f input[type=date]{max-width:200px}
+.ccr-pre{font-size:13px;background:var(--surface-2);border:1px solid var(--rowline);border-radius:5px;padding:7px 9px;white-space:pre-wrap;color:var(--text)}
+.ccr-pre .src{display:block;font-size:10.5px;color:var(--muted);margin-top:4px}
+.ccr-meta{display:flex;gap:10px;align-items:center;font-size:11px;color:var(--dgray);margin-top:4px;flex-wrap:wrap}
+.ccr-cnt{font-variant-numeric:tabular-nums}
+.ccr-cnt.over{color:var(--red);font-weight:700}
+details.ccr-notes{font-size:11.5px;color:var(--dgray);margin-top:5px}
+details.ccr-notes summary{cursor:pointer;color:var(--teal);font-weight:600;width:max-content}
+details.ccr-notes div{white-space:pre-wrap;margin-top:4px;padding:6px 9px;border-left:3px solid var(--ltblue);line-height:1.45}
+.sec-notes{margin:6px 0 2px}
+.ccr-facets{display:grid;grid-template-columns:1fr 1fr;gap:3px 14px;font-size:12.5px}
+.ccr-facets span{display:flex;gap:6px;align-items:flex-start;line-height:1.35}
+.ccr-facets span.off{color:var(--muted)}
+.ccr-note{font-size:12.5px;color:var(--dgray);font-style:italic}
+.ccr-empty{font-size:13px;color:var(--dgray);padding:24px 4px;text-align:center;line-height:1.55}
+.ccr-sbs-wrap{overflow:auto}
+table.ccr-sbs{min-width:880px;border:1px solid var(--rowline);border-radius:6px}
+table.ccr-sbs th{position:static;font-size:10px;padding:6px 6px;text-transform:none;letter-spacing:0;white-space:normal}
+table.ccr-sbs th.grp{text-align:center;font-size:11px;text-transform:uppercase;letter-spacing:.4px}
+table.ccr-sbs td{padding:3px 4px;font-size:12px;vertical-align:middle}
+table.ccr-sbs td.div,table.ccr-sbs th.div{border-left:2px solid var(--mgray)}
+table.ccr-sbs input,table.ccr-sbs select{font-size:12px;padding:4px 5px;max-width:none}
+table.ccr-sbs input.nm-in{min-width:190px}
+table.ccr-sbs select.st-in{width:78px}
+table.ccr-sbs select.rse-in{width:96px}
+table.ccr-sbs tfoot td{font-weight:700;background:var(--surface-2);font-variant-numeric:tabular-nums}
+.sbs-add{margin-top:8px}
+.chip.ccr{background:var(--surface-2);color:var(--dgray);border:1px solid var(--rowline)}
+.chip.ccr.full{background:var(--ltgrn);color:var(--txgrn);border-color:transparent}
+
+/* ═══ CCR PACKET (report) ═══ */
+.pk-toc{margin-bottom:22px}
+.pk-toc table{border:1px solid var(--rowline);border-radius:6px;overflow:hidden}
+.pk-toc thead th{position:static;font-size:10px;padding:6px 10px}
+.pk-toc tbody td{font-size:12.5px;padding:7px 10px}
+.pk-item{border-top:3px solid var(--navytx);padding-top:14px;margin-top:26px}
+.pk-item h3{font-size:18px;color:var(--navytx);line-height:1.3}
+.pk-item .pk-sub{font-size:12.5px;color:var(--dgray);margin:3px 0 10px}
+.pk-facts{display:grid;grid-template-columns:repeat(auto-fill,minmax(210px,1fr));gap:6px 18px;font-size:12.5px;margin-bottom:12px;
+  background:var(--surface);border:1px solid var(--rowline);border-radius:6px;padding:10px 14px}
+.pk-facts b{display:block;font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--dgray)}
+.pk-block{background:var(--surface);border:1px solid var(--rowline);border-radius:6px;padding:10px 14px;margin-bottom:12px;font-size:13px}
+.pk-block h4{font-size:12px;color:var(--navytx);margin-bottom:4px}
+.pk-block p{white-space:pre-wrap;line-height:1.5}
+.pk-form{margin:16px 0 8px}
+.pk-form>h4{font-size:14px;color:var(--navytx);border-bottom:2px solid var(--ltblue);padding-bottom:4px;margin-bottom:8px;display:flex;gap:8px;align-items:center}
+.pk-form>h4 .v{font-size:10.5px;font-weight:400;color:var(--muted)}
+.pk-sec{font-size:11px;font-weight:700;color:var(--dgray);text-transform:uppercase;letter-spacing:.4px;margin:12px 0 4px}
+.pk-qa{display:grid;grid-template-columns:44px minmax(160px,34%) 1fr;gap:4px 10px;font-size:12.5px;padding:5px 0;border-bottom:1px solid var(--rowline);break-inside:avoid}
+.pk-qa .n{color:var(--navytx);font-weight:700;font-variant-numeric:tabular-nums}
+.pk-qa .q{color:var(--dgray)}
+.pk-qa .a{white-space:pre-wrap;overflow-wrap:anywhere;line-height:1.45}
+.pk-qa .a.blank{color:var(--muted);font-style:italic}
+.pk-qa .a a{color:var(--teal)}
+.pk-qa.wide{grid-template-columns:44px 1fr}
+.pk-qa.wide .a{grid-column:1/-1}
+.pk-nocr{font-size:12.5px;color:var(--dgray);font-style:italic;padding:8px 0}
+.pk-sbs{font-size:11.5px;border:1px solid var(--rowline)}
+.pk-sbs th,.pk-sbs td{padding:4px 6px!important;font-size:11.5px!important}
+.pk-sbs thead th{position:static}
+
 /* ═══ GATE ═══ */
 .gate{max-width:520px;margin:60px auto;background:var(--surface);border:1px solid var(--mgray);border-radius:8px;padding:24px 26px;line-height:1.55}
 .gate h2{font-size:18px;color:var(--navytx);margin-bottom:8px}
@@ -304,6 +384,9 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
   #t-table th.sk,#t-table td.sk,#t-table th.sk2,#t-table td.sk2{position:static}
   tr{break-inside:avoid}
   .rpt-sec h3{break-after:avoid}
+  .pk-item{break-before:page;border-top:none;margin-top:0}
+  .pk-form>h4,.pk-sec{break-after:avoid}
+  details.ccr-notes{display:none}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style>
@@ -330,6 +413,7 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
   <div class="tabs" id="tabs">
     <button class="tab-btn active" id="tab-track" data-view="v-track">Tracker</button>
     <button class="tab-btn" id="tab-report" data-view="v-report">Status report (CCSR)</button>
+    <button class="tab-btn" id="tab-ccr" data-view="v-ccr">CCR packets</button>
     <button class="tab-btn admin-only" id="tab-appr" data-view="v-appr">Approvals <span class="tab-badge" id="appr-badge">0</span></button>
     <button class="tab-btn admin-only" id="tab-setup" data-view="v-setup">Season setup</button>
   </div>
@@ -394,6 +478,17 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
         <button class="btn btn-p btn-s" id="btn-print" style="margin-left:auto">🖨 Print / save as PDF</button>
       </div>
       <div class="rpt-scroll"><div class="rpt" id="r-body"></div></div>
+    </section>
+
+    <!-- ── CCR PACKETS ───────────────────────────────────────── -->
+    <section class="view" id="v-ccr">
+      <div class="tb">
+        <select id="k-season" aria-label="Season"></select>
+        <select id="k-pack" aria-label="Packet" style="min-width:320px;max-width:520px"></select>
+        <label class="ck"><input type="checkbox" id="k-notes"> Show blank questions</label>
+        <button class="btn btn-p btn-s" id="btn-k-print" style="margin-left:auto">🖨 Print / save as PDF</button>
+      </div>
+      <div class="rpt-scroll"><div class="rpt" id="k-body"></div></div>
     </section>
 
     <!-- ── APPROVALS (admin) ─────────────────────────────────── -->
@@ -554,6 +649,7 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
     </div>
     <div class="mf">
       <span class="statusline lft" id="im-hint"></span>
+      <button class="btn" id="btn-im-ccr">📝 CCR</button>
       <button class="btn" id="btn-im-reqdel">Request deletion</button>
       <button class="btn btn-d" id="btn-im-harddel">Delete permanently</button>
       <button class="btn" id="btn-im-restore">Keep (restore)</button>
@@ -582,6 +678,21 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
     <div class="mf">
       <button class="btn" data-close="mo-stage">Cancel</button>
       <button class="btn btn-p" id="btn-sg-save">Save stage</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── CCR MODAL (sits above the item modal, below confirm) ────── -->
+<div class="mo" id="mo-ccr">
+  <div class="mc xl">
+    <div class="mh"><h3 id="cr-heading">CCR</h3><span id="cr-pill" class="pill"></span><button class="x" id="cr-x" aria-label="Close">×</button></div>
+    <div class="ccr-tabs" id="cr-tabs"></div>
+    <div class="mb" id="cr-body"></div>
+    <div class="mf">
+      <span class="statusline lft" id="cr-hint"></span>
+      <button class="btn" id="btn-cr-print">🖨 Print this CCR</button>
+      <button class="btn" id="btn-cr-cancel">Close</button>
+      <button class="btn btn-p" id="btn-cr-save">Save CCR</button>
     </div>
   </div>
 </div>
@@ -661,6 +772,13 @@ let instTouched=false;      // approval-tracks select edited by hand
 let cellCtx=null;           // {itemId,stageId} for the stage-cell modal
 let cfmCb=null;
 let pollTimer=null;
+// CCR (Phase 2)
+let FORM_DEFS=[];           // cc_form_defs rows
+let CCR={};                 // item id -> cc_ccr row
+let CCR_READY=false;        // false until cc_003 has been run
+let PROG_COURSES=[],PREREQ=[],PREREQ_GRP=[],COREQ=[];   // catalog relationships, for prefill
+let crItemId=null,crForms=[],crTab=0,crWork={},crDirty=false,crReadOnly=false;
+let PACKET_KEY='';          // selected packet on the CCR tab
 
 const isAdmin=()=>TIER==='admin';
 const isEditor=()=>TIER==='editor';
@@ -811,11 +929,24 @@ async function loadData(){
   const [seR,stR,ssR,calR,fcR,itR,evR,lkR,pgR,prR,crR]=await Promise.all([
     q('cc_seasons'),q('cc_stages'),q('cc_season_stages'),q('cc_calendar'),q('cc_facets'),
     q('cc_items'),q('cc_stage_events'),q('cc_item_links'),q('cc_item_progress'),
-    q('programs'),q('courses','id,course_code,full_name,prefix,number,title,parent_id')
+    q('programs'),q('courses','id,course_code,full_name,prefix,number,number2,title,parent_id,credits,grading,level,description')
   ]);
   for(const r of [seR,stR,ssR,calR,fcR,itR,evR,lkR,pgR,prR,crR]){if(r.error)throw r.error;}
   // Faculty names are a nicety — the app still works if this view is unavailable.
   const fR=await q('faculty_directory');
+  // CCR tables (cc_003) and catalog relationships. None of these are fatal:
+  // before cc_003 runs, the CCR features show a notice instead of failing.
+  const [fdR,ccR,pcR,prqR,pgrR,crqR]=await Promise.all([
+    q('cc_form_defs'),q('cc_ccr'),q('program_courses'),
+    q('course_prerequisites'),q('course_prerequisite_groups'),q('course_corequisites')
+  ]);
+  CCR_READY=!fdR.error&&!ccR.error;
+  FORM_DEFS=CCR_READY?(fdR.data||[]):[];
+  CCR={}; if(CCR_READY)(ccR.data||[]).forEach(c=>{CCR[c.item_id]=c;});
+  PROG_COURSES=pcR.error?[]:(pcR.data||[]);
+  PREREQ=prqR.error?[]:(prqR.data||[]);
+  PREREQ_GRP=pgrR.error?[]:(pgrR.data||[]);
+  COREQ=crqR.error?[]:(crqR.data||[]);
 
   SEASONS=(seR.data||[]).sort((a,b)=>String(b.label).localeCompare(String(a.label)));
   STAGES={}; (stR.data||[]).forEach(s=>{STAGES[s.id]=s;});
@@ -880,6 +1011,7 @@ function renderAll(){
   fillProgFilter();
   renderTracker();
   renderReport();
+  renderPackets();
   if(isAdmin()){renderApprovals();renderSetup();}
   updateApprovalBadge();
 }
@@ -890,6 +1022,7 @@ function seasonOptionsHTML(selected){
 function fillSeasonSelects(){
   $('t-season').innerHTML=seasonOptionsHTML(SEASON_ID);
   $('r-season').innerHTML=seasonOptionsHTML(SEASON_ID);
+  $('k-season').innerHTML=seasonOptionsHTML(SEASON_ID);
   $('sc-season').innerHTML=seasonOptionsHTML(SETUP_SEASON_ID);
 }
 function sortedPrograms(){
@@ -954,6 +1087,8 @@ function renderTracker(){
     if(r.approval_state!=='active')meta.push(`<span class="pill ${esc(r.approval_state)}">${esc(APPROVAL_LBL[r.approval_state])}</span>`);
     if(parents.length)meta.push(`<span class="chip link" title="${esc(parents.map(itemRef).join('\n'))}">part of ${parents.map(p=>'#'+seqLabel(p.seq)).join(', ')}</span>`);
     if(kids.length)meta.push(`<span class="chip link" title="${esc(kids.map(itemRef).join('\n'))}">includes ${kids.length}</span>`);
+    const cp=ccrProgress(r);
+    if(cp)meta.push(`<span class="chip ccr${cp.done===cp.total&&cp.total?' full':''}" title="CCR questions answered">CCR ${cp.started?cp.done+'/'+cp.total:'not started'}</span>`);
     if(slash.length)meta.push(`<span class="chip link">slash ${slash.map(p=>'#'+seqLabel(p.seq)).join(', ')}</span>`);
     if(xl.length)meta.push(`<span class="chip link">cross-list ${xl.map(p=>'#'+seqLabel(p.seq)).join(', ')}</span>`);
     return `<tr class="clickable" data-id="${esc(r.id)}">
@@ -1212,6 +1347,7 @@ function openItem(id){
   $('btn-im-restore').style.display=(r&&isAdmin()&&!LOCKED&&r.approval_state==='pending_delete')?'':'none';
   $('btn-im-harddel').style.display=(r&&isAdmin()&&!LOCKED)?'':'none';
   $('btn-im-reqdel').style.display=(r&&isEditor()&&own&&!LOCKED&&r.approval_state!=='pending_delete')?'':'none';
+  $('btn-im-ccr').style.display=r?'':'none';
   openM('mo-item');
 }
 function readForm(){
@@ -1378,6 +1514,13 @@ function histText(h){
     if(h.action==='DELETE')return nm+': cleared';
     const st={done:'done',na:'n/a',declined:'declined'}[n.state]||n.state;
     return nm+': '+st+(n.event_date?' '+fmtLong(n.event_date):'')+(n.note?' — '+n.note:'');
+  }
+  if(h.table_name==='cc_ccr'){
+    if(h.action==='DELETE')return 'Cleared the CCR';
+    const o2=o.answers||{},n2=n.answers||{};
+    const forms=Object.keys(n2).filter(k=>JSON.stringify(o2[k])!==JSON.stringify(n2[k]));
+    const nm=k=>{const d=FORM_DEFS.find(f=>f.form_key===k);return d?(d.definition.short||d.title):k;};
+    return (h.action==='INSERT'?'Started the CCR':'Edited the CCR')+(forms.length?': '+forms.map(nm).join(', '):'');
   }
   if(h.table_name==='cc_item_links'){
     const row=h.action==='DELETE'?o:n;
@@ -1574,6 +1717,629 @@ function delCal(id){
     async()=>{const ok=await sbSave(sb.from('cc_calendar').delete().eq('id',id),'● Date deleted');if(ok)await reload();});
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   CCR FORM ENGINE (Phase 2)
+   Form definitions live in cc_form_defs (versioned JSON). Nothing here is
+   specific to one form: a definition lists sections and fields, and each
+   field says its type, branching (show_if), limits, notes, and where its
+   starting value comes from:
+     prefill  read-only value from the catalog or the change record
+              ("Existing …" fields). Live while the change is open; the
+              value is snapshotted on every save, and a closed change shows
+              that snapshot so the record reads as it did at the time.
+     seed     editable starting value (catalog text, or another form's
+              answer, e.g. OHSU New Course title ← PSU New Course title)
+     default  fixed starting value
+   Answers are stored in cc_ccr.answers as {form_key: {field_key: value}},
+   and cc_ccr.form_versions records the definition version used.
+   ══════════════════════════════════════════════════════════════════════ */
+const CRS_DEPT={BSTA:'Biostatistics',EPI:'Epidemiology',ESHH:'Environmental Systems and Human Health',
+  HSMP:'Health Systems Management and Policy',PHE:'Community Health'};
+const REL_LBL={core_required:'Core required',program_required:'Program required',elective:'Elective',
+  culminating_experience:'Culminating experience',other:'Other'};
+const REL_ORDER=['core_required','program_required','elective','culminating_experience','other'];
+const REL_CR={core_required:'core_credits',program_required:'program_credits',elective:'elective_credits',
+  culminating_experience:'culminating_credits',other:'other_credits'};
+const ANSWER_TYPES=new Set(['text','textarea','select','yesno','number','date','links','sbs']);
+const SBS_ST=['Same','Add','Revise','Delete'],SBS_RSE=['Required','Selective','Elective'];
+const SBS_COLS=['os','oc','ocr','ot','orse','ps','pc','pcr','pt','prse'];
+const clone=o=>JSON.parse(JSON.stringify(o??{}));
+const isBlank=v=>v==null||(typeof v==='string'&&v.trim()==='')||(Array.isArray(v)&&!v.length);
+
+/* ── Which forms apply ── */
+function latestDefs(){
+  const m={};
+  FORM_DEFS.forEach(d=>{if(d.active===false)return;const c=m[d.form_key];if(!c||d.version>c.version)m[d.form_key]=d;});
+  return m;
+}
+function defFor(key,ver){return FORM_DEFS.find(d=>d.form_key===key&&Number(d.version)===Number(ver))||null;}
+function formApplies(d,r){
+  const a=(d.definition&&d.definition.applies)||{};
+  if(a.action&&!a.action.includes(r.action))return false;
+  if(a.target&&!a.target.includes(r.target_kind))return false;
+  if(a.inst==='P'&&r.institutions==='OHSU')return false;
+  if(a.inst==='O'&&r.institutions==='PSU')return false;
+  if(a.level&&!a.level.includes(r.student_level))return false;
+  if(a.ohsu_category&&!a.ohsu_category.includes(Number(r.ohsu_category)))return false;
+  return true;
+}
+// Every form that applies to the change right now. A form this CCR was
+// already filled against keeps that version, so old answers stay aligned.
+// Answers for a form that stops applying (say the OHSU category changes)
+// are kept in the database, just not shown.
+function formsForItem(r){
+  const saved=(CCR[r.id]&&CCR[r.id].form_versions)||{};
+  const latest=latestDefs();
+  const out=[];
+  new Set([...Object.keys(latest),...Object.keys(saved)]).forEach(k=>{
+    const d=(saved[k]&&defFor(k,saved[k]))||latest[k];
+    if(d&&formApplies(d,r))out.push(d);
+  });
+  return out.sort((a,b)=>(a.sort??100)-(b.sort??100));
+}
+function eachField(d,fn){((d.definition&&d.definition.sections)||[]).forEach(s=>(s.fields||[]).forEach(f=>fn(f,s)));}
+function condOK(c,r,w){
+  if(!c)return true;
+  if(c.all)return c.all.every(x=>condOK(x,r,w));
+  if(c.any)return c.any.some(x=>condOK(x,r,w));
+  if(c.not)return !condOK(c.not,r,w);
+  if(c.f){const v=w[c.f];return c.in?c.in.includes(v):v===c.eq;}
+  if(c.facet)return (r.change_facets||[]).includes(c.facet);
+  if(c.level)return c.level.includes(r.student_level);
+  if(c.target)return c.target.includes(r.target_kind);
+  return true;
+}
+function visibleSections(d,r,w){
+  return ((d.definition&&d.definition.sections)||[]).filter(s=>condOK(s.show_if,r,w))
+    .map(s=>({s,fields:(s.fields||[]).filter(f=>condOK(f.show_if,r,w))}));
+}
+function formProgress(d,r,w){
+  let total=0,done=0;
+  visibleSections(d,r,w).forEach(({fields})=>fields.forEach(f=>{
+    if(!ANSWER_TYPES.has(f.type))return;
+    total++;if(!isBlank(w[f.key]))done++;
+  }));
+  return {total,done};
+}
+function ccrProgress(r){
+  if(!CCR_READY)return null;
+  const forms=formsForItem(r);
+  if(!forms.length)return null;
+  const saved=CCR[r.id];
+  if(!saved)return {started:false,total:0,done:0};
+  let total=0,done=0;
+  forms.forEach(d=>{const p=formProgress(d,r,(saved.answers||{})[d.form_key]||{});total+=p.total;done+=p.done;});
+  return {started:true,total,done};
+}
+
+/* ── Catalog context for prefill / seed ── */
+function seasonYears(sid){
+  const m=/(\d{2})\s*-\s*(\d{2})\s*$/.exec(seasonLabel(sid)||'');
+  const y=m?2000+Number(m[2]):new Date().getFullYear();
+  return [String(y),String(y+1)];
+}
+function cCode(id){const c=COURSES[id];return c?courseCode(c):'';}
+function creditsRange(s){
+  const m=String(s??'').match(/(\d+(?:\.\d+)?)(?:\s*[-‐-―]\s*(\d+(?:\.\d+)?))?/);
+  return m?[m[1],m[2]||m[1]]:['',''];
+}
+function reqLabel(row,key){
+  const t=row[key]?cCode(row[key]):'';
+  return (t||row.custom_text||'')+(row.note?` (${row.note})`:'');
+}
+// Prerequisites as text. Groups read "(A and B)" / "(A or B)"; separate
+// top-level entries are joined with "; ", matching the course page's list.
+function prereqText(cid){
+  const rows=PREREQ.filter(p=>p.course_id===cid);
+  if(!rows.length)return '';
+  const kids=pid=>[
+    ...rows.filter(r=>(r.group_id||null)===(pid||null)).map(r=>({s:r.sort_order||0,t:reqLabel(r,'prerequisite_course_id')})),
+    ...PREREQ_GRP.filter(g=>(g.parent_group_id||null)===(pid||null)).map(g=>{
+      const inner=kids(g.id);
+      return {s:g.sort_order||0,t:inner.length?'('+inner.join(g.logic==='and'?' and ':' or ')+')':''};
+    })
+  ].sort((a,b)=>a.s-b.s).map(x=>x.t).filter(Boolean);
+  return kids(null).join('; ');
+}
+function coreqText(cid){return COREQ.filter(p=>p.course_id===cid).map(r=>reqLabel(r,'corequisite_course_id')).filter(Boolean).join('; ');}
+function courseDeps(cid){
+  const out=[];
+  PREREQ.filter(p=>p.prerequisite_course_id===cid).forEach(p=>{const c=cCode(p.course_id);if(c)out.push(c+' (prerequisite)');});
+  COREQ.filter(p=>p.corequisite_course_id===cid).forEach(p=>{const c=cCode(p.course_id);if(c)out.push(c+' (corequisite)');});
+  return [...new Set(out)].sort().join('\n');
+}
+function progTitle(p){
+  if(!p)return '';
+  const n=p.name||'',c=p.credential||'';
+  return c&&!n.toLowerCase().includes(c.toLowerCase())?`${n} (${c})`:n;
+}
+function programDeps(cid){
+  return [...new Set(PROG_COURSES.filter(pc=>pc.course_id===cid).map(pc=>{
+    const p=PROGRAMS[pc.program_id];
+    return p?progTitle(p)+' — '+(REL_LBL[pc.relationship_type]||pc.relationship_type||''):'';
+  }).filter(Boolean))].sort().join('\n');
+}
+function progDegree(p){
+  if(!p)return '';
+  const c=(p.credential||'')+' '+(p.name||'');
+  if(/ph\.?\s?d/i.test(c))return 'PhD';
+  if(/m\.?\s?p\.?\s?h/i.test(c))return 'MPH';
+  if(/\bm\.?\s?s\b/i.test(c))return 'MS';
+  if(/cert/i.test(c))return 'Graduate certificate';
+  return '';
+}
+function progRows(pid){
+  return PROG_COURSES.filter(pc=>pc.program_id===pid).sort((a,b)=>
+    REL_ORDER.indexOf(a.relationship_type)-REL_ORDER.indexOf(b.relationship_type)||(a.sort_order||0)-(b.sort_order||0));
+}
+function pcLabel(pc){const c=COURSES[pc.course_id];return c?courseLabel(c):(pc.custom_text||'');}
+function progReqText(pid){
+  const p=PROGRAMS[pid],rows=progRows(pid);
+  return REL_ORDER.map(k=>{
+    const rs=rows.filter(r=>r.relationship_type===k);
+    if(!rs.length)return '';
+    const cr=p&&p[REL_CR[k]]!=null?` (${p[REL_CR[k]]} credits)`:'';
+    return REL_LBL[k]+cr+':\n'+rs.map(r=>{const c=COURSES[r.course_id];return '  '+pcLabel(r)+(c&&c.credits?` (${c.credits})`:'');}).join('\n');
+  }).filter(Boolean).join('\n\n');
+}
+function progSbs(pid){
+  return progRows(pid).map(pc=>{
+    const c=COURSES[pc.course_id],lbl=pcLabel(pc),cr=c&&c.credits!=null?String(c.credits):'';
+    const rse=pc.relationship_type==='elective'?'Elective':'Required';
+    return {os:'Same',oc:lbl,ocr:cr,ot:'1',orse:rse,ps:'Same',pc:lbl,pcr:cr,pt:'1',prse:rse};
+  });
+}
+function ccrCtx(r,key){
+  const c=r.target_kind==='course'&&!r.is_external?COURSES[r.course_id]:null;
+  const p=r.target_kind==='program'&&!r.is_external?PROGRAMS[r.program_id]:null;
+  switch(key){
+    case 'item.prefix':return r.proposed_prefix||'';
+    case 'item.number':return r.proposed_number||'';
+    case 'item.department':return CRS_DEPT[String(r.proposed_prefix||(c&&c.prefix)||'').toUpperCase()]||'';
+    case 'item.level_word':return r.student_level==='UG'?'Undergraduate':r.student_level==='GR'?'Graduate':'';
+    case 'item.fall_term':return 'Fall '+seasonYears(r.season_id)[0];
+    case 'course.prefix':return c?c.prefix||'':'';
+    case 'course.number':return c?[c.number,c.number2].filter(Boolean).join('/'):'';
+    case 'course.title':return c?c.title||'':'';
+    case 'course.description':return c?c.description||'':'';
+    case 'course.credits':return c&&c.credits!=null?String(c.credits):'';
+    case 'course.credits_min':return c?creditsRange(c.credits)[0]:'';
+    case 'course.credits_max':return c?creditsRange(c.credits)[1]:'';
+    case 'course.grading_psu':{
+      if(!c)return '';
+      const g=String(c.grading||'').trim();
+      return {'A-F':'Letter only','P/NP':'P/NP only','A-F/P/NP':'Both Letter and P/NP'}[g]||g;
+    }
+    case 'course.prereq_text':return c?prereqText(c.id):'';
+    case 'course.coreq_text':return c?coreqText(c.id):'';
+    case 'course.course_deps':return c?courseDeps(c.id):'';
+    case 'course.program_deps':return c?programDeps(c.id):'';
+    case 'course.label':return c?courseLabel(c):targetLabel(r);
+    case 'program.name':return p?p.name||'':(r.is_external?r.external_name||'':'');
+    case 'program.title':return p?progTitle(p):(r.is_external?r.external_name||'':'');
+    case 'program.description':return p?p.description||'':'';
+    case 'program.degree':return progDegree(p);
+    case 'program.requirements_text':return p?progReqText(p.id):'';
+    case 'program.sbs':return p?progSbs(p.id):[];
+  }
+  return '';
+}
+function itemClosed(r){const s=itemStatus(r);return s==='complete'||s==='declined'||s==='withdrawn';}
+// → {v, src, ro}. src: catalog | record | snapshot | manual
+function prefillValue(r,f,w){
+  const snap=w?w[f.key]:undefined;
+  if(itemClosed(r)&&!isBlank(snap))return {v:snap,src:'snapshot',ro:true};
+  const src=String(f.prefill||'').startsWith('item.')?'record':'catalog';
+  const live=ccrCtx(r,f.prefill);
+  if(!isBlank(live))return {v:live,src,ro:true};
+  // Dependency lists are computed: empty means "none", not "unknown".
+  if(/_deps$/.test(f.prefill)&&r.target_kind==='course'&&!r.is_external&&COURSES[r.course_id])return {v:'',src,ro:true};
+  return {v:snap??'',src:'manual',ro:false};
+}
+function seedValue(r,s){
+  if(String(s).startsWith('answer:')){
+    const [fk,fld]=s.slice(7).split('.');
+    const w=crWork[fk]||((CCR[r.id]&&CCR[r.id].answers)||{})[fk]||{};
+    return w[fld];
+  }
+  return ccrCtx(r,s);
+}
+// Fill in starting values for fields that have never had one.
+function initForm(d,r){
+  const w=crWork[d.form_key]=crWork[d.form_key]||{};
+  eachField(d,f=>{
+    if(w[f.key]!==undefined||!ANSWER_TYPES.has(f.type))return;
+    let v=f.seed?seedValue(r,f.seed):undefined;
+    if(isBlank(v)&&f.default!=null)v=f.default;
+    if(isBlank(v)&&f.options==='$years')v=seasonYears(r.season_id)[0];
+    if(!isBlank(v))w[f.key]=clone({v}).v;
+  });
+}
+// Facet checklist for a form, in the form's own item order when it numbers them.
+function facetList(f){
+  const nums=f.numbers||{};
+  return FACETS.filter(x=>x.target_kind===f.target&&(!f.only||f.only.includes(x.key)))
+    .sort((a,b)=>(Number(nums[a.key])||999)-(Number(nums[b.key])||999)||a.sort-b.sort);
+}
+function fieldOptions(f,r){
+  if(f.type==='yesno')return ['Yes','No'];
+  if(f.options==='$years')return seasonYears(r.season_id);
+  return Array.isArray(f.options)?f.options:[];
+}
+function countInfo(f,v){
+  if(f.max_chars){const n=String(v??'').length;return {n,max:f.max_chars,unit:'characters',over:n>f.max_chars,hard:!!f.hard_max};}
+  if(f.max_words){const s=String(v??'').trim();const n=s?s.split(/\s+/).length:0;return {n,max:f.max_words,unit:'words',over:n>f.max_words,hard:!!f.hard_max};}
+  return null;
+}
+function countText(ci){
+  if(!ci)return '';
+  return `${ci.n} / ${ci.max} ${ci.unit}`+(ci.over?(ci.hard?' — over the limit':' — over the recommended length'):'');
+}
+const showNum=f=>!!f.num&&!/x$/.test(f.num);   // "…x" = helper field with no form number
+const notesHTML=(t,cls)=>t?`<details class="ccr-notes${cls?' '+cls:''}"><summary>Form notes</summary><div>${esc(t)}</div></details>`:'';
+
+/* ── Editor ── */
+function openCcr(id){
+  const r=ITEM_BY_ID[id];if(!r)return;
+  if(!CCR_READY){setSS('⚠ CCR tables not found — run cc_003_ccr_forms.sql');return;}
+  crItemId=id;crForms=formsForItem(r);crTab=0;crDirty=false;
+  crReadOnly=!canEditItem(r);
+  crWork=clone((CCR[id]&&CCR[id].answers)||{});
+  $('cr-heading').textContent='CCR · '+itemRef(r);
+  const st=itemStatus(r),pill=$('cr-pill');
+  pill.className='pill '+st;pill.textContent=STATUS_LBL[st]||st;
+  renderCcr();
+  $('cr-body').scrollTop=0;
+  openM('mo-ccr');
+}
+function ccrHint(){
+  const h=[];
+  if(crReadOnly)h.push(LOCKED?'Editing is locked.':TIER==='viewer'?'View only.':'Only the person who entered this change (or an admin) can edit its CCR.');
+  else if(crDirty)h.push('Unsaved changes.');
+  const saved=CCR[crItemId];
+  if(saved&&saved.updated_at)h.push('Last saved '+new Date(saved.updated_at).toLocaleString('en-US',{month:'short',day:'numeric',hour:'numeric',minute:'2-digit'})+'.');
+  $('cr-hint').textContent=h.join(' ');
+}
+function renderCcrTabs(){
+  const r=ITEM_BY_ID[crItemId];if(!r)return;
+  $('cr-tabs').style.display=crForms.length?'':'none';
+  $('cr-tabs').innerHTML=crForms.map((d,i)=>{
+    const p=formProgress(d,r,crWork[d.form_key]||{});
+    const inst=(d.definition&&d.definition.institution)||'E';
+    return `<button type="button" class="ccr-tab${i===crTab?' active':''}" data-crtab="${i}"><span class="ib inst-${esc(inst)}">${esc(inst)}</span>${esc(d.definition.short||d.title)} <span class="prog">${p.done}/${p.total}</span></button>`;
+  }).join('');
+  ccrHint();
+}
+function renderCcr(){
+  const r=ITEM_BY_ID[crItemId];if(!r)return;
+  if(crTab>=crForms.length)crTab=0;
+  const none=!crForms.length;
+  $('btn-cr-save').style.display=(none||crReadOnly)?'none':'';
+  $('btn-cr-print').style.display=none?'none':'';
+  if(none){
+    $('cr-tabs').style.display='none';
+    let why='No CCR forms apply to this change. Forms are chosen from the action, whether it is a course or a program, the approval tracks, the level, and the OHSU category.';
+    if(r.target_kind==='program'&&r.institutions!=='PSU'&&!r.ohsu_category)why+=' For the OHSU Category II or III form, set the OHSU category on the change.';
+    $('cr-body').innerHTML=`<div class="ccr-empty">${esc(why)}</div>`;
+    ccrHint();return;
+  }
+  const d=crForms[crTab];
+  initForm(d,r);
+  renderCcrTabs();
+  renderCcrBody();
+}
+function renderCcrBody(){
+  const r=ITEM_BY_ID[crItemId],d=crForms[crTab];if(!r||!d)return;
+  const w=crWork[d.form_key]||{};
+  const def=d.definition||{};
+  const intro=[`<b>${esc(d.title)}</b> · version ${esc(d.version)}.`];
+  if(def.placeholder)intro.push('This is a placeholder until the official questions are available.');
+  const facetDriven=((def.sections)||[]).some(s=>(s.show_if&&s.show_if.facet)||(s.fields||[]).some(f=>f.type==='facets'||(f.show_if&&f.show_if.facet)));
+  if(facetDriven)intro.push("Sections follow the change's saved “What's changing” boxes. If you just edited those, save the change first.");
+  if(itemClosed(r))intro.push('This change is closed, so “Existing” values show what the catalog said when the CCR was last saved.');
+  let h=`<div class="ccr-intro">${intro.join(' ')}</div>`;
+  visibleSections(d,r,w).forEach(({s,fields})=>{
+    if(!fields.length)return;
+    h+=`<div class="ccr-sec"><h4>${esc(s.title)}</h4><div class="sb">${notesHTML(s.notes,'sec-notes')}${fields.map(f=>fieldHTML(f,r,w)).join('')}</div></div>`;
+  });
+  $('cr-body').innerHTML=h;
+}
+function fieldHTML(f,r,w){
+  const id='cf-'+f.key;
+  const dis=crReadOnly?' disabled':'';
+  const num=showNum(f)?`<span class="ccr-num">${esc(f.num)}</span>`:'';
+  const lab=`<label for="${esc(id)}">${num}<span>${esc(f.label)}</span></label>`;
+  const v=w[f.key];
+  let ctl='',meta=[];
+  switch(f.type){
+    case 'textarea':case 'links':
+      ctl=`<textarea id="${esc(id)}" data-k="${esc(f.key)}" rows="${f.type==='links'?2:3}"${f.type==='links'?' placeholder="https://…"':''}${dis}>${esc(v??'')}</textarea>`;break;
+    case 'number':
+      ctl=`<input type="number" step="any" id="${esc(id)}" data-k="${esc(f.key)}" value="${esc(v??'')}"${dis}>`;break;
+    case 'date':
+      ctl=`<input type="date" id="${esc(id)}" data-k="${esc(f.key)}" value="${esc(v??'')}"${dis}>`;break;
+    case 'select':case 'yesno':{
+      const opts=fieldOptions(f,r).slice();
+      if(!isBlank(v)&&!opts.includes(v))opts.push(v);
+      ctl=`<select id="${esc(id)}" data-k="${esc(f.key)}"${dis}><option value="">—</option>${opts.map(o=>`<option${o===v?' selected':''}>${esc(o)}</option>`).join('')}</select>`;
+      break;
+    }
+    case 'prefill':{
+      const pv=prefillValue(r,f,w);
+      if(pv.ro){
+        const src={catalog:'From the catalog',record:'From the change record',snapshot:'As recorded when this CCR was last saved'}[pv.src]||'';
+        ctl=`<div class="ccr-pre" id="${esc(id)}">${isBlank(pv.v)?'<span class="muted">None on file</span>':esc(pv.v)}<span class="src">${esc(src)}</span></div>`;
+        const ci=countInfo(f,pv.v);if(ci)meta.push(`<span class="ccr-cnt${ci.over?' over':''}">${esc(countText(ci))}</span>`);
+      }else{
+        ctl=`<input id="${esc(id)}" data-k="${esc(f.key)}" value="${esc(pv.v??'')}"${dis}>`;
+        meta.push('<span>Not in the catalog — type it here.</span>');
+      }
+      break;
+    }
+    case 'facets':{
+      const nums=f.numbers||{};
+      const list=facetList(f);
+      const on=new Set(r.change_facets||[]);
+      ctl=`<div class="ccr-facets">${list.map(x=>`<span class="${on.has(x.key)?'':'off'}">${on.has(x.key)?'☑':'☐'} ${nums[x.key]?`<span class="ccr-num">${esc(nums[x.key])}</span>`:''}${esc(x.label)}</span>`).join('')}</div>`;
+      break;
+    }
+    case 'note':
+      ctl=`<div class="ccr-note">${esc(f.text||'')}</div>`;break;
+    case 'sbs':
+      ctl=sbsHTML(f,Array.isArray(v)?v:[],dis);break;
+    default:
+      ctl=`<input id="${esc(id)}" data-k="${esc(f.key)}" value="${esc(v??'')}"${dis}>`;
+  }
+  if(f.type!=='prefill'){const ci=countInfo(f,v);if(ci)meta.push(`<span class="ccr-cnt${ci.over?' over':''}">${esc(countText(ci))}</span>`);}
+  if(f.hint)meta.push(`<span>${esc(f.hint)}</span>`);
+  return `<div class="ccr-f" data-f="${esc(f.key)}">${lab}${ctl}${meta.length?`<div class="ccr-meta">${meta.join('')}</div>`:''}${notesHTML(f.notes)}</div>`;
+}
+function sbsTotals(rows){
+  const n=x=>{const m=String(x??'').match(/\d+(?:\.\d+)?/);return m?Number(m[0]):0;};
+  const o=rows.filter(r=>!isBlank(r.oc)&&r.os!=='Add').reduce((s,r)=>s+n(r.ocr),0);
+  const p=rows.filter(r=>!isBlank(r.pc)&&r.ps!=='Delete').reduce((s,r)=>s+n(r.pcr),0);
+  return {o,p};
+}
+function sbsHTML(f,rows,dis){
+  const k=esc(f.key);
+  const cell=(i,c,row)=>{
+    const v=row[c]??'';
+    if(c==='os'||c==='ps'||c==='orse'||c==='prse'){
+      const opts=(c==='os'||c==='ps')?SBS_ST:SBS_RSE;
+      return `<select class="${(c==='os'||c==='ps')?'st-in':'rse-in'}" data-sbsk="${k}" data-i="${i}" data-c="${c}" aria-label="${c}"${dis}><option value=""></option>${opts.map(o=>`<option${o===v?' selected':''}>${o}</option>`).join('')}</select>`;
+    }
+    const wd=(c==='oc'||c==='pc')?' class="nm-in"':' style="width:56px"';
+    return `<input data-sbsk="${k}" data-i="${i}" data-c="${c}" value="${esc(v)}" aria-label="${c}"${wd}${dis}>`;
+  };
+  const t=sbsTotals(rows);
+  const hdr=['Same, Add, Revise, Delete','Course #/Name','# of credits','# of times taken','Required, Selective or Elective'];
+  return `<div class="ccr-sbs-wrap"><table class="ccr-sbs"><thead>
+    <tr><th colspan="5" class="grp">Original</th><th colspan="5" class="grp div">Proposed</th><th></th></tr>
+    <tr>${hdr.map(x=>`<th>${x}</th>`).join('')}${hdr.map((x,i)=>`<th${i===0?' class="div"':''}>${x}</th>`).join('')}<th></th></tr></thead>
+    <tbody>${rows.map((row,i)=>`<tr>${SBS_COLS.map(c=>`<td${c==='ps'?' class="div"':''}>${cell(i,c,row)}</td>`).join('')}
+      <td>${dis?'':`<button type="button" class="rrm" data-sbs-rm="${i}" data-sbsk="${k}" aria-label="Remove row">✕</button>`}</td></tr>`).join('')
+      ||`<tr><td colspan="11" class="empty-row">No rows. ${dis?'':'Use “+ Add row”, or “Start from catalog” to copy the program’s courses.'}</td></tr>`}</tbody>
+    <tfoot><tr><td colspan="2">Total credits</td><td data-sbs-tot="o">${t.o}</td><td colspan="2"></td><td class="div" colspan="2">Total credits</td><td data-sbs-tot="p">${t.p}</td><td colspan="3"></td></tr></tfoot>
+  </table></div>${dis?'':`<div class="sbs-add acts"><button type="button" class="btn btn-s" data-sbs-add="${k}">+ Add row</button><button type="button" class="btn btn-s" data-sbs-reset="${k}">Start from catalog</button></div>`}`;
+}
+function curWork(){const d=crForms[crTab];if(!d)return null;return crWork[d.form_key]=crWork[d.form_key]||{};}
+function reRenderBody(){const b=$('cr-body'),sc=b.scrollTop;renderCcrBody();b.scrollTop=sc;}
+function markDirty(){crDirty=true;renderCcrTabs();}
+function ccrOnInput(e){
+  if(crReadOnly)return;
+  const el=e.target,w=curWork();if(!w)return;
+  if(el.dataset.sbsk){
+    const rows=Array.isArray(w[el.dataset.sbsk])?w[el.dataset.sbsk]:(w[el.dataset.sbsk]=[]);
+    const row=rows[Number(el.dataset.i)];if(!row)return;
+    if(row[el.dataset.c]===el.value)return;
+    row[el.dataset.c]=el.value;
+    markDirty();
+    // Update the totals in place — re-rendering would steal focus mid-typing.
+    const t=sbsTotals(rows),tb=el.closest('table');
+    if(tb){const o=tb.querySelector('[data-sbs-tot="o"]'),p=tb.querySelector('[data-sbs-tot="p"]');if(o)o.textContent=t.o;if(p)p.textContent=t.p;}
+    return;
+  }
+  const k=el.dataset.k;if(!k)return;
+  if(w[k]===el.value)return;
+  w[k]=el.value;
+  const d=crForms[crTab],f=(()=>{let x=null;eachField(d,g=>{if(g.key===k)x=g;});return x;})();
+  const cnt=el.closest('.ccr-f')&&el.closest('.ccr-f').querySelector('.ccr-cnt');
+  if(cnt&&f){const ci=countInfo(f,el.value);cnt.textContent=countText(ci);cnt.classList.toggle('over',!!(ci&&ci.over));}
+  markDirty();
+  if(el.tagName==='SELECT')reRenderBody();   // branching may have changed
+}
+function ccrOnClick(e){
+  if(crReadOnly)return;
+  const w=curWork();if(!w)return;
+  const add=e.target.closest('[data-sbs-add]');
+  if(add){const k=add.dataset.sbsAdd;(w[k]=Array.isArray(w[k])?w[k]:[]).push({os:'',oc:'',ocr:'',ot:'',orse:'',ps:'Add',pc:'',pcr:'',pt:'1',prse:''});markDirty();reRenderBody();return;}
+  const rm=e.target.closest('[data-sbs-rm]');
+  if(rm){const k=rm.dataset.sbsk;if(Array.isArray(w[k])){w[k].splice(Number(rm.dataset.sbsRm),1);markDirty();reRenderBody();}return;}
+  const rs=e.target.closest('[data-sbs-reset]');
+  if(rs){
+    const k=rs.dataset.sbsReset,r=ITEM_BY_ID[crItemId];
+    const go=()=>{w[k]=ccrCtx(r,'program.sbs');markDirty();reRenderBody();};
+    if(Array.isArray(w[k])&&w[k].length)showCfm('Start over from the catalog?','This replaces every row in the side-by-side with the program’s courses as they are on file now.',go);
+    else go();
+  }
+}
+async function saveCcr(){
+  if(crReadOnly||!crItemId)return false;
+  const r=ITEM_BY_ID[crItemId];if(!r)return false;
+  const prev=CCR[crItemId]||{};
+  const answers=clone(crWork);
+  const versions=Object.assign({},prev.form_versions||{});
+  crForms.forEach(d=>{
+    const w=answers[d.form_key];if(!w)return;   // never opened, nothing to save
+    versions[d.form_key]=d.version;
+    // Snapshot read-only "Existing" values so a closed change keeps them.
+    eachField(d,f=>{if(f.type!=='prefill')return;const pv=prefillValue(r,f,w);if(pv.ro)w[f.key]=pv.v;});
+  });
+  const btn=$('btn-cr-save');btn.disabled=true;setSS('Saving CCR…');
+  try{
+    const {data,error}=await sb.from('cc_ccr').upsert({item_id:crItemId,answers,form_versions:versions},{onConflict:'item_id'}).select().single();
+    if(error){setSS('⚠ CCR not saved: '+error.message);return false;}
+    CCR[crItemId]=data;
+    crWork=clone(data.answers);
+    crDirty=false;
+    setSS('● CCR saved');
+    renderCcrTabs();renderTracker();renderPackets();
+    return true;
+  }finally{btn.disabled=false;}
+}
+function closeCcr(){
+  if(crDirty&&!crReadOnly){
+    showCfm('Close without saving?','Your unsaved CCR answers will be lost.',()=>{crDirty=false;closeM('mo-ccr');});
+    return;
+  }
+  closeM('mo-ccr');
+}
+async function printCcr(){
+  const r=ITEM_BY_ID[crItemId];if(!r)return;
+  if(crDirty&&!crReadOnly){if(!await saveCcr())return;}
+  if(SEASON_ID!==r.season_id)setSeason(r.season_id);
+  PACKET_KEY='item:'+r.id;
+  switchTab('v-ccr');renderPackets();
+  setTimeout(()=>window.print(),100);   // modals are hidden in print
+}
+
+/* ── CCR packets: one program's changes plus the courses linked to them ── */
+function packetOrder(a,b){
+  const w=r=>r.target_kind==='program'?0:r.action==='add'?1:r.action==='edit'?2:3;
+  return w(a)-w(b)||(a.seq??0)-(b.seq??0);
+}
+function packetsFor(sid){
+  const items=ITEMS.filter(r=>r.season_id===sid&&r.approval_state!=='pending_delete');
+  const map=new Map();
+  const add=(key,label,it)=>{if(!map.has(key))map.set(key,{key,label,ids:new Set()});map.get(key).ids.add(it.id);};
+  items.forEach(r=>{
+    let key,label;
+    if(r.target_kind==='program'&&r.is_external){key='ext:'+(r.external_name||'');label=(r.external_name||'Non-SPH program')+' (non-SPH)';}
+    else if(r.program_id!=null&&PROGRAMS[r.program_id]){key='prog:'+r.program_id;label=progTitle(PROGRAMS[r.program_id]);}
+    else{key='prog:none';label='Other / no program';}
+    add(key,label,r);
+    if(r.target_kind==='program'){
+      // Linked courses come along, with their slash and cross-list partners.
+      childrenOf(r.id).forEach(k=>{
+        [k,...pairsOf(k.id,'slash_pair'),...pairsOf(k.id,'cross_list')]
+          .filter(x=>x.season_id===sid&&x.approval_state!=='pending_delete').forEach(x=>add(key,label,x));
+      });
+    }
+  });
+  return [...map.values()].map(p=>({key:p.key,label:p.label,items:[...p.ids].map(id=>ITEM_BY_ID[id]).filter(Boolean).sort(packetOrder)}))
+    .sort((a,b)=>(a.key==='prog:none')-(b.key==='prog:none')||a.label.localeCompare(b.label));
+}
+function renderPackets(){
+  const box=$('k-body'),sel=$('k-pack');if(!box)return;
+  if(!CCR_READY){
+    sel.innerHTML='<option value="">—</option>';
+    box.innerHTML='<div class="rpt-empty">CCR packets need a database update. Run <b>cc_003_ccr_forms.sql</b> in the Supabase SQL Editor, then reload this page.</div>';
+    return;
+  }
+  const sid=SEASON_ID;
+  const packs=packetsFor(sid);
+  const items=ITEMS.filter(r=>r.season_id===sid).sort((a,b)=>(a.seq??0)-(b.seq??0));
+  sel.innerHTML=items.length
+    ?`<optgroup label="By program">${packs.map(p=>`<option value="${esc(p.key)}">${esc(p.label)} — ${p.items.length} change${p.items.length===1?'':'s'}</option>`).join('')}</optgroup>
+      <optgroup label="Single change">${items.map(r=>`<option value="item:${esc(r.id)}">${esc(itemRef(r))}</option>`).join('')}</optgroup>`
+    :'<option value="">No changes this season</option>';
+  if(!PACKET_KEY||![...sel.options].some(o=>o.value===PACKET_KEY))PACKET_KEY=packs[0]?packs[0].key:'';
+  sel.value=PACKET_KEY;
+  let pk=null;
+  if(PACKET_KEY.startsWith('item:')){const r=ITEM_BY_ID[PACKET_KEY.slice(5)];if(r)pk={label:itemRef(r),items:[r],single:true};}
+  else pk=packs.find(p=>p.key===PACKET_KEY)||null;
+  if(!pk){box.innerHTML='<div class="rpt-empty">No curricular changes recorded for this season yet.</div>';return;}
+  box.innerHTML=packetHTML(pk,$('k-notes').checked);
+}
+function nextStepText(r){
+  const p=PROG[r.id]||{},st=itemStatus(r);
+  if(st!=='not_started'&&st!=='in_progress')return STATUS_LBL[st]||st;
+  const parts=[];
+  if(r.institutions!=='OHSU')parts.push('PSU: '+(p.next_psu_stage_id&&STAGES[p.next_psu_stage_id]?STAGES[p.next_psu_stage_id].label:'done'));
+  if(r.institutions!=='PSU')parts.push('OHSU: '+(p.next_ohsu_stage_id&&STAGES[p.next_ohsu_stage_id]?STAGES[p.next_ohsu_stage_id].label:'done'));
+  return parts.join(' · ');
+}
+function packetHTML(pk,showBlank){
+  const season=SEASONS.find(s=>s.id===SEASON_ID);
+  let h=`<div class="rpt-head">
+    <div><h2>Curricular Change Report</h2><div class="rpt-season">${esc(season?season.label:'')} · ${esc(pk.label)}</div></div>
+    <div class="rpt-asof">As of ${esc(fmtLong(todayISO()))}<br>OHSU-PSU School of Public Health</div>
+  </div>`;
+  if(!pk.single){
+    h+=`<div class="pk-toc"><table><thead><tr><th style="width:44px">#</th><th>Change</th><th>Level</th><th>APCC</th><th>Where it stands</th></tr></thead><tbody>${
+      pk.items.map(r=>`<tr><td class="seq">${seqLabel(r.seq)}</td><td><div class="nm">${esc(r.title)}</div><div style="font-size:11.5px;color:var(--dgray)">${esc(kindLabel(r))}</div></td>
+        <td>${esc(r.student_level)}${r.ohsu_category?' · Cat '+esc(r.ohsu_category):''}</td><td style="white-space:nowrap">${esc(apccLabel(r.apcc_meeting_id)||'—')}</td>
+        <td style="font-size:12px">${esc(nextStepText(r))}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  pk.items.forEach(r=>{h+=pkItemHTML(r,showBlank);});
+  return h;
+}
+function answerHTML(f,r,w){
+  let v;
+  if(f.type==='prefill')v=prefillValue(r,f,w).v;
+  else if(f.type==='facets'){
+    const on=new Set(r.change_facets||[]);
+    v=facetList(f).filter(x=>on.has(x.key))
+      .map(x=>((f.numbers||{})[x.key]?(f.numbers[x.key]+'. '):'')+x.label).join('\n');
+  }
+  else v=w[f.key];
+  if(isBlank(v))return null;
+  if(f.type==='links')return String(v).split(/\n+/).map(s=>s.trim()).filter(Boolean)
+    .map(s=>/^https?:\/\//i.test(s)?`<a href="${esc(s)}" target="_blank" rel="noopener">${esc(s)}</a>`:esc(s)).join('<br>');
+  if(f.type==='sbs'){
+    const t=sbsTotals(v);
+    return `<table class="pk-sbs"><thead><tr><th colspan="5">Original</th><th colspan="5">Proposed</th></tr>
+      <tr><th>S/A/R/D</th><th>Course</th><th>Cr</th><th>Times</th><th>R/S/E</th><th>S/A/R/D</th><th>Course</th><th>Cr</th><th>Times</th><th>R/S/E</th></tr></thead>
+      <tbody>${v.map(row=>`<tr>${SBS_COLS.map(c=>`<td>${esc(row[c]??'')}</td>`).join('')}</tr>`).join('')}</tbody>
+      <tfoot><tr><td colspan="2"><b>Total credits</b></td><td><b>${t.o}</b></td><td colspan="4"></td><td><b>${t.p}</b></td><td colspan="2"></td></tr></tfoot></table>`;
+  }
+  return esc(v);
+}
+function pkItemHTML(r,showBlank){
+  const parents=parentsOf(r.id),kids=childrenOf(r.id),slash=pairsOf(r.id,'slash_pair'),xl=pairsOf(r.id,'cross_list');
+  const links=[];
+  if(parents.length)links.push('Part of '+parents.map(itemRef).join('; '));
+  if(kids.length)links.push('Includes '+kids.map(x=>'#'+seqLabel(x.seq)).join(', '));
+  if(slash.length)links.push('Slash pair with '+slash.map(x=>'#'+seqLabel(x.seq)).join(', '));
+  if(xl.length)links.push('Cross-listed with '+xl.map(x=>'#'+seqLabel(x.seq)).join(', '));
+  const tracks={both:'PSU and OHSU',PSU:'PSU only',OHSU:'OHSU only'}[r.institutions]||r.institutions;
+  const fact=(k,v)=>v?`<div><b>${esc(k)}</b>${esc(v)}</div>`:'';
+  let h=`<section class="pk-item">
+    <h3>#${seqLabel(r.seq)} ${esc(r.title)}</h3>
+    <div class="pk-sub">${esc(kindLabel(r))} · ${esc(itemProgramLabel(r))}<span class="no-print"> · <a href="#" data-open-ccr="${esc(r.id)}" style="color:var(--teal)">Open CCR</a></span></div>
+    <div class="pk-facts">
+      ${fact('Level',r.student_level+(r.ohsu_category?' · OHSU '+(CAT_LBL[r.ohsu_category]||r.ohsu_category):''))}
+      ${fact('Approval tracks',tracks)}
+      ${fact('Initiated by',[initiatorShort(r),r.initiated_on?fmtLong(r.initiated_on):''].filter(Boolean).join(', '))}
+      ${fact('APCC meeting',apccLabel(r.apcc_meeting_id))}
+      ${fact('Where it stands',nextStepText(r))}
+      ${fact('Linked changes',links.join(' · '))}
+    </div>`;
+  if(r.description)h+=`<div class="pk-block"><h4>Summary</h4><p>${esc(r.description)}</p></div>`;
+  if(r.justification)h+=`<div class="pk-block"><h4>Justification</h4><p>${esc(r.justification)}</p></div>`;
+  const forms=formsForItem(r),saved=CCR[r.id];
+  if(!forms.length)h+='<div class="pk-nocr">No CCR forms apply to this change.</div>';
+  else if(!saved)h+=`<div class="pk-nocr">CCR not started. Forms that apply: ${esc(forms.map(d=>d.definition.short||d.title).join(', '))}.</div>`;
+  else forms.forEach(d=>{
+    const w=(saved.answers||{})[d.form_key]||{};
+    const p=formProgress(d,r,w);
+    let body='';
+    visibleSections(d,r,w).forEach(({s,fields})=>{
+      let rows='';
+      fields.forEach(f=>{
+        if(f.type==='note')return;
+        const a=answerHTML(f,r,w);
+        if(a==null&&!showBlank)return;
+        rows+=`<div class="pk-qa${f.type==='sbs'&&a!=null?' wide':''}"><span class="n">${showNum(f)?esc(f.num):''}</span><span class="q">${esc(f.label)}</span>
+          <span class="a${a==null?' blank':''}">${a==null?'Not answered':a}</span></div>`;
+      });
+      if(rows)body+=`<div class="pk-sec">${esc(s.title)}</div>${rows}`;
+    });
+    h+=`<div class="pk-form"><h4>${esc(d.title)} <span class="v">v${esc(d.version)} · ${p.done} of ${p.total} answered</span></h4>${body||'<div class="pk-nocr">Nothing answered yet.</div>'}</div>`;
+  });
+  return h+'</section>';
+}
+
 /* ── MODAL PLUMBING ── */
 function openM(id){$(id).classList.add('open');}
 function closeM(id){$(id).classList.remove('open');if(id==='mo-cfm')cfmCb=null;if(id==='mo-stage')cellCtx=null;}
@@ -1589,8 +2355,8 @@ function switchTab(viewId){
 }
 function setSeason(id){
   SEASON_ID=id||null;
-  setv('t-season',SEASON_ID);setv('r-season',SEASON_ID);
-  renderTracker();renderReport();
+  setv('t-season',SEASON_ID);setv('r-season',SEASON_ID);setv('k-season',SEASON_ID);
+  renderTracker();renderReport();renderPackets();
 }
 
 /* ── WIRING ── */
@@ -1614,6 +2380,30 @@ function wire(){
   $('r-season').addEventListener('change',()=>setSeason(val('r-season')));
   ['r-level','r-done','r-closed'].forEach(id=>$(id).addEventListener('change',renderReport));
   $('btn-print').onclick=()=>window.print();
+
+  // CCR packets
+  $('k-season').addEventListener('change',()=>{PACKET_KEY='';setSeason(val('k-season'));});
+  $('k-pack').addEventListener('change',()=>{PACKET_KEY=val('k-pack');renderPackets();});
+  $('k-notes').addEventListener('change',renderPackets);
+  $('btn-k-print').onclick=()=>window.print();
+  $('k-body').addEventListener('click',e=>{
+    const a=e.target.closest('[data-open-ccr]');if(!a)return;
+    e.preventDefault();openCcr(a.dataset.openCcr);
+  });
+
+  // CCR editor
+  $('btn-im-ccr').onclick=()=>{if(itemId)openCcr(itemId);};
+  $('cr-tabs').addEventListener('click',e=>{
+    const b=e.target.closest('[data-crtab]');if(!b)return;
+    crTab=Number(b.dataset.crtab);renderCcr();
+  });
+  $('cr-body').addEventListener('input',ccrOnInput);
+  $('cr-body').addEventListener('change',ccrOnInput);
+  $('cr-body').addEventListener('click',ccrOnClick);
+  $('btn-cr-save').onclick=()=>saveCcr();
+  $('btn-cr-cancel').onclick=closeCcr;
+  $('cr-x').onclick=closeCcr;
+  $('btn-cr-print').onclick=printCcr;
 
   // Item modal
   document.querySelectorAll('input[name="im-action"],input[name="im-target"]').forEach(r=>r.addEventListener('change',imSync));
@@ -1682,13 +2472,16 @@ function wire(){
   $('cfm-ok').onclick=()=>{const cb=cfmCb;closeM('mo-cfm');if(cb)cb();};
   document.querySelectorAll('[data-close]').forEach(b=>{b.onclick=()=>closeM(b.dataset.close);});
   document.querySelectorAll('.mo').forEach(o=>{
-    o.addEventListener('click',e=>{if(e.target===o&&o.id!=='mo-item')closeM(o.id);});
+    o.addEventListener('click',e=>{if(e.target===o&&o.id!=='mo-item'&&o.id!=='mo-ccr')closeM(o.id);});
   });
   document.addEventListener('keydown',e=>{
     if(e.key!=='Escape')return;
     // Close only the topmost modal (confirm sits above the item modal).
     const open=[...document.querySelectorAll('.mo.open')];
-    if(open.length)closeM(open[open.length-1].id);
+    if(!open.length)return;
+    const top=open[open.length-1].id;
+    if(top==='mo-ccr')closeCcr();   // asks first if there are unsaved answers
+    else closeM(top);
   });
 }
 
