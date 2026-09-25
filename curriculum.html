@@ -285,6 +285,9 @@ table.ccr-sbs tfoot td{font-weight:700;background:var(--surface-2);font-variant-
 .od-sub{font-size:14px;font-weight:600;color:var(--text);margin-top:2px}
 .od-levels{font-size:12px;color:var(--dgray);margin-top:3px}
 .od-intro{font-size:12px;color:var(--dgray);margin:8px 0 2px}
+.od-p{margin:3px 0}
+.od-top{position:relative}
+.od-dl{position:absolute;top:-4px;right:0}
 .od-h{font-size:13.5px;font-weight:700;color:var(--navytx);text-decoration:underline;text-underline-offset:3px;margin:16px 0 6px;break-after:avoid}
 .od-h2{font-size:12.5px;font-weight:700;color:var(--text);margin:12px 0 4px;break-after:avoid}
 .od-line{display:flex;gap:6px;align-items:baseline;padding:2px 0;break-inside:avoid}
@@ -750,6 +753,7 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
     <div class="mb" id="cr-body"></div>
     <div class="mf">
       <span class="statusline lft" id="cr-hint"></span>
+      <button class="btn" id="btn-cr-docx" title="Download the form on this tab as a Word document, including unsaved answers">⬇ Word</button>
       <button class="btn" id="btn-cr-print">🖨 Print this CCR</button>
       <button class="btn" id="btn-cr-cancel">Close</button>
       <button class="btn btn-p" id="btn-cr-save">Save CCR</button>
@@ -2078,6 +2082,7 @@ function renderCcr(){
   const none=!crForms.length;
   $('btn-cr-save').style.display=(none||crReadOnly)?'none':'';
   $('btn-cr-print').style.display=none?'none':'';
+  $('btn-cr-docx').style.display=(!none&&crForms[crTab]&&OD_MODEL[crForms[crTab].form_key])?'':'none';
   if(none){
     $('cr-tabs').style.display='none';
     let why='No CCR forms apply to this change. Forms are chosen from the action, whether it is a course or a program, the approval tracks, the level, and the OHSU category.';
@@ -2513,226 +2518,445 @@ function stageDoneDate(r,key){
   const e=(EVENTS[r.id]||{})[s.id];
   return e&&e.state==='done'?(e.event_date||''):null;
 }
+const OD_REGISTRAR='NOTE: You are encouraged to discuss your proposal with the Registrar’s Office during its development stage to help you understand how best to represent the desired curricular changes and to provide guidance on course numbers, titles, credits, and descriptions.';
+/* Each OHSU layout builds a form model: a list of blocks (headings,
+   label/answer lines, checkbox rows, the revision grid, numbered prompts,
+   signature lines…). odToHTML draws the model on the page; odToDocx builds
+   the same model as a Word file. One layout, two outputs, so they can't
+   drift apart. Values are plain text; lines that are URLs become links. */
 function odKit(d,r,w){
   const M={};eachField(d,(f,s)=>{M[f.key]={f,s};});
   const used=new Set();
-  const blank='<span class="od-blank">Not answered</span>';
+  const txt=(f)=>{
+    let v;
+    if(f.type==='prefill')v=prefillValue(r,f,w).v;
+    else v=w[f.key];
+    if(isBlank(v))return null;
+    if(f.type==='checks'){const on=new Set(v);return (f.options||[]).filter(o=>on.has(o.k)).map(o=>o.label.replace(/:$/,'')).join('\n');}
+    if(Array.isArray(v))return null;   // side-by-side rows are drawn by their own block
+    return String(v);
+  };
+  const V=k=>{used.add(k);const x=M[k];return x?txt(x.f):null;};
   const raw=k=>{used.add(k);const x=M[k];if(!x)return '';
     if(x.f.type==='prefill')return prefillValue(r,x.f,w).v??'';return w[k]??'';};
-  const A=k=>{used.add(k);const x=M[k];return x?answerHTML(x.f,r,w):null;};
-  const date=k=>{const v=raw(k);return v?esc(/^\d{4}-\d{2}-\d{2}/.test(v)?fmtLong(v):v):null;};
-  const line=(lab,html,cls)=>`<div class="od-line${cls?' '+cls:''}"><span class="od-lab">${esc(lab)}</span><span class="od-val">${html??blank}</span></div>`;
-  const choice=(lab,opts,v,cls)=>{
-    const on=(Array.isArray(v)?v:[v]).map(x=>String(x??'').trim().toLowerCase());
-    return `<div class="od-line${cls?' '+cls:''}"><span class="od-lab">${esc(lab)}</span><span>${opts.map(o=>{
-      const c=on.includes(o.toLowerCase());return `<span class="od-ch${c?' on':''}">${BOX(c)}${esc(o)}</span>`;}).join('')}</span></div>`;
-  };
-  const q=(n,text,html)=>`<div class="od-q"><div class="od-qt">${n?`<span class="n">${esc(n)}.</span>`:''}<span${n?'':' style="font-weight:600"'}>${esc(text)}</span></div><div class="od-a">${html??blank}</div></div>`;
+  const date=k=>{const v=raw(k);return v?(/^\d{4}-\d{2}-\d{2}/.test(v)?fmtLong(v):String(v)):null;};
   const extras=()=>{
-    let rows='';
+    const rows=[];
     eachField(d,(f,s)=>{
-      if(used.has(f.key)||!ANSWER_TYPES.has(f.type))return;
+      if(used.has(f.key)||!ANSWER_TYPES.has(f.type)||f.type==='sbs')return;
       if(!condOK(s.show_if,r,w)||!condOK(f.show_if,r,w))return;
-      const a=answerHTML(f,r,w);if(a==null)return;
-      rows+=`<div class="pk-qa"><span class="n">${showNum(f)?esc(f.num):''}</span><span class="q">${esc(f.label)}</span><span class="a">${a}</span></div>`;
+      const a=txt(f);if(a==null)return;
+      rows.push({num:showNum(f)?f.num:'',label:f.label,val:a});
     });
-    return rows?`<div class="od-extra"><div class="od-h2">Other answers on this CCR</div>${rows}</div>`:'';
+    return rows.length?[{t:'extras',rows}]:[];
   };
-  return {M,used,blank,raw,A,date,line,choice,q,extras};
+  return {M,used,V,raw,date,extras};
 }
-function odHead(title,sub,levels,intro){
-  return `<div class="od-top"><div class="od-kicker">OHSU form · drafted in ConvergeSPH</div>
-    <div class="od-title">${esc(title)}</div>${sub?`<div class="od-sub">${esc(sub)}</div>`:''}
-    ${levels?`<div class="od-levels">Levels of Review: ${esc(levels)}</div>`:''}</div>${intro?`<div class="od-intro">${intro}</div>`:''}`;
+const odLine=(lab,val,sub)=>({t:'line',lab,val,sub:!!sub});
+const odChoice=(lab,opts,v,sub)=>{
+  const on=(Array.isArray(v)?v:[v]).map(x=>String(x??'').trim().toLowerCase());
+  return {t:'choice',lab,sub:!!sub,items:opts.map(o=>({label:o,on:on.includes(o.toLowerCase())}))};
+};
+function odFootBlock(d){
+  return {t:'foot',left:'OHSU form updated: '+((d.definition&&d.definition.ohsu_form_date)||'April 2025'),
+    right:'CCR form: '+(d.definition.short||d.title)+' v'+d.version};
 }
-function odFoot(d){
-  const fd=(d.definition&&d.definition.ohsu_form_date)||'April 2025';
-  return `<div class="od-foot"><span>OHSU form updated: ${esc(fd)}</span><span>CCR form: ${esc(d.definition.short||d.title)} v${esc(d.version)}</span></div>`;
-}
-function odAuth(r,what){
+function odAuthBlocks(r,what){
   const signed=stageDoneDate(r,'ohsu_forms_signed');
-  const sv=signed!=null?'Signed (Adobe e-sign)':'';
-  const sd=signed?fmtLong(signed):'';
-  return `<div class="od-h2">Authorization</div>
-    <div>By signing this form, you confirm your request to ${esc(what)}.</div>
-    <div>All requests must include the signature of the program director and the applicable associate dean.</div>
-    <div class="od-sig">
-      <div class="sc"><span class="sv">${esc(sv)}</span><span class="ln">Program Director Signature</span></div><div class="sc"><span class="sv">${esc(sd)}</span><span class="ln">Date</span></div>
-      <div class="sc"><span class="sv">${esc(sv)}</span><span class="ln">Associate Dean Signature**</span></div><div class="sc"><span class="sv">${esc(sd)}</span><span class="ln">Date</span></div>
-    </div>
-    <div class="od-fn">*If necessary. Consult the Office of the Provost for guidance on whether your proposal will require regional accreditation approval.</div>
-    <div class="od-fn">**Following the Associate Dean's signature, the Office of the Dean will submit the form as verification of school-level approval to the Office of the Provost-Academic Affairs (ModifyCurriculum@ohsu.edu) to initiate the university-level administrative review process.</div>`;
+  return [
+    {t:'h2',text:'Authorization'},
+    {t:'p',text:`By signing this form, you confirm your request to ${what}.`},
+    {t:'p',text:'All requests must include the signature of the program director and the applicable associate dean.'},
+    {t:'sig',signed:signed!=null,date:signed?fmtLong(signed):''},
+    {t:'fn',text:'*If necessary. Consult the Office of the Provost for guidance on whether your proposal will require regional accreditation approval.'},
+    {t:'fn',text:'**Following the Associate Dean’s signature, the Office of the Dean will submit the form as verification of school-level approval to the Office of the Provost-Academic Affairs (ModifyCurriculum@ohsu.edu) to initiate the university-level administrative review process.'}
+  ];
 }
-const OD_REGISTRAR='NOTE: You are encouraged to discuss your proposal with the Registrar’s Office during its development stage to help you understand how best to represent the desired curricular changes and to provide guidance on course numbers, titles, credits, and descriptions.';
+function odFileName(parts){
+  return parts.filter(Boolean).join(' ').replace(/[\\/:*?"<>|#]+/g,'').replace(/\s+/g,'_').replace(/_+/g,'_').slice(0,120)+'.docx';
+}
 
 /* ── Category II / Category III ── */
-function odProgram(d,r,w){
-  const cat=d.form_key==='ohsu_cat2'?2:3;
-  const K=odKit(d,r,w);
-  let h=odHead(`Curricular Modification: Category ${cat===2?'II':'III'}`,
-    cat===2?'Substantive Program Revision':'Minor Program Revision',
-    cat===2?'Program – School – University – Accreditation*':'Program – School – Provost’s Office',
-    `Review the Curriculum Modifications webpage for the deadlines by which proposals need to be submitted to the Office of the Provost${cat===2?' for the proposed implementation date':''}.`);
+function odProgramModel(d,r,w){
+  const cat=d.form_key==='ohsu_cat2'?2:3,roman=cat===2?'II':'III';
+  const K=odKit(d,r,w),B=[];
+  B.push({t:'head',title:`Curricular Modification: Category ${roman}`,
+    sub:cat===2?'Substantive Program Revision':'Minor Program Revision',
+    levels:cat===2?'Program – School – University – Accreditation*':'Program – School – Provost’s Office',
+    intro:`Review the Curriculum Modifications webpage for the deadlines by which proposals need to be submitted to the Office of the Provost${cat===2?' for the proposed implementation date':''}.`});
+  B.push({t:'h',text:'Submission Information'},odLine('Date of Submission to the Office of the Provost:',K.date('f1')));
+  B.push({t:'h',text:'Program Information'},odLine('School/College:',K.V('f2')),
+    {t:'row',items:[odLine('Degree(s):',K.V('f3')),odLine('Major:',K.V('f4'))]},
+    {t:'row',items:[odLine('Contact’s Name:',K.V('f5')),odLine('Contact’s Email:',K.V('f6'))]});
+  B.push({t:'h',text:'Proposed Implementation Date'},odLine(cat===2?'Term and Academic Year:':'Academic Year:',K.V('f7')));
 
-  h+=`<div class="od-h">Submission Information</div>${K.line('Date of Submission to the Office of the Provost:',K.date('f1'))}`;
-  h+=`<div class="od-h">Program Information</div>${K.line('School/College:',K.A('f2'))}
-    <div class="od-row">${K.line('Degree(s):',K.A('f3'))}${K.line('Major:',K.A('f4'))}</div>
-    <div class="od-row">${K.line('Contact’s Name:',K.A('f5'))}${K.line('Contact’s Email:',K.A('f6'))}</div>`;
-  h+=`<div class="od-h">Proposed Implementation Date</div>${K.line(cat===2?'Term and Academic Year:':'Academic Year:',K.A('f7'))}`;
-
-  // Checkbox grid
   let cols;
   if(cat===2){
     const on=new Set(r.change_facets||[]);
     K.used.add('whats');
-    const other=K.A('f16a');
-    cols=CAT2_GRID.map(g=>`<div><div class="gh">${esc(g.group)}:</div>${g.items.map(([k,l])=>
-      `<div class="gi${on.has(k)?' on':''}">${BOX(on.has(k))}<span>${esc(l)}</span></div>${k==='prog_other'&&on.has(k)?`<div class="go">${other??''}</div>`:''}`).join('')}</div>`);
-    h+=`<div class="od-h">Proposed Substantive Revision (Select all that apply)</div>`;
+    const other=K.V('f16a');
+    cols=CAT2_GRID.map(g=>({title:g.group+':',items:g.items.map(([k,l])=>({label:l,on:on.has(k),other:k==='prog_other'&&on.has(k)?(other||''):null}))}));
+    B.push({t:'h',text:'Proposed Substantive Revision (Select all that apply)'});
   }else{
     const opts=(K.M.revs&&K.M.revs.f.options)||CAT3_OPTS;
     const saved=K.M.revs?w.revs:undefined;
     const on=new Set(Array.isArray(saved)?saved:cat3Derived(r));
     if(opts.some(o=>o.indent&&on.has(o.k)))on.add('c_desig');
     ['revs','whats'].forEach(k=>K.used.add(k));
-    const other=K.M.revs_other?K.A('revs_other'):K.A('f16a');
+    const other=K.M.revs_other?K.V('revs_other'):K.V('f16a');
     const groups=[];opts.forEach(o=>{let g=groups.find(x=>x.name===o.group);if(!g)groups.push(g={name:o.group,opts:[]});g.opts.push(o);});
-    cols=groups.map(g=>`<div><div class="gh">${esc(g.name)}:</div>${g.opts.map(o=>
-      `<div class="gi${o.indent?' in':''}${on.has(o.k)?' on':''}">${BOX(on.has(o.k))}<span>${esc(o.label)}</span></div>${o.k==='m_other'&&on.has(o.k)?`<div class="go">${other??''}</div>`:''}`).join('')}</div>`);
-    h+=`<div class="od-h">Proposed Minor Revision (Select all that apply)</div>`;
+    cols=groups.map(g=>({title:g.name+':',items:g.opts.map(o=>({label:o.label,on:on.has(o.k),indent:!!o.indent,other:o.k==='m_other'&&on.has(o.k)?(other||''):null}))}));
+    B.push({t:'h',text:'Proposed Minor Revision (Select all that apply)'});
   }
-  h+=`<div class="od-grid">${cols.join('')}</div><div class="od-note">${esc(OD_REGISTRAR)}</div>`;
+  B.push({t:'grid',cols},{t:'note',text:OD_REGISTRAR});
 
-  h+=`<div class="od-h">Proposal Summary</div>
-    <div>Below, provide a concise summary of each revision included in the proposal.${cat===3?' Explain how the program and/or course is currently designed, structured, described, or designated, and how this will change if the proposed revision is implemented.':''} State if the revision alters the total credits for program completion, and how.</div>
-    <div class="od-a" style="margin-left:0">${K.A('summary')??K.blank}</div>`;
+  B.push({t:'h',text:'Proposal Summary'},
+    {t:'p',text:`Below, provide a concise summary of each revision included in the proposal.${cat===3?' Explain how the program and/or course is currently designed, structured, described, or designated, and how this will change if the proposed revision is implemented.':''} State if the revision alters the total credits for program completion, and how.`},
+    {t:'q',n:'',text:'',val:K.V('summary')});
 
-  h+=`<div class="od-h">Proposal</div>
-    <div>The section is designed to gather information that is essential for accreditation purposes and to ${cat===2?'effectively facilitate the development and improvement of academic programs':'facilitate academic programs’ development and improvement'}. Respond to <u>each</u> of the following prompts/questions:</div>`;
+  B.push({t:'h',text:'Proposal'},
+    {t:'p',runs:[{text:`The section is designed to gather information that is essential for accreditation purposes and to ${cat===2?'effectively facilitate the development and improvement of academic programs':'facilitate academic programs’ development and improvement'}. Respond to `},{text:'each',u:true},{text:' of the following prompts/questions:'}]});
   let n=0;
   ((d.definition&&d.definition.sections)||[]).forEach(s=>{
     if(s.title!=='Proposal'&&s.title!=='If applicable to your proposal')return;
     if(s.title==='If applicable to your proposal')
-      h+=`<div style="margin-top:10px">If applicable to your proposal, respond below each of the following questions. If a question is not applicable, write “Not applicable.”</div>`;
+      B.push({t:'p',text:'If applicable to your proposal, respond below each of the following questions. If a question is not applicable, write “Not applicable.”'});
     (s.fields||[]).forEach(f=>{
       if(!ANSWER_TYPES.has(f.type))return;
-      n++;h+=K.q(String(n),String(f.label||'').replace(/^\s*\d+[.)]\s*/,''),K.A(f.key));
+      n++;B.push({t:'q',n:String(n),text:String(f.label||'').replace(/^\s*\d+[.)]\s*/,''),val:K.V(f.key)});
     });
   });
 
-  // Additional instructions
   const ai=((d.definition.sections||[]).find(s=>s.title==='Additional instructions')||{fields:[]});
   const tcf=(ai.fields||[]).find(f=>f.type==='links');
-  const tc=tcf?K.A(tcf.key):null;
-  const tcTxt=tc??'<span class="st">Not attached</span>';
-  h+=`<div class="od-h">Additional Instructions</div>`;
+  const tc=tcf?K.V(tcf.key):null;
+  B.push({t:'h',text:'Additional Instructions'});
   if(cat===2){
     const sb=((CCR[r.id]||{}).answers||{}).ohsu_sbs;
     const sbDone=sb&&Array.isArray(sb.sbs)&&sb.sbs.length;
     const news=relatedCourseItems(r).filter(x=>x.action==='add');
     const closure=(r.change_facets||[]).includes('prog_closure');
-    h+=`<div>Attach the following documents or information as supplemental material:</div><ol class="od-ai">
-      <li>Complete Curriculum Side-by-side (Excel) — <span class="st">${sbDone?'drafted in this CCR (Curriculum Side-by-side, below)':'not started'}</span></li>
-      <li>Complete the New Course Form (as needed) — <span class="st">${news.length?esc(news.map(x=>'#'+seqLabel(x.seq)+' '+targetLabel(x)).join(', ')):'no new courses linked'}</span></li>
-      <li>Complete Program Suspension or Closure Request Form (as needed) — <span class="st">${closure?'needed (closure/suspension is checked)':'not needed'}</span></li>
-      <li>Track changes version of the Program Requirements (needed if your proposal includes any change(s) to the program requirements) — ${tcTxt}</li></ol>`;
+    B.push({t:'ol',intro:'Attach the following documents or information as supplemental material:',items:[
+      {text:'Complete Curriculum Side-by-side (Excel)',status:sbDone?'drafted in this CCR (Curriculum Side-by-side)':'not started'},
+      {text:'Complete the New Course Form (as needed)',status:news.length?news.map(x=>'#'+seqLabel(x.seq)+' '+targetLabel(x)).join(', '):'no new courses linked'},
+      {text:'Complete Program Suspension or Closure Request Form (as needed)',status:closure?'needed (closure/suspension is checked)':'not needed'},
+      {text:'Track changes version of the Program Requirements (needed if your proposal includes any change(s) to the program requirements)',status:tc||'not attached'}]});
   }else{
-    h+=`<div>If the proposal includes any change(s) to the program requirements, include this supplemental material:</div><ol class="od-ai">
-      <li>Track changes version of the Program Requirements Guide — ${tcTxt}</li></ol>`;
+    B.push({t:'ol',intro:'If the proposal includes any change(s) to the program requirements, include this supplemental material:',items:[
+      {text:'Track changes version of the Program Requirements Guide',status:tc||'not attached'}]});
   }
-  h+=odAuth(r,'modify the academic program');
-  h+=K.extras()+odFoot(d);
-  return `<div class="od">${h}</div>`;
+  B.push(...odAuthBlocks(r,'modify the academic program'),...K.extras(),odFootBlock(d));
+  const prog=ccrCtx(r,'program.name')||itemProgramLabel(r);
+  return {blocks:B,file:odFileName(['OHSU','Cat',roman,prog,seasonLabel(r.season_id)])};
 }
 
 /* ── New Course Form ── */
-function odNewCourse(d,r,w){
-  const K=odKit(d,r,w);
+function odNewCourseModel(d,r,w){
+  const K=odKit(d,r,w),B=[];
   const parents=parentsOf(r.id).filter(p=>p.target_kind==='program'&&p.ohsu_category);
-  const withTxt=parents.length?` Submitted with ${esc(parents.map(p=>'#'+seqLabel(p.seq)+' '+p.title+' (Category '+(p.ohsu_category===2?'II':p.ohsu_category===3?'III':p.ohsu_category)+')').join('; '))}.`:'';
-  let h=odHead('Curricular Modification: New Course Form','','',`Submit this form with the applicable Category II or Category III proposal.${withTxt}`);
+  const withTxt=parents.length?' Submitted with '+parents.map(p=>'#'+seqLabel(p.seq)+' '+p.title+' (Category '+(p.ohsu_category===2?'II':p.ohsu_category===3?'III':p.ohsu_category)+')').join('; ')+'.':'';
+  B.push({t:'head',title:'Curricular Modification: New Course Form',intro:'Submit this form with the applicable Category II or Category III proposal.'+withTxt});
   const yn=['Yes','No'];
-  const sub=(lab,html)=>K.line(lab,html,'od-sub-line');
-  h+=`<div class="od-h">Submission Information</div>${K.line('Date of Submission to the Office of the Provost:',K.date('f1'))}`;
+  B.push({t:'h',text:'Submission Information'},odLine('Date of Submission to the Office of the Provost:',K.date('f1')));
   const ay=String(K.raw('f2')||'');   // v1 stores the starting year, e.g. 2026 → 2026-27
-  h+=`<div class="od-h">Proposed Implementation Date</div>${K.line('Academic Year:',ay?esc(/^\d{4}$/.test(ay)?ay+'-'+String(Number(ay)+1).slice(2):ay):null)}`;
+  B.push({t:'h',text:'Proposed Implementation Date'},odLine('Academic Year:',ay?(/^\d{4}$/.test(ay)?ay+'-'+String(Number(ay)+1).slice(2):ay):null));
 
   const code=[K.raw('f3'),K.raw('f4')].filter(x=>!isBlank(x)).join(' ');
-  h+=`<div class="od-h">I. Catalog Information</div>
-    ${K.line('A. Course Subject Code(s) and Course Number(s):',code?esc(code):null)}
-    ${K.line('B. Full Course Title (100 characters max):',K.A('f5'))}
-    ${K.line('C. Banner Course Title (30 characters max; appears on transcripts):',K.A('f6'))}
-    ${K.q('','D. Course Description (under 100 words):',K.A('f7'))}
-    ${K.choice('E. Credit Type:',['Fixed','Variable'],K.raw('f8'))}
-    ${K.line('F. Number of Credits (Fixed) or Credit Range (Variable):',K.A('f9'))}
-    ${K.choice('G. Is the course repeatable for credit?',yn,K.raw('f10'))}
-    ${sub('i. How many credits can be applied to the degree/certificate?',K.A('f10a'))}
-    ${K.line('H. Other Equivalent Courses (provide all subject codes and numbers):',K.A('f19'))}
-    ${K.choice('I. Course Grading:',['P/NP','Letter Grade'],K.raw('f20'))}
-    ${K.line('J. Pre-requisites (provide all subject codes and numbers):',K.A('f21'))}`;
+  B.push({t:'h',text:'I. Catalog Information'},
+    odLine('A. Course Subject Code(s) and Course Number(s):',code||null),
+    odLine('B. Full Course Title (100 characters max):',K.V('f5')),
+    odLine('C. Banner Course Title (30 characters max; appears on transcripts):',K.V('f6')),
+    {t:'q',n:'',text:'D. Course Description (under 100 words):',val:K.V('f7')},
+    odChoice('E. Credit Type:',['Fixed','Variable'],K.raw('f8')),
+    odLine('F. Number of Credits (Fixed) or Credit Range (Variable):',K.V('f9')),
+    odChoice('G. Is the course repeatable for credit?',yn,K.raw('f10')),
+    odLine('i. How many credits can be applied to the degree/certificate?',K.V('f10a'),true),
+    odLine('H. Other Equivalent Courses (provide all subject codes and numbers):',K.V('f19')),
+    odChoice('I. Course Grading:',['P/NP','Letter Grade'],K.raw('f20')),
+    odLine('J. Pre-requisites (provide all subject codes and numbers):',K.V('f21')));
 
   const div=K.raw('f22'),dep=K.raw('f23');
-  h+=`<div class="od-h">II. Additional Banner Setup Information</div>
-    ${K.line('A. Academic division and department sponsoring course:',(div||dep)?esc(`Division: ${div||'—'} · Department: ${dep||'—'}`):null)}
-    ${K.line('B. Course Type/Schedule:',K.A('f24'))}
-    ${K.choice('C. Is the course excluded from course evaluations?*',yn,K.raw('f25'))}
-    <div class="od-fn od-sub-line">*Per OHSU Policy 02-50-035, these course types are excluded: seminars, dissertations/thesis, independent study, internship, practicum, clinical, research, journal club, reading and conference, nano courses.</div>
-    ${K.choice('D. Is this course replacing another course?',yn,K.raw('f26'))}
-    ${sub('i. If applicable, provide the course subject code and number that is being replaced:',K.A('f26a'))}
-    ${K.choice('ii. If applicable, the course that is being replaced should be:',['Inactivated','Retained'],K.raw('f26b'),'od-sub-line')}`;
+  B.push({t:'h',text:'II. Additional Banner Setup Information'},
+    odLine('A. Academic division and department sponsoring course:',(div||dep)?`Division: ${div||'—'} · Department: ${dep||'—'}`:null),
+    odLine('B. Course Type/Schedule:',K.V('f24')),
+    odChoice('C. Is the course excluded from course evaluations?*',yn,K.raw('f25')),
+    {t:'fn',sub:true,text:'*Per OHSU Policy 02-50-035, these course types are excluded: seminars, dissertations/thesis, independent study, internship, practicum, clinical, research, journal club, reading and conference, nano courses.'},
+    odChoice('D. Is this course replacing another course?',yn,K.raw('f26')),
+    odLine('i. If applicable, provide the course subject code and number that is being replaced:',K.V('f26a'),true),
+    odChoice('ii. If applicable, the course that is being replaced should be:',['Inactivated','Retained'],K.raw('f26b'),true));
 
-  const freq=K.raw('f33'),freqO=K.raw('f33a');
+  const freq=K.raw('f33'),freqO=K.V('f33a');
   const terms=[['f34','Summer'],['f35','Fall'],['f36','Winter'],['f37','Spring']].filter(([k])=>K.raw(k)==='Yes').map(x=>x[1]);
   const aFallback=['Quizzes','Mid-term Exam','Final Exam','Class Participation','Written Work','Presentations','Clinical Skills Assessment','Other'];
-  const assess=['f38','f39','f40','f41','f42','f43','f44','f45'].map((k,i)=>{
-    const lab=String(K.M[k]?K.M[k].f.label:aFallback[i]).replace(/[?:]\s*$/,'');
-    const on=K.raw(k)==='Yes';
-    return `<span class="od-ch${on?' on':''}">${BOX(on)}${esc(lab)}</span>`;
-  });
-  const aOther=K.raw('f45a');
-  h+=`<div class="od-h">III. Additional Course Design Information</div>
-    ${K.choice('A. Course Offering:',['Required','Elective','Selective'],K.raw('f27'))}
-    ${K.choice('B. Course Delivery:',['In-person','Distance (online)'],K.raw('f28'))}
-    ${K.choice('C. Course Duration:',['Full-Term','Modular'],K.raw('f29'))}
-    ${sub('i. If this is a modular course, provide the number of weeks:',K.A('f30'))}
-    ${K.line('D. Anticipated Instructors:',K.A('f31'))}
-    ${K.line('E. Expected Term Enrollment:',K.A('f32'))}
-    ${K.choice('F. Frequency of Offering:',['Quarterly','Annually','Other'],freq)}${freq==='Other'?sub('Describe:',freqO?esc(freqO):null):''}
-    ${K.choice('G. Term(s) the course will be offered:',['Summer','Fall','Winter','Spring'],terms)}
-    <div class="od-line"><span class="od-lab">H. Assessment Methods (Select all that apply):</span></div>
-    <div class="od-sub-line" style="display:flex;flex-wrap:wrap;gap:3px 0">${assess.join('')}</div>
-    ${K.raw('f45')==='Yes'?sub('Other:',aOther?esc(aOther):null):''}
-    ${K.choice('I. Are the learning objectives/outcomes included in the proposal?',yn,K.raw('f46'))}
-    ${sub('ii. If “no”, please explain:',K.A('f46a'))}`;
+  const assess=['f38','f39','f40','f41','f42','f43','f44','f45'].map((k,i)=>({
+    label:String(K.M[k]?K.M[k].f.label:aFallback[i]).replace(/[?:]\s*$/,''),on:K.raw(k)==='Yes'}));
+  const aOther=K.V('f45a');
+  B.push({t:'h',text:'III. Additional Course Design Information'},
+    odChoice('A. Course Offering:',['Required','Elective','Selective'],K.raw('f27')),
+    odChoice('B. Course Delivery:',['In-person','Distance (online)'],K.raw('f28')),
+    odChoice('C. Course Duration:',['Full-Term','Modular'],K.raw('f29')),
+    odLine('i. If this is a modular course, provide the number of weeks:',K.V('f30'),true),
+    odLine('D. Anticipated Instructors:',K.V('f31')),
+    odLine('E. Expected Term Enrollment:',K.V('f32')),
+    odChoice('F. Frequency of Offering:',['Quarterly','Annually','Other'],freq));
+  if(freq==='Other')B.push(odLine('Describe:',freqO,true));
+  B.push(odChoice('G. Term(s) the course will be offered:',['Summer','Fall','Winter','Spring'],terms),
+    {t:'choice',lab:'H. Assessment Methods (Select all that apply):',items:[]},
+    {t:'choice',lab:'',sub:true,items:assess});
+  if(K.raw('f45')==='Yes')B.push(odLine('Other:',aOther,true));
+  B.push(odChoice('I. Are the learning objectives/outcomes included in the proposal?',yn,K.raw('f46')),
+    odLine('ii. If “no”, please explain:',K.V('f46a'),true));
 
-  h+=`<div class="od-h">IV. School Approval Process Information</div>
-    ${K.q('','A. Describe any impact this new course will have on other courses or programs. If there is no impact, write “No impact.”',K.A('f47'))}
-    ${K.choice('B. If there is an impact on other courses or programs, have they been notified?',['Yes','No','Not applicable'],K.raw('f48'))}
-    ${sub('i. If “no,” please explain:',K.A('f48a'))}
-    ${K.q('','C. Who did you consult about the new course?',K.A('f49'))}`;
-  h+=K.extras()+odFoot(d);
-  return `<div class="od">${h}</div>`;
+  B.push({t:'h',text:'IV. School Approval Process Information'},
+    {t:'q',n:'',text:'A. Describe any impact this new course will have on other courses or programs. If there is no impact, write “No impact.”',val:K.V('f47')},
+    odChoice('B. If there is an impact on other courses or programs, have they been notified?',['Yes','No','Not applicable'],K.raw('f48')),
+    odLine('i. If “no,” please explain:',K.V('f48a'),true),
+    {t:'q',n:'',text:'C. Who did you consult about the new course?',val:K.V('f49')});
+  B.push(...K.extras(),odFootBlock(d));
+  return {blocks:B,file:odFileName(['OHSU','New Course',code||targetLabel(r),seasonLabel(r.season_id)])};
 }
 
 /* ── Curriculum Side-by-side (supplemental to Category II / III) ── */
-function odSbs(d,r,w){
+function odSbsModel(d,r,w){
   const K=odKit(d,r,w);
   K.used.add('sbs');
   const rows=Array.isArray(w.sbs)?w.sbs:[];
-  const t=sbsTotals(rows);
-  const hdr=['Same, Add, Revise, Delete','Course #/Name','# of credits','# of times taken','Required, Selective or Elective'];
   const cat=r.ohsu_category===2?'Category II':r.ohsu_category===3?'Category III':'Category II/III';
-  let h=odHead('Curriculum Side-by-side',ccrCtx(r,'program.title')||itemProgramLabel(r),'',`Supplemental material for the ${esc(cat)} proposal.`);
-  h+=rows.length?`<table class="od-sbs"><thead>
-      <tr><th colspan="5" style="text-align:center">Original</th><th colspan="5" class="dv" style="text-align:center">Proposed</th></tr>
-      <tr>${hdr.map(x=>`<th>${x}</th>`).join('')}${hdr.map((x,i)=>`<th${i===0?' class="dv"':''}>${x}</th>`).join('')}</tr></thead>
-    <tbody>${rows.map(row=>`<tr>${SBS_COLS.map(c=>`<td${c==='ps'?' class="dv"':''}>${esc(row[c]??'')}</td>`).join('')}</tr>`).join('')}</tbody>
-    <tfoot><tr><td colspan="2">Total credits</td><td>${t.o}</td><td colspan="2"></td><td class="dv" colspan="2">Total credits</td><td>${t.p}</td><td colspan="2"></td></tr></tfoot></table>`
-    :`<div class="od-a" style="margin-left:0">${K.blank}</div>`;
-  h+=K.extras()+odFoot(d);
-  return `<div class="od">${h}</div>`;
+  const prog=ccrCtx(r,'program.title')||itemProgramLabel(r);
+  const B=[{t:'head',title:'Curriculum Side-by-side',sub:prog,intro:`Supplemental material for the ${cat} proposal.`},
+    {t:'sbs',rows,tot:sbsTotals(rows)},...K.extras(),odFootBlock(d)];
+  return {blocks:B,landscape:true,file:odFileName(['OHSU','Side-by-side',ccrCtx(r,'program.name')||prog,seasonLabel(r.season_id)])};
 }
-const OD_RENDER={ohsu_cat2:odProgram,ohsu_cat3:odProgram,ohsu_new_course:odNewCourse,ohsu_sbs:odSbs};
+const OD_MODEL={ohsu_cat2:odProgramModel,ohsu_cat3:odProgramModel,ohsu_new_course:odNewCourseModel,ohsu_sbs:odSbsModel};
+
+/* ── Model → page ── */
+function odTextHTML(v){
+  return String(v).split('\n').map(s=>/^https?:\/\/\S+$/i.test(s.trim())
+    ?`<a href="${esc(s.trim())}" target="_blank" rel="noopener">${esc(s.trim())}</a>`:esc(s)).join('\n');
+}
+function odToHTML(m,dl){
+  const blank='<span class="od-blank">Not answered</span>';
+  const V=v=>isBlank(v)?blank:odTextHTML(v);
+  const line=b=>`<div class="od-line${b.sub?' od-sub-line':''}"><span class="od-lab">${esc(b.lab)}</span><span class="od-val">${V(b.val)}</span></div>`;
+  const out=m.blocks.map(b=>{switch(b.t){
+    case 'head':return `<div class="od-top">${dl?`<button type="button" class="btn btn-s no-print od-dl" data-docx="${esc(dl)}" title="Download this form as a Word document">⬇ Word</button>`:''}
+      <div class="od-kicker">OHSU form · drafted in ConvergeSPH</div><div class="od-title">${esc(b.title)}</div>
+      ${b.sub?`<div class="od-sub">${esc(b.sub)}</div>`:''}${b.levels?`<div class="od-levels">Levels of Review: ${esc(b.levels)}</div>`:''}</div>
+      ${b.intro?`<div class="od-intro">${esc(b.intro)}</div>`:''}`;
+    case 'h':return `<div class="od-h">${esc(b.text)}</div>`;
+    case 'h2':return `<div class="od-h2">${esc(b.text)}</div>`;
+    case 'p':return `<div class="od-p">${b.runs?b.runs.map(x=>x.u?`<u>${esc(x.text)}</u>`:esc(x.text)).join(''):esc(b.text)}</div>`;
+    case 'fn':return `<div class="od-fn${b.sub?' od-sub-line':''}">${esc(b.text)}</div>`;
+    case 'note':return `<div class="od-note">${esc(b.text)}</div>`;
+    case 'line':return line(b);
+    case 'row':return `<div class="od-row">${b.items.map(line).join('')}</div>`;
+    case 'choice':return `<div class="od-line${b.sub?' od-sub-line':''}" style="flex-wrap:wrap">${b.lab?`<span class="od-lab">${esc(b.lab)}</span>`:''}<span>${b.items.map(i=>
+      `<span class="od-ch${i.on?' on':''}">${BOX(i.on)}${esc(i.label)}</span>`).join('')}</span></div>`;
+    case 'grid':return `<div class="od-grid">${b.cols.map(c=>`<div><div class="gh">${esc(c.title)}</div>${c.items.map(i=>
+      `<div class="gi${i.indent?' in':''}${i.on?' on':''}">${BOX(i.on)}<span>${esc(i.label)}</span></div>${i.other!=null?`<div class="go">${odTextHTML(i.other)}</div>`:''}`).join('')}</div>`).join('')}</div>`;
+    case 'q':return `<div class="od-q">${(b.n||b.text)?`<div class="od-qt">${b.n?`<span class="n">${esc(b.n)}.</span>`:''}<span${b.n?'':' style="font-weight:600"'}>${esc(b.text)}</span></div>`:''}<div class="od-a"${b.n||b.text?'':' style="margin-left:0"'}>${V(b.val)}</div></div>`;
+    case 'ol':return `${b.intro?`<div class="od-p">${esc(b.intro)}</div>`:''}<ol class="od-ai">${b.items.map(i=>`<li>${esc(i.text)} — <span class="st">${odTextHTML(i.status)}</span></li>`).join('')}</ol>`;
+    case 'sig':{
+      const sv=b.signed?'Signed (Adobe e-sign)':'';
+      const cell=(t,l)=>`<div class="sc"><span class="sv">${esc(t)}</span><span class="ln">${esc(l)}</span></div>`;
+      return `<div class="od-sig">${cell(sv,'Program Director Signature')}${cell(b.date,'Date')}${cell(sv,'Associate Dean Signature**')}${cell(b.date,'Date')}</div>`;
+    }
+    case 'sbs':{
+      if(!b.rows.length)return `<div class="od-a" style="margin-left:0">${blank}</div>`;
+      const hdr=['Same, Add, Revise, Delete','Course #/Name','# of credits','# of times taken','Required, Selective or Elective'];
+      return `<table class="od-sbs"><thead>
+        <tr><th colspan="5" style="text-align:center">Original</th><th colspan="5" class="dv" style="text-align:center">Proposed</th></tr>
+        <tr>${hdr.map(x=>`<th>${x}</th>`).join('')}${hdr.map((x,i)=>`<th${i===0?' class="dv"':''}>${x}</th>`).join('')}</tr></thead>
+        <tbody>${b.rows.map(row=>`<tr>${SBS_COLS.map(c=>`<td${c==='ps'?' class="dv"':''}>${esc(row[c]??'')}</td>`).join('')}</tr>`).join('')}</tbody>
+        <tfoot><tr><td colspan="2">Total credits</td><td>${b.tot.o}</td><td colspan="2"></td><td class="dv" colspan="2">Total credits</td><td>${b.tot.p}</td><td colspan="2"></td></tr></tfoot></table>`;
+    }
+    case 'extras':return `<div class="od-extra"><div class="od-h2">Other answers on this CCR</div>${b.rows.map(x=>
+      `<div class="pk-qa"><span class="n">${esc(x.num)}</span><span class="q">${esc(x.label)}</span><span class="a">${odTextHTML(x.val)}</span></div>`).join('')}</div>`;
+    case 'foot':return `<div class="od-foot"><span>${esc(b.left)}</span><span>${esc(b.right)}</span></div>`;
+  }return '';});
+  return `<div class="od">${out.join('')}</div>`;
+}
+const OD_RENDER={};
+Object.keys(OD_MODEL).forEach(k=>{OD_RENDER[k]=(d,r,w)=>odToHTML(OD_MODEL[k](d,r,w),r.id+'|'+k);});
+
+/* ── Model → Word (.docx) ──
+   Built in the browser with the docx library, loaded from the CDN the first
+   time someone downloads a form. Blank answers stay blank in Word so the
+   file can be finished there. */
+const DOCX_URL='https://cdn.jsdelivr.net/npm/docx@9.6.1/dist/index.iife.js';
+let docxLoading=null;
+function loadDocx(){
+  if(window.docx&&window.docx.Packer)return Promise.resolve(window.docx);
+  if(!docxLoading)docxLoading=new Promise((res,rej)=>{
+    const s=document.createElement('script');s.src=DOCX_URL;
+    s.onload=()=>window.docx&&window.docx.Packer?res(window.docx):rej(new Error('Word library did not load'));
+    s.onerror=()=>{docxLoading=null;rej(new Error('Could not load the Word library (check your connection)'));};
+    document.head.appendChild(s);
+  });
+  return docxLoading;
+}
+function odToDocx(D,m){
+  const {Document,Paragraph,TextRun,Table,TableRow,TableCell,WidthType,BorderStyle,ShadingType,ExternalHyperlink,
+    AlignmentType,PageOrientation,Footer,TableLayoutType}=D;
+  const NAVY='1F3864',GRAY='595959',LINE='BFBFBF';
+  const land=!!m.landscape;
+  const PAGE_W=land?15840:12240,MARGIN=1080,W=PAGE_W-2*MARGIN;
+  const SUB=360;   // sub-item indent
+  const box=on=>new TextRun({text:on?'☒':'☐',font:'Segoe UI Symbol'});
+  const runsFor=(v,opts)=>{   // text with URL lines as links; returns [runs] per line
+    return String(v).split('\n').map(s=>{
+      const t=s.trim();
+      if(/^https?:\/\/\S+$/i.test(t))return [new ExternalHyperlink({link:t,children:[new TextRun({text:t,style:'Hyperlink',...(opts||{})})]})];
+      return [new TextRun({text:s,...(opts||{})})];
+    });
+  };
+  const P=(children,o)=>new Paragraph({children,spacing:{after:60},...(o||{})});
+  const none={style:BorderStyle.NONE,size:0,color:'FFFFFF'};
+  const noBorders={top:none,bottom:none,left:none,right:none,insideHorizontal:none,insideVertical:none};
+  const cellM={top:80,bottom:80,left:120,right:120};
+  const answerBox=(v,indent)=>{   // shaded one-cell table holding a long answer
+    const lines=isBlank(v)?[[new TextRun('')]]:runsFor(v);
+    const w=W-(indent||0);
+    return new Table({width:{size:w,type:WidthType.DXA},columnWidths:[w],indent:{size:indent||0,type:WidthType.DXA},
+      rows:[new TableRow({children:[new TableCell({width:{size:w,type:WidthType.DXA},margins:cellM,
+        shading:{type:ShadingType.CLEAR,color:'auto',fill:'F2F2F2'},
+        borders:{top:{style:BorderStyle.SINGLE,size:4,color:LINE},bottom:{style:BorderStyle.SINGLE,size:4,color:LINE},left:{style:BorderStyle.SINGLE,size:4,color:LINE},right:{style:BorderStyle.SINGLE,size:4,color:LINE}},
+        children:lines.map(l=>new Paragraph({children:l,spacing:{after:40}}))})]})]});
+  };
+  const spacer=()=>new Paragraph({children:[],spacing:{after:80}});
+  const lineP=b=>{
+    const lines=isBlank(b.val)?[[]]:runsFor(b.val);
+    const out=[P([new TextRun({text:b.lab+' ',bold:true}),...lines[0]],{indent:b.sub?{left:SUB}:undefined})];
+    lines.slice(1).forEach(l=>out.push(P(l,{indent:{left:b.sub?SUB*2:SUB}})));
+    return out;
+  };
+  const kids=[];
+  m.blocks.forEach(b=>{switch(b.t){
+    case 'head':
+      kids.push(P([new TextRun({text:'OHSU FORM · DRAFTED IN CONVERGESPH',size:16,color:GRAY,bold:true})],{spacing:{after:40}}));
+      kids.push(P([new TextRun({text:b.title,bold:true,size:32,color:NAVY})],{spacing:{after:40}}));
+      if(b.sub)kids.push(P([new TextRun({text:b.sub,bold:true,size:24})],{spacing:{after:40}}));
+      if(b.levels)kids.push(P([new TextRun({text:'Levels of Review: '+b.levels,size:20,color:GRAY})],{spacing:{after:40}}));
+      kids.push(new Paragraph({children:[],border:{bottom:{style:BorderStyle.SINGLE,size:12,color:NAVY,space:1}},spacing:{after:120}}));
+      if(b.intro)kids.push(P([new TextRun({text:b.intro,size:20,color:GRAY})]));
+      break;
+    case 'h':kids.push(P([new TextRun({text:b.text,bold:true,underline:{},size:24,color:NAVY})],{spacing:{before:240,after:100},keepNext:true}));break;
+    case 'h2':kids.push(P([new TextRun({text:b.text,bold:true,size:22})],{spacing:{before:200,after:80},keepNext:true}));break;
+    case 'p':kids.push(P(b.runs?b.runs.map(x=>new TextRun({text:x.text,underline:x.u?{}:undefined})):[new TextRun(b.text)]));break;
+    case 'fn':kids.push(P([new TextRun({text:b.text,size:16,color:GRAY})],{indent:b.sub?{left:SUB}:undefined}));break;
+    case 'note':kids.push(P([new TextRun({text:b.text,size:18,color:GRAY,italics:true})],{spacing:{before:80,after:120}}));break;
+    case 'line':kids.push(...lineP(b));break;
+    case 'row':b.items.forEach(x=>kids.push(...lineP(x)));break;
+    case 'choice':{
+      const runs=b.lab?[new TextRun({text:b.lab+'  ',bold:true})]:[];
+      b.items.forEach((i,ix)=>{runs.push(box(i.on),new TextRun({text:'\u00a0'+i.label.replace(/ /g,'\u00a0')+(ix<b.items.length-1?'     ':''),bold:i.on}));});
+      kids.push(P(runs,{indent:b.sub?{left:SUB}:undefined}));
+      break;
+    }
+    case 'grid':{
+      const cw=Math.floor(W/b.cols.length),cws=b.cols.map((_,i)=>i===b.cols.length-1?W-cw*(b.cols.length-1):cw);
+      const bd={style:BorderStyle.SINGLE,size:4,color:'808080'};
+      kids.push(new Table({width:{size:W,type:WidthType.DXA},columnWidths:cws,layout:TableLayoutType.FIXED,
+        borders:{top:bd,bottom:bd,left:bd,right:bd,insideHorizontal:bd,insideVertical:bd},
+        rows:[new TableRow({children:b.cols.map((c,ci)=>new TableCell({width:{size:cws[ci],type:WidthType.DXA},margins:cellM,children:[
+          new Paragraph({children:[new TextRun({text:c.title,bold:true})],spacing:{after:80}}),
+          ...c.items.flatMap(i=>{
+            const ps=[new Paragraph({children:[box(i.on),new TextRun({text:' '+i.label,bold:i.on})],spacing:{after:50},
+              indent:{left:(i.indent?SUB:0)+280,hanging:280}})];
+            if(i.other!=null)ps.push(new Paragraph({children:[new TextRun({text:i.other||' '})],indent:{left:280},spacing:{after:50},
+              border:{bottom:{style:BorderStyle.SINGLE,size:4,color:LINE,space:1}}}));
+            return ps;
+          })]}))})]}));
+      break;
+    }
+    case 'q':
+      if(b.n||b.text)kids.push(P([new TextRun({text:b.n?b.n+'.\t':'',bold:true}),new TextRun({text:b.text,bold:!b.n})],
+        {indent:b.n?{left:360,hanging:360}:undefined,keepNext:true,spacing:{before:120,after:60}}));
+      kids.push(answerBox(b.val,b.n?360:0),spacer());
+      break;
+    case 'ol':
+      if(b.intro)kids.push(P([new TextRun(b.intro)]));
+      b.items.forEach((i,ix)=>{
+        const st=runsFor(i.status,{color:GRAY});
+        kids.push(P([new TextRun({text:(ix+1)+'.\t'}),new TextRun({text:i.text+' — '}),...st.flat()],{indent:{left:360,hanging:360}}));
+      });
+      break;
+    case 'sig':{
+      const sv=b.signed?'Signed (Adobe e-sign)':'';
+      const c1=Math.round(W*0.62),c2=W-c1;
+      const top={style:BorderStyle.SINGLE,size:6,color:'000000'};
+      const pair=(label)=>new Table({width:{size:W,type:WidthType.DXA},columnWidths:[c1,c2],borders:noBorders,
+        rows:[new TableRow({children:[[sv,label],[b.date,'Date']].map(([v,l],ci)=>new TableCell({width:{size:ci?c2:c1,type:WidthType.DXA},
+          margins:{top:0,bottom:0,left:0,right:ci?0:360},borders:{top:none,left:none,right:none,bottom:none},
+          children:[new Paragraph({children:[new TextRun({text:v||' ',color:'2E7D32',bold:true,size:20})],spacing:{before:360,after:0},
+                      border:{bottom:top}}),
+                    new Paragraph({children:[new TextRun({text:l,size:20})],spacing:{after:120}})]}))})]});
+      kids.push(pair('Program Director Signature'),pair('Associate Dean Signature**'));
+      break;
+    }
+    case 'sbs':{
+      const hdr=['Same, Add, Revise, Delete','Course #/Name','# of credits','# of times taken','Required, Selective or Elective'];
+      const unit=[1.3,3.2,0.9,0.9,1.4],tu=unit.reduce((a,x)=>a+x,0)*2;
+      const cws=[...unit,...unit].map(x=>Math.floor(W*x/tu));cws[cws.length-1]+=W-cws.reduce((a,x)=>a+x,0);
+      const bd={style:BorderStyle.SINGLE,size:4,color:'808080'};
+      const cell=(t,ci,o)=>new TableCell({width:{size:cws[ci]??W,type:WidthType.DXA},margins:{top:40,bottom:40,left:80,right:80},...(o||{}),
+        children:[new Paragraph({children:[new TextRun({text:String(t??''),size:18,bold:!!(o&&o.bold)})],alignment:o&&o.center?AlignmentType.CENTER:undefined})]});
+      const hs={shading:{type:ShadingType.CLEAR,color:'auto',fill:'D9E2F3'},bold:true};
+      const rows=[
+        new TableRow({tableHeader:true,children:[
+          new TableCell({columnSpan:5,width:{size:cws.slice(0,5).reduce((a,x)=>a+x,0),type:WidthType.DXA},shading:hs.shading,
+            children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:'Original',bold:true,size:18})]})]}),
+          new TableCell({columnSpan:5,width:{size:cws.slice(5).reduce((a,x)=>a+x,0),type:WidthType.DXA},shading:hs.shading,
+            children:[new Paragraph({alignment:AlignmentType.CENTER,children:[new TextRun({text:'Proposed',bold:true,size:18})]})]})]}),
+        new TableRow({tableHeader:true,children:[...hdr,...hdr].map((h,i)=>cell(h,i,hs))}),
+        ...b.rows.map(row=>new TableRow({children:SBS_COLS.map((c,i)=>cell(row[c],i))})),
+        new TableRow({children:[['Total credits',2],[b.tot.o,1],['',2],['Total credits',2],[b.tot.p,1],['',2]].map(([t,span],j,arr)=>{
+          const start=arr.slice(0,j).reduce((a,x)=>a+x[1],0);
+          return new TableCell({columnSpan:span,width:{size:cws.slice(start,start+span).reduce((a,x)=>a+x,0),type:WidthType.DXA},
+            margins:{top:40,bottom:40,left:80,right:80},shading:{type:ShadingType.CLEAR,color:'auto',fill:'F2F2F2'},
+            children:[new Paragraph({children:[new TextRun({text:String(t),bold:true,size:18})]})]});
+        })})
+      ];
+      kids.push(new Table({width:{size:W,type:WidthType.DXA},columnWidths:cws,layout:TableLayoutType.FIXED,
+        borders:{top:bd,bottom:bd,left:bd,right:bd,insideHorizontal:bd,insideVertical:bd},rows}));
+      break;
+    }
+    case 'extras':
+      kids.push(P([new TextRun({text:'Other answers on this CCR',bold:true,size:22})],{spacing:{before:240,after:80},keepNext:true}));
+      b.rows.forEach(x=>{
+        kids.push(P([new TextRun({text:(x.num?x.num+'. ':'')+x.label,bold:true})],{keepNext:true}));
+        runsFor(x.val).forEach(l=>kids.push(P(l,{indent:{left:SUB}})));
+      });
+      break;
+    case 'foot':break;   // goes in the page footer
+  }});
+  const foot=m.blocks.find(b=>b.t==='foot');
+  return new Document({
+    creator:'ConvergeSPH',title:(m.blocks.find(b=>b.t==='head')||{}).title||'OHSU form',
+    styles:{default:{document:{run:{font:'Calibri',size:22}}}},
+    sections:[{
+      properties:{page:{size:{width:12240,height:15840,orientation:land?PageOrientation.LANDSCAPE:PageOrientation.PORTRAIT},
+        margin:{top:MARGIN,bottom:MARGIN,left:MARGIN,right:MARGIN}}},
+      footers:foot?{default:new Footer({children:[new Paragraph({children:[
+        new TextRun({text:foot.left+'   ·   '+foot.right+'   ·   Drafted in ConvergeSPH',size:16,color:GRAY})]})]})}:undefined,
+      children:kids
+    }]
+  });
+}
+async function downloadOhsuDocx(r,d,w){
+  const mk=OD_MODEL[d.form_key];if(!mk)return;
+  setSS('Building Word file…');
+  try{
+    const D=await loadDocx();
+    const m=mk(d,r,w||{});
+    const blob=await D.Packer.toBlob(odToDocx(D,m));
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(blob);a.download=m.file;
+    document.body.appendChild(a);a.click();a.remove();
+    setTimeout(()=>URL.revokeObjectURL(a.href),4000);
+    setSS('● Word file downloaded');
+  }catch(e){setSS('⚠ '+(e.message||e));}
+}
 
 /* ── MODAL PLUMBING ── */
 function openM(id){$(id).classList.add('open');}
@@ -2781,6 +3005,13 @@ function wire(){
   $('k-notes').addEventListener('change',renderPackets);
   $('btn-k-print').onclick=()=>window.print();
   $('k-body').addEventListener('click',e=>{
+    const dx=e.target.closest('[data-docx]');
+    if(dx){
+      const [iid,fk]=dx.dataset.docx.split('|');const r=ITEM_BY_ID[iid];if(!r)return;
+      const d=formsForItem(r).find(x=>x.form_key===fk);if(!d)return;
+      downloadOhsuDocx(r,d,((CCR[iid]||{}).answers||{})[fk]||{});
+      return;
+    }
     const a=e.target.closest('[data-open-ccr]');if(!a)return;
     e.preventDefault();openCcr(a.dataset.openCcr);
   });
@@ -2798,6 +3029,10 @@ function wire(){
   $('btn-cr-cancel').onclick=closeCcr;
   $('cr-x').onclick=closeCcr;
   $('btn-cr-print').onclick=printCcr;
+  $('btn-cr-docx').onclick=()=>{
+    const r=ITEM_BY_ID[crItemId],d=crForms[crTab];if(!r||!d)return;
+    downloadOhsuDocx(r,d,crWork[d.form_key]||{});
+  };
 
   // Item modal
   document.querySelectorAll('input[name="im-action"],input[name="im-target"]').forEach(r=>r.addEventListener('change',imSync));
