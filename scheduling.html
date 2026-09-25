@@ -1840,8 +1840,9 @@ function applyAY(){
   rows.forEach((t,i)=>{TL[t.code]=t.label;TO[t.code]=i;TC[t.code]=TC_PALETTE[i%TC_PALETTE.length];});
 }
 function termRow(code){return TERM_ROWS.find(t=>t.code===code)||null;}
-/* Today's term, by start_date/end_date on the `terms` table — used once at
-   bootstrap to default the Schedule tab's term filter. Searches ALL terms the
+/* Today's term, by start_date/end_date on the `terms` table. Currently unused —
+   it formerly defaulted the Schedule tab's term filter at bootstrap (see the
+   note there); kept so that behavior can be switched back on. Searches ALL terms the
    user can see (not just activeAY), since "today" may fall in a term whose AY
    isn't the designated current one; if the matching term isn't in TERMS (the
    active AY's codes) the caller just leaves the filter on "All Terms". Returns
@@ -6684,13 +6685,9 @@ document.addEventListener('DOMContentLoaded',async()=>{
   // too, instead of appearing empty until a manual refresh.
   try{ await loadData(); }catch(e){}
   rebuildTermUI();
-  // Default the Schedule tab's term filter to today's term, once, at
-  // bootstrap only — rebuildTermUI() itself always preserves whatever the
-  // filter already held (see keepF), so later AY switches/reloads are
-  // untouched by this. No match (today falls outside every defined term, or
-  // that term isn't in the active AY) leaves it on "All Terms" as before.
-  const cc=currentTermCode();
-  if(cc&&TERMS.includes(cc))setv('f-term',cc);
+  // The Schedule tab's term filter opens on "All Terms" (users preferred that
+  // over defaulting to today's term). To restore the old behavior, re-add:
+  //   const cc=currentTermCode(); if(cc&&TERMS.includes(cc))setv('f-term',cc);
   renderAll();
   maybeShowEnrBanner();
   startLockPolling();
