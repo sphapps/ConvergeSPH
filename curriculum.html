@@ -334,6 +334,31 @@ table.ccr-sbs tfoot td{font-weight:700;background:var(--surface-2);font-variant-
 .ccr-checks label{display:flex;gap:6px;align-items:flex-start;font-weight:400;margin:0;padding:2px 0;cursor:pointer;line-height:1.35;color:var(--text)}
 .ccr-checks label.in{padding-left:20px}
 .ccr-checks input{width:auto;margin-top:2px;flex:0 0 auto}
+/* CCR editor: numbered revisions (Category II / III) */
+.rv-card{border:1px solid var(--mgray);border-radius:6px;padding:8px 12px 10px;margin:10px 0;background:var(--surface)}
+.rv-top{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding-bottom:2px}
+.rv-top .sp{flex:1}
+.rv-n{font-weight:700;font-style:italic;color:var(--navytx);font-size:13px}
+.rv-uses{font-size:11px;color:var(--dgray)}
+.rv-top .rrm:disabled{opacity:.35;cursor:default}
+.rv-items{display:flex;flex-wrap:wrap;gap:4px;margin-bottom:6px}
+.chip.rv-it{font-size:11px;white-space:normal;display:inline-flex;align-items:center;gap:4px;text-align:left}
+.rv-x{border:none;background:none;color:var(--dgray);cursor:pointer;font-size:11px;padding:0 2px;line-height:1}
+.rv-x:hover{color:var(--red)}
+.rv-sel{font-size:12.5px;padding:5px 8px;border:1px solid var(--mgray);border-radius:5px;background:var(--surface);color:var(--text);font-family:inherit;max-width:520px}
+.rv-share{display:flex;gap:7px;align-items:center;font-size:12.5px;margin-top:6px;cursor:pointer;color:var(--text)}
+.rv-share input{width:auto;margin:0}
+.rv-warn{margin-top:10px;font-size:12px;color:var(--txgold);background:var(--ltgold);border-radius:5px;padding:6px 9px;line-height:1.45}
+.od-rv-h{font-weight:700;font-style:italic;margin:12px 0 3px}
+.od-rv-h:first-child{margin-top:0}
+.od-rv-p{white-space:pre-wrap}
+.od-rv-p+.od-rv-h{margin-top:12px}
+/* Stage modal: copy an OHSU stage down to the course changes on the same form */
+.sg-bundle{display:none;margin-top:12px;padding:9px 11px;border:1px dashed var(--mgray);border-radius:6px;background:var(--surface-2)}
+.sg-bundle.on{display:block}
+.sg-bundle label{display:flex;gap:7px;align-items:flex-start;font-size:12.5px;font-weight:600;color:var(--text);cursor:pointer;margin:0}
+.sg-bundle input{margin-top:2px}
+.sg-bundle .hint{margin-left:22px}
 @media (max-width:700px){.od{padding:18px 16px}.od-grid,.ccr-checks,.od-row{grid-template-columns:1fr}.od-grid>div{border-left:none;border-top:1px solid var(--mgray)}.od-grid>div:first-child{border-top:none}}
 
 /* ═══ GATE ═══ */
@@ -737,6 +762,7 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
       </div>
       <div style="margin-bottom:10px"><label for="sg-date">Date</label><input type="date" id="sg-date"></div>
       <div><label for="sg-note">Note</label><textarea id="sg-note"></textarea></div>
+      <div class="sg-bundle" id="sg-bundle"></div>
     </div>
     <div class="mf">
       <button class="btn" data-close="mo-stage">Cancel</button>
@@ -843,6 +869,10 @@ let CCR_READY=false;        // false until cc_003 has been run
 let PROG_COURSES=[],PREREQ=[],PREREQ_GRP=[],COREQ=[];   // catalog relationships, for prefill
 let crItemId=null,crForms=[],crTab=0,crWork={},crDirty=false,crReadOnly=false;
 let PACKET_KEY='';          // selected packet on the CCR tab
+// Numbered revisions on OHSU Category II / III forms (cc_005)
+let REVS={};                // revision id -> cc_revisions row
+let REV_READY=false;        // false until cc_005 has been run
+let crRevEdit={};           // revision id -> working copy while the CCR modal is open
 
 const isAdmin=()=>TIER==='admin';
 const isEditor=()=>TIER==='editor';
@@ -1000,11 +1030,14 @@ async function loadData(){
   const fR=await q('faculty_directory');
   // CCR tables (cc_003) and catalog relationships. None of these are fatal:
   // before cc_003 runs, the CCR features show a notice instead of failing.
-  const [fdR,ccR,pcR,prqR,pgrR,crqR]=await Promise.all([
+  const [fdR,ccR,pcR,prqR,pgrR,crqR,rvR]=await Promise.all([
     q('cc_form_defs'),q('cc_ccr'),q('program_courses'),
-    q('course_prerequisites'),q('course_prerequisite_groups'),q('course_corequisites')
+    q('course_prerequisites'),q('course_prerequisite_groups'),q('course_corequisites'),
+    q('cc_revisions')
   ]);
   CCR_READY=!fdR.error&&!ccR.error;
+  REV_READY=!rvR.error;
+  REVS={}; if(REV_READY)(rvR.data||[]).forEach(v=>{REVS[v.id]=v;});
   FORM_DEFS=CCR_READY?(fdR.data||[]):[];
   CCR={}; if(CCR_READY)(ccR.data||[]).forEach(c=>{CCR[c.item_id]=c;});
   PROG_COURSES=pcR.error?[]:(pcR.data||[]);
@@ -1185,12 +1218,25 @@ function openCell(iid,sid){
   setRadio('sg-state',ev?ev.state:'');
   setv('sg-date',ev?ev.event_date:'');
   setv('sg-note',ev?ev.note:'');
+  // OHSU stage on a Category II/III program change: offer to record it on
+  // the course changes that go to OHSU on the same form.
+  const bundle=isOhsuStage(s)?ohsuBundle(r):[];
+  const bx=$('sg-bundle');
+  bx.classList.toggle('on',bundle.length>0);
+  bx.innerHTML=bundle.length?bundleOfferHTML(r,bundle):'';
   openM('mo-stage');
+}
+function bundleOfferHTML(r,bundle){
+  const mine=bundle.filter(canEditItem),skip=bundle.length-mine.length;
+  const cat=Number(r.ohsu_category)===2?'II':'III';
+  return `<label><input type="checkbox" id="sg-bundle-ck"> Also record this on the ${bundle.length} course change${bundle.length===1?'':'s'} on this program's OHSU Category ${cat} form</label>
+    <div class="hint">${esc(bundle.map(x=>'#'+seqLabel(x.seq)+' '+targetLabel(x)).join(', '))}. Replaces the status and date recorded on them for this stage; their notes are kept.${skip?` ${skip} entered by someone else will be skipped.`:''}</div>`;
 }
 async function saveCell(){
   if(!cellCtx)return;
   const {itemId:iid,stageId:sid}=cellCtx;
   const st=radioVal('sg-state');
+  const copyDown=!!($('sg-bundle-ck')&&$('sg-bundle-ck').checked&&$('sg-bundle').classList.contains('on'));
   let ok;
   if(!st){
     ok=await sbSave(sb.from('cc_stage_events').delete().match({item_id:iid,stage_id:sid}),'● Stage cleared');
@@ -1201,6 +1247,38 @@ async function saveCell(){
   if(!ok)return;
   closeM('mo-stage');
   await reload();
+  if(copyDown)await copyStagesDown(iid,[sid]);
+}
+
+/* ── OHSU bundle: a Category II/III program change and the course changes
+   that go to OHSU on the same form. Their OHSU-track stages can be copied
+   down from the program change in one step. ── */
+const OHSU_STAGE_KEYS=new Set(['ohsu_forms','ohsu_forms_signed','sent_to_ohsu','ohsu_approval']);
+const isOhsuStage=s=>!!s&&(s.institution==='O'||OHSU_STAGE_KEYS.has(s.key));
+function ohsuBundle(r){
+  if(!r||r.target_kind!=='program'||r.institutions==='PSU'||![2,3].includes(Number(r.ohsu_category)))return [];
+  return relatedCourseItems(r);
+}
+// Copy the program change's current state for these stages onto its bundle.
+// A stage that's cleared on the program change is cleared on the bundle too.
+async function copyStagesDown(pid,stageIds){
+  const r=ITEM_BY_ID[pid];if(!r)return;
+  const src=EVENTS[pid]||{};
+  const bundle=ohsuBundle(r),mine=bundle.filter(canEditItem),skip=bundle.length-mine.length;
+  if(!mine.length){setSS('⚠ None of the bundled course changes are yours to edit');return;}
+  const ups=[],dels=[];
+  mine.forEach(t=>stageIds.forEach(sid=>{
+    const e=src[sid],have=(EVENTS[t.id]||{})[sid];
+    if(e)ups.push({item_id:t.id,stage_id:sid,state:e.state,event_date:e.event_date||null,note:have?have.note||null:null});
+    else if(have)dels.push({item_id:t.id,stage_id:sid});
+  }));
+  setSS('Copying stages…');
+  const problems=[];
+  if(ups.length){const {error}=await sb.from('cc_stage_events').upsert(ups,{onConflict:'item_id,stage_id'});if(error)problems.push(error.message);}
+  for(const d of dels){const {error}=await sb.from('cc_stage_events').delete().match(d);if(error){problems.push(error.message);break;}}
+  await reload();
+  if(problems.length)setSS('⚠ Some stages not copied: '+problems.join('; '));
+  else setSS(`● Copied to ${mine.length} course change${mine.length===1?'':'s'}`+(skip?` · ${skip} skipped (entered by someone else)`:''));
 }
 
 /* ── ITEM MODAL ── */
@@ -1529,6 +1607,17 @@ async function saveItem(){
     await reload();
     if(problems.length)setSS('⚠ Change saved, but '+problems.join('; '));
     else setSS(!itemId&&isEditor()?'● Added — waiting for admin approval':(itemId?'● Saved':'● Added'));
+    // OHSU stages changed on a Category II/III program change → offer to copy them down.
+    const changedOhsu=[...ups.map(u=>u.stage_id),...dels].filter(sid=>isOhsuStage(STAGES[sid]));
+    const bundle=ohsuBundle(ITEM_BY_ID[id]);
+    if(!problems.length&&changedOhsu.length&&bundle.length){
+      const names=[...new Set(changedOhsu.map(sid=>STAGES[sid].label))].join(', ');
+      const skip=bundle.filter(x=>!canEditItem(x)).length;
+      showCfm('Copy OHSU stages to the course changes?',
+        `You updated ${names} on ${itemRef(ITEM_BY_ID[id])}. Record the same on the ${bundle.length} course change${bundle.length===1?'':'s'} on its OHSU Category ${Number(ITEM_BY_ID[id].ohsu_category)===2?'II':'III'} form (${bundle.map(x=>'#'+seqLabel(x.seq)).join(', ')})? This replaces the status and date recorded on them for ${changedOhsu.length===1?'that stage':'those stages'}; their notes are kept.`+(skip?` ${skip} entered by someone else will be skipped.`:''),
+        ()=>copyStagesDown(id,[...new Set(changedOhsu)]));
+      $('cfm-ok').textContent='Copy';$('cfm-ok').className='btn btn-p';
+    }
   }finally{btn.disabled=false;}
 }
 async function setApproval(id,state,msg){
@@ -1859,9 +1948,12 @@ function visibleSections(d,r,w){
 }
 function formProgress(d,r,w){
   let total=0,done=0;
+  // With revisions listed, the Summary and prompt 1 are built from them.
+  const gen=new Set();
+  if(revSupported(d)&&revList(w).length){gen.add('summary');const t=revTargetKey(d);if(t)gen.add(t);}
   visibleSections(d,r,w).forEach(({fields})=>fields.forEach(f=>{
     if(!ANSWER_TYPES.has(f.type))return;
-    total++;if(!isBlank(w[f.key]))done++;
+    total++;if(gen.has(f.key)||!isBlank(w[f.key]))done++;
   }));
   return {total,done};
 }
@@ -2095,6 +2187,103 @@ function renderCcr(){
   renderCcrTabs();
   renderCcrBody();
 }
+/* ── Numbered revisions (OHSU Category II / III) ──
+   One Category II/III form carries a program change and every course change
+   that goes with it, written up as numbered revisions. Revisions live in
+   cc_revisions (so a shared one — e.g. the new MPH core — is written once and
+   used on every program's form); a form lists its revisions, in order, in
+   answers[form_key]._revs. From that list the form builds the Proposal
+   Summary, prompt 1 ("Change N) …" sections) and "Other, describe:". */
+const REV_FORMS=new Set(['ohsu_cat2','ohsu_cat3']);
+const revSupported=d=>!!d&&REV_FORMS.has(d.form_key);
+function revGet(id){return crRevEdit[id]||REVS[id]||null;}
+function revIdsOf(w){return (w&&Array.isArray(w._revs)?w._revs:[]).filter(id=>revGet(id));}
+function revList(w){return revIdsOf(w).map(revGet);}
+function revItems(rv){return (rv.item_ids||[]).map(id=>ITEM_BY_ID[id]).filter(Boolean);}
+// Where the revisions' write-ups go: Category II asks for them in prompt 1;
+// Category III asks for them in the Proposal Summary (its prompt 1 is the rationale).
+const revIntoSummary=d=>!!d&&d.form_key==='ohsu_cat3';
+function revTargetKey(d){if(!revSupported(d))return null;if(revIntoSummary(d))return 'summary';const q=q1Field(d);return q?q.key:null;}
+const revAfterKey=d=>revIntoSummary(d)?'_sum_after':'_q1_after';
+const revHeads=revs=>revs.map((rv,i)=>`Change ${i+1}) ${rv.title||'(untitled)'}`).join('\n');
+function revNumbered(revs,sep){return revs.map((rv,i)=>`${i+1}) ${rv.title||'(untitled)'}`).join(sep);}
+// Prompt 1 = the first answer field in the form's "Proposal" section.
+function q1Field(d){
+  const s=((d.definition&&d.definition.sections)||[]).find(x=>x.title==='Proposal');
+  return s?(s.fields||[]).find(f=>ANSWER_TYPES.has(f.type))||null:null;
+}
+// Answers for an item, using the open editor's working copy when it's that item.
+function answersFor(r){return crItemId===r.id?crWork:(((CCR[r.id]||{}).answers)||{});}
+// Every change covered by a program change's Category II/III revisions.
+function formRevItems(r){
+  const ans=answersFor(r),ids=new Set();
+  REV_FORMS.forEach(fk=>revList(ans[fk]).forEach(rv=>(rv.item_ids||[]).forEach(x=>ids.add(x))));
+  return [...ids].map(id=>ITEM_BY_ID[id]).filter(x=>x&&x.id!==r.id);
+}
+// Other items whose saved CCR lists this revision.
+function revUses(id,exceptItem){
+  const out=new Set();
+  Object.values(CCR).forEach(c=>{
+    if(c.item_id===exceptItem)return;
+    Object.entries(c.answers||{}).forEach(([fk,w])=>{if(REV_FORMS.has(fk)&&w&&Array.isArray(w._revs)&&w._revs.includes(id))out.add(c.item_id);});
+  });
+  return [...out].map(i=>ITEM_BY_ID[i]).filter(Boolean);
+}
+function revCanEdit(rv){return !crReadOnly&&!LOCKED&&(isAdmin()||(isEditor()&&(rv._new||rv.created_by===MY_UID)));}
+function revWork(id){if(!crRevEdit[id]&&REVS[id])crRevEdit[id]=clone(REVS[id]);return crRevEdit[id]||null;}
+// Course changes a revision can cover: this program's first, then the rest of the season.
+function revPickable(r,rv){
+  const have=new Set(rv.item_ids||[]),rel=new Set(relatedCourseItems(r).map(x=>x.id));
+  const all=ITEMS.filter(x=>x.season_id===r.season_id&&x.id!==r.id&&x.target_kind==='course'&&x.approval_state!=='pending_delete'&&!have.has(x.id))
+    .sort((a,b)=>(a.seq??0)-(b.seq??0));
+  return {rel:all.filter(x=>rel.has(x.id)),other:all.filter(x=>!rel.has(x.id))};
+}
+function revCardHTML(rv,i,n,r){
+  const ed=revCanEdit(rv),dis=ed?'':' disabled',formEd=!crReadOnly;
+  const uses=revUses(rv.id,r.id),items=revItems(rv),pick=ed?revPickable(r,rv):{rel:[],other:[]};
+  const opt=x=>`<option value="${esc(x.id)}">${esc(itemRef(x))}</option>`;
+  return `<div class="rv-card" data-rv="${esc(rv.id)}">
+    <div class="rv-top"><span class="rv-n">Change ${i+1})</span>${rv.shared?'<span class="chip">Shared</span>':''}
+      ${uses.length?`<span class="rv-uses" title="${esc(uses.map(itemRef).join('\n'))}">Also on ${uses.length} other form${uses.length===1?'':'s'}: ${esc(uses.map(itemProgramLabel).join(', '))}</span>`:''}
+      <span class="sp"></span>
+      ${formEd?`<button type="button" class="rrm" data-rv-mv="${i}|-1" aria-label="Move up"${i===0?' disabled':''}>▲</button><button type="button" class="rrm" data-rv-mv="${i}|1" aria-label="Move down"${i===n-1?' disabled':''}>▼</button><button type="button" class="rrm" data-rv-rm="${i}" aria-label="Remove from this form" title="Remove from this form">✕</button>`:''}
+    </div>
+    <div class="ccr-f"><label>Title — one line, as it reads in the numbered list</label>
+      <input data-rvf="title" value="${esc(rv.title||'')}" placeholder="e.g. Replace the current 5-course MPH core with a newly developed 7-course core"${dis}></div>
+    <div class="ccr-f"><label>Detailed description for ${revIntoSummary(crForms[crTab])?'the Proposal Summary':'prompt 1'}</label>
+      <textarea data-rvf="detail" rows="6" placeholder="How it's structured now, how it will change, how many students it affects, and whether it changes total credits"${dis}>${esc(rv.detail||'')}</textarea></div>
+    <div class="ccr-f"><label>Tracked changes this revision covers</label>
+      <div class="rv-items">${items.map(x=>`<span class="chip rv-it">${esc(itemRef(x))}${ed?`<button type="button" class="rv-x" data-rv-item-rm="${esc(x.id)}" aria-label="Remove ${esc(itemRef(x))}">✕</button>`:''}</span>`).join('')
+        ||'<span class="muted" style="font-size:12px">None. That’s fine for a program-only revision, like a change in total credits.</span>'}</div>
+      ${ed&&(pick.rel.length||pick.other.length)?`<select class="rv-sel" data-rv-item-add aria-label="Add a tracked change"><option value="">Add a tracked change…</option>${
+        pick.rel.length?`<optgroup label="Tied to this program">${pick.rel.map(opt).join('')}</optgroup>`:''}${
+        pick.other.length?`<optgroup label="Other course changes this season">${pick.other.map(opt).join('')}</optgroup>`:''}</select>`:''}
+    </div>
+    ${ed?`<label class="rv-share"><input type="checkbox" data-rvf="shared"${rv.shared?' checked':''}> Shared: other programs’ Category II/III forms this season can use this revision</label>`:''}
+    ${!ed&&formEd?'<div class="ccr-meta">Written by someone else, so only they or an admin can edit it. You can still keep it on this form or remove it.</div>':''}
+    ${ed&&uses.length?'<div class="ccr-meta">Edits here change it on every form listed above.</div>':''}
+  </div>`;
+}
+function revEditorHTML(d,r,w){
+  const cat=d.form_key==='ohsu_cat2'?'II':'III';
+  if(!REV_READY)return `<div class="ccr-sec"><h4>Revisions in this proposal</h4><div class="sb"><div class="ccr-note" style="padding:8px 0">Numbered revisions need a database update. Run <b>cc_005_revisions.sql</b> in the Supabase SQL Editor, then reload.</div></div></div>`;
+  const revs=revList(w),ids=revIdsOf(w);
+  let h=`<div class="ccr-sec"><h4>Revisions in this proposal</h4><div class="sb">
+    <div class="ccr-intro" style="margin:8px 0 4px">List each revision in this Category ${cat} proposal. The form numbers them “Change 1)”, “Change 2)”… and builds ${cat==='II'?'the Proposal Summary, prompt 1,':'the Proposal Summary'} and “Other, describe:” from this list. Attach the tracked changes each revision covers so they go to OHSU with this form and join this program’s packet.</div>`;
+  h+=revs.map((rv,i)=>revCardHTML(rv,i,revs.length,r)).join('');
+  if(!revs.length)h+='<div class="ccr-note" style="padding:6px 0">No revisions yet. Without any, the Summary and prompt 1 are the plain answer boxes below.</div>';
+  if(!crReadOnly){
+    const avail=Object.values(REVS).filter(x=>x.shared&&x.season_id===r.season_id&&!ids.includes(x.id))
+      .sort((a,b)=>String(a.title).localeCompare(String(b.title)));
+    h+=`<div class="acts sbs-add"><button type="button" class="btn btn-s" data-rv-new>+ New revision</button>${avail.length
+      ?`<select class="rv-sel" data-rv-shared aria-label="Add a shared revision"><option value="">Add a shared revision…</option>${avail.map(x=>{
+        const u=revUses(x.id,r.id);return `<option value="${esc(x.id)}">${esc(x.title||'(untitled)')}${u.length?' — on '+esc(u.map(itemProgramLabel).join(', ')):''}</option>`;}).join('')}</select>`:''}</div>`;
+  }
+  const covered=new Set(revs.flatMap(x=>x.item_ids||[]));
+  const loose=relatedCourseItems(r).filter(x=>!covered.has(x.id));
+  if(revs.length&&loose.length)h+=`<div class="rv-warn">Tied to this program but not in any revision yet: ${esc(loose.map(itemRef).join('; '))}</div>`;
+  return h+'</div></div>';
+}
 function renderCcrBody(){
   const r=ITEM_BY_ID[crItemId],d=crForms[crTab];if(!r||!d)return;
   const w=crWork[d.form_key]||{};
@@ -2105,10 +2294,14 @@ function renderCcrBody(){
   if(facetDriven)intro.push("Sections follow the change's saved “What's changing” boxes. If you just edited those, save the change first.");
   if(itemClosed(r))intro.push('This change is closed, so “Existing” values show what the catalog said when the CCR was last saved.');
   let h=`<div class="ccr-intro">${intro.join(' ')}</div>`;
+  // Category II/III: the revisions list goes just before the Proposal Summary.
+  let revPlaced=!revSupported(d);
   visibleSections(d,r,w).forEach(({s,fields})=>{
     if(!fields.length)return;
+    if(!revPlaced&&(fields.some(f=>f.key==='summary')||s.title==='Proposal')){h+=revEditorHTML(d,r,w);revPlaced=true;}
     h+=`<div class="ccr-sec"><h4>${esc(s.title)}</h4><div class="sb">${notesHTML(s.notes,'sec-notes')}${fields.map(f=>fieldHTML(f,r,w)).join('')}</div></div>`;
   });
+  if(!revPlaced)h+=revEditorHTML(d,r,w);
   $('cr-body').innerHTML=h;
 }
 function fieldHTML(f,r,w){
@@ -2168,6 +2361,21 @@ function fieldHTML(f,r,w){
   }
   if(f.type!=='prefill'){const ci=countInfo(f,v);if(ci)meta.push(`<span class="ccr-cnt${ci.over?' over':''}">${esc(countText(ci))}</span>`);}
   if(f.hint)meta.push(`<span>${esc(f.hint)}</span>`);
+  // Category II/III with revisions: show what the form builds from them.
+  const dCur=crForms[crTab],revs=revSupported(dCur)?revList(w):[];
+  if(revs.length){
+    const tk=revTargetKey(dCur),ak=revAfterKey(dCur);
+    if(f.key===tk){
+      ctl=`<div class="ccr-pre">${esc(revHeads(revs))}<span class="src">Each revision’s detailed description prints under its Change heading</span></div>
+        <div class="ccr-meta" style="margin:8px 0 3px">Opening text, before the Change sections (optional)</div>`+ctl+
+        `<div class="ccr-meta" style="margin:8px 0 3px">Closing text, after the Change sections (optional)</div><textarea data-k="${ak}" rows="2"${dis}>${esc(w[ak]??'')}</textarea>`;
+    }else if(f.key==='summary'){
+      ctl=`<div class="ccr-pre">${esc(revNumbered(revs,'\n'))}<span class="src">Numbered list built from the revisions above</span></div>
+        <div class="ccr-meta" style="margin:8px 0 3px">Anything else for the summary (optional, printed after the list)</div>`+ctl;
+    }else if(f.key==='f16a'||f.key==='revs_other'){
+      meta.push('<span>With revisions listed, “Other, describe:” prints their numbered titles. This box is only used when there are none.</span>');
+    }
+  }
   return `<div class="ccr-f" data-f="${esc(f.key)}">${lab}${ctl}${meta.length?`<div class="ccr-meta">${meta.join('')}</div>`:''}${notesHTML(f.notes)}</div>`;
 }
 function sbsTotals(rows){
@@ -2198,12 +2406,84 @@ function sbsHTML(f,rows,dis){
     <tfoot><tr><td colspan="2">Total credits</td><td data-sbs-tot="o">${t.o}</td><td colspan="2"></td><td class="div" colspan="2">Total credits</td><td data-sbs-tot="p">${t.p}</td><td colspan="3"></td></tr></tfoot>
   </table></div>${dis?'':`<div class="sbs-add acts"><button type="button" class="btn btn-s" data-sbs-add="${k}">+ Add row</button><button type="button" class="btn btn-s" data-sbs-reset="${k}">Start from catalog</button></div>`}`;
 }
+// Revision cards. Returns true when the event was theirs.
+function revOnInput(e,el,w){
+  const r=ITEM_BY_ID[crItemId];
+  if(el.dataset.rvShared!==undefined){   // "Add a shared revision…"
+    if(e.type!=='change'||!el.value)return true;
+    const ids=Array.isArray(w._revs)?w._revs:(w._revs=[]);
+    if(!ids.includes(el.value))ids.push(el.value);
+    markDirty();reRenderBody();return true;
+  }
+  const card=el.closest('[data-rv]');if(!card)return false;
+  const rv=revWork(card.dataset.rv);if(!rv||!revCanEdit(rv))return true;
+  if(el.dataset.rvItemAdd!==undefined){
+    if(e.type!=='change'||!el.value)return true;
+    rv.item_ids=[...new Set([...(rv.item_ids||[]),el.value])];
+    markDirty();reRenderBody();return true;
+  }
+  const k=el.dataset.rvf;if(!k)return true;
+  if(k==='shared'){
+    if(e.type!=='change')return true;
+    rv.shared=el.checked;markDirty();reRenderBody();return true;
+  }
+  if(rv[k]===el.value)return true;
+  rv[k]=el.value;
+  markDirty();
+  // Keep the generated previews below in step without re-rendering mid-typing.
+  if(k==='title')refreshRevPreviews(r,w);
+  return true;
+}
+function refreshRevPreviews(r,w){
+  const d=crForms[crTab],revs=revList(w),tk=revTargetKey(d);
+  const set=(key,txt)=>{const p=$('cr-body').querySelector(`.ccr-f[data-f="${key}"] .ccr-pre`);if(p&&p.firstChild&&p.firstChild.nodeType===3)p.firstChild.nodeValue=txt;};
+  if(tk!=='summary')set('summary',revNumbered(revs,'\n'));
+  if(tk)set(tk,revHeads(revs));
+}
+function revOnClick(e,w){
+  const r=ITEM_BY_ID[crItemId];
+  if(e.target.closest('[data-rv-new]')){
+    const id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(c^Math.random()*16>>c/4).toString(16));
+    crRevEdit[id]={id,season_id:r.season_id,title:'',detail:'',item_ids:[],shared:false,created_by:MY_UID,_new:true};
+    (Array.isArray(w._revs)?w._revs:(w._revs=[])).splice(revIdsOf(w).length,0,id);
+    w._revs=revIdsOf(w);
+    markDirty();reRenderBody();
+    const cards=$('cr-body').querySelectorAll('.rv-card');const last=cards[cards.length-1];
+    if(last){last.scrollIntoView({block:'nearest'});const t=last.querySelector('[data-rvf="title"]');if(t)t.focus();}
+    return true;
+  }
+  const mv=e.target.closest('[data-rv-mv]');
+  if(mv){
+    const [i,dir]=mv.dataset.rvMv.split('|').map(Number),ids=revIdsOf(w),j=i+dir;
+    if(j<0||j>=ids.length)return true;
+    [ids[i],ids[j]]=[ids[j],ids[i]];w._revs=ids;
+    markDirty();reRenderBody();return true;
+  }
+  const rm=e.target.closest('[data-rv-rm]');
+  if(rm){
+    const ids=revIdsOf(w),i=Number(rm.dataset.rvRm),rv=revGet(ids[i]);if(!rv)return true;
+    const go=()=>{ids.splice(i,1);w._revs=ids;markDirty();reRenderBody();};
+    const typed=!isBlank(rv.title)||!isBlank(rv.detail);
+    if(typed&&!rv.shared&&!revUses(rv.id,r.id).length)
+      showCfm('Remove this revision?',`“${rv.title||'(untitled)'}” isn’t used on any other form, so its text is deleted when you save the CCR.`,go);
+    else go();
+    return true;
+  }
+  const ir=e.target.closest('[data-rv-item-rm]');
+  if(ir){
+    const card=ir.closest('[data-rv]'),rv=card&&revWork(card.dataset.rv);
+    if(rv&&revCanEdit(rv)){rv.item_ids=(rv.item_ids||[]).filter(x=>x!==ir.dataset.rvItemRm);markDirty();reRenderBody();}
+    return true;
+  }
+  return false;
+}
 function curWork(){const d=crForms[crTab];if(!d)return null;return crWork[d.form_key]=crWork[d.form_key]||{};}
 function reRenderBody(){const b=$('cr-body'),sc=b.scrollTop;renderCcrBody();b.scrollTop=sc;}
 function markDirty(){crDirty=true;renderCcrTabs();}
 function ccrOnInput(e){
   if(crReadOnly)return;
   const el=e.target,w=curWork();if(!w)return;
+  if(revOnInput(e,el,w))return;
   if(el.dataset.ck){
     const k=el.dataset.ck;
     const vals=[...$('cr-body').querySelectorAll(`input[data-ck="${k}"]:checked`)].map(x=>x.value);
@@ -2235,6 +2515,7 @@ function ccrOnInput(e){
 function ccrOnClick(e){
   if(crReadOnly)return;
   const w=curWork();if(!w)return;
+  if(revOnClick(e,w))return;
   const ckr=e.target.closest('[data-ck-reset]');
   if(ckr){
     const k=ckr.dataset.ckReset,d=crForms[crTab],r=ITEM_BY_ID[crItemId];
@@ -2256,27 +2537,81 @@ function ccrOnClick(e){
 }
 async function saveCcr(){
   if(crReadOnly||!crItemId)return false;
-  const r=ITEM_BY_ID[crItemId];if(!r)return false;
-  const prev=CCR[crItemId]||{};
-  const answers=clone(crWork);
-  const versions=Object.assign({},prev.form_versions||{});
-  crForms.forEach(d=>{
-    const w=answers[d.form_key];if(!w)return;   // never opened, nothing to save
-    versions[d.form_key]=d.version;
-    // Snapshot read-only "Existing" values so a closed change keeps them.
-    eachField(d,f=>{if(f.type!=='prefill')return;const pv=prefillValue(r,f,w);if(pv.ro)w[f.key]=pv.v;});
-  });
+  const iid=crItemId,r=ITEM_BY_ID[iid];if(!r)return false;
+  const prev=CCR[iid]||{};
   const btn=$('btn-cr-save');btn.disabled=true;setSS('Saving CCR…');
   try{
-    const {data,error}=await sb.from('cc_ccr').upsert({item_id:crItemId,answers,form_versions:versions},{onConflict:'item_id'}).select().single();
+    // 1. Revisions first, so the CCR never lists one that doesn't exist.
+    if(REV_READY){
+      const err=await saveRevisionRows();
+      if(err){setSS('⚠ CCR not saved — revision: '+err);return false;}
+    }
+    const answers=clone(crWork);
+    const versions=Object.assign({},prev.form_versions||{});
+    crForms.forEach(d=>{
+      const w=answers[d.form_key];if(!w)return;   // never opened, nothing to save
+      versions[d.form_key]=d.version;
+      if(revSupported(d)&&Array.isArray(w._revs))w._revs=w._revs.filter(id=>REVS[id]);
+      // Snapshot read-only "Existing" values so a closed change keeps them.
+      eachField(d,f=>{if(f.type!=='prefill')return;const pv=prefillValue(r,f,w);if(pv.ro)w[f.key]=pv.v;});
+    });
+    // 2. The CCR itself.
+    const {data,error}=await sb.from('cc_ccr').upsert({item_id:iid,answers,form_versions:versions},{onConflict:'item_id'}).select().single();
     if(error){setSS('⚠ CCR not saved: '+error.message);return false;}
-    CCR[crItemId]=data;
-    crWork=clone(data.answers);
-    crDirty=false;
-    setSS('● CCR saved');
-    renderCcrTabs();renderTracker();renderPackets();
+    CCR[iid]=data;
+    if(crItemId===iid){crWork=clone(data.answers);crDirty=false;}
+    // 3. Tidy up: delete revisions dropped from this form that nothing else uses,
+    //    and link the changes the revisions cover to this program change.
+    const warn=REV_READY?[...await dropOrphanRevisions(prev.answers||{},data.answers||{},iid),...await linkRevisionItems(r)]:[];
+    setSS(warn.length?'● CCR saved · ⚠ '+warn.join('; '):'● CCR saved');
+    if(crItemId===iid){renderCcrTabs();reRenderBody();}
+    renderTracker();renderPackets();
     return true;
   }finally{btn.disabled=false;}
+}
+// Insert new revisions and update edited ones. Returns an error message or ''.
+async function saveRevisionRows(){
+  const onForm=new Set();
+  REV_FORMS.forEach(fk=>{const w=crWork[fk];if(w&&Array.isArray(w._revs))w._revs.forEach(id=>onForm.add(id));});
+  for(const [id,rv] of Object.entries(crRevEdit)){
+    if(rv._new&&!onForm.has(id)){delete crRevEdit[id];continue;}   // added then removed before saving
+    const row={title:rv.title||'',detail:N(rv.detail),item_ids:rv.item_ids||[],shared:!!rv.shared};
+    let res;
+    if(rv._new)res=await sb.from('cc_revisions').insert({id,season_id:rv.season_id,...row}).select().single();
+    else{
+      const o=REVS[id];
+      const same=o&&o.title===row.title&&(o.detail||null)===row.detail&&!!o.shared===row.shared&&
+        JSON.stringify(o.item_ids||[])===JSON.stringify(row.item_ids);
+      if(same||!revCanEdit(rv)){delete crRevEdit[id];continue;}
+      res=await sb.from('cc_revisions').update(row).eq('id',id).select().single();
+    }
+    if(res.error)return `“${rv.title||'(untitled)'}”: ${res.error.message}`;
+    REVS[id]=res.data;delete crRevEdit[id];
+  }
+  return '';
+}
+async function dropOrphanRevisions(before,after,iid){
+  const ids=fk=>new Set(((before[fk]||{})._revs)||[]);
+  const now=new Set();REV_FORMS.forEach(fk=>(((after[fk]||{})._revs)||[]).forEach(id=>now.add(id)));
+  const warn=[];
+  for(const fk of REV_FORMS)for(const id of ids(fk)){
+    const rv=REVS[id];
+    if(now.has(id)||!rv||rv.shared||revUses(id,iid).length)continue;
+    if(!(isAdmin()||rv.created_by===MY_UID))continue;
+    const {error}=await sb.from('cc_revisions').delete().eq('id',id);
+    if(error)warn.push('removed revision not deleted: '+error.message);else delete REVS[id];
+  }
+  return warn;
+}
+async function linkRevisionItems(r){
+  if(r.target_kind!=='program')return [];
+  const have=new Set(childrenOf(r.id).map(x=>x.id));
+  const rows=formRevItems(r).filter(x=>!have.has(x.id)).map(x=>({parent_id:r.id,child_id:x.id,link_type:'part_of'}));
+  if(!rows.length)return [];
+  const {data,error}=await sb.from('cc_item_links').insert(rows).select();
+  if(error)return ['couldn’t link covered changes to this program change: '+error.message];
+  LINKS.push(...(data||rows));
+  return [];
 }
 function closeCcr(){
   if(crDirty&&!crReadOnly){
@@ -2311,7 +2646,8 @@ function packetsFor(sid){
     add(key,label,r);
     if(r.target_kind==='program'){
       // Linked courses come along, with their slash and cross-list partners.
-      childrenOf(r.id).forEach(k=>{
+      // (Changes covered by its Category II/III revisions count as linked.)
+      [...new Map([...childrenOf(r.id),...formRevItems(r)].map(x=>[x.id,x])).values()].forEach(k=>{
         [k,...pairsOf(k.id,'slash_pair'),...pairsOf(k.id,'cross_list')]
           .filter(x=>x.season_id===sid&&x.approval_state!=='pending_delete').forEach(x=>add(key,label,x));
       });
@@ -2483,11 +2819,13 @@ const CAT2_GRID=[
     ['prog_title','Revise the name of the major for the academic program'],
     ['prog_other','Other, describe:']]}
 ];
-// Course changes that belong to a program change: its linked courses plus
-// course changes tagged to the same program this season (PSU-only ones excluded).
+// Course changes that belong to a program change: its linked courses, the
+// courses its Category II/III revisions cover, and course changes tagged to
+// the same program this season (PSU-only ones excluded).
 function relatedCourseItems(r){
   const m=new Map();
   childrenOf(r.id).filter(x=>x.target_kind==='course').forEach(x=>m.set(x.id,x));
+  if(r.target_kind==='program')formRevItems(r).filter(x=>x.target_kind==='course').forEach(x=>m.set(x.id,x));
   if(r.program_id!=null)ITEMS.filter(x=>x.season_id===r.season_id&&x.target_kind==='course'&&x.id!==r.id&&
     String(x.program_id)===String(r.program_id)).forEach(x=>m.set(x.id,x));
   return [...m.values()].filter(x=>x.approval_state!=='pending_delete'&&x.institutions!=='PSU').sort((a,b)=>(a.seq??0)-(b.seq??0));
@@ -2518,7 +2856,7 @@ function stageDoneDate(r,key){
   const e=(EVENTS[r.id]||{})[s.id];
   return e&&e.state==='done'?(e.event_date||''):null;
 }
-const OD_REGISTRAR='NOTE: You are encouraged to discuss your proposal with the Registrar’s Office during its development stage to help you understand how best to represent the desired curricular changes and to provide guidance on course numbers, titles, credits, and descriptions.';
+const OD_REGISTRAR='NOTE: You are encouraged to discuss your proposal with the Registrar’s Office during its development stage (contact hyattg@ohsu.edu) to help you understand how best to represent the desired curricular changes and to provide guidance on course numbers, titles, credits, and descriptions.';
 /* Each OHSU layout builds a form model: a list of blocks (headings,
    label/answer lines, checkbox rows, the revision grid, numbered prompts,
    signature lines…). odToHTML draws the model on the page; odToDocx builds
@@ -2580,10 +2918,20 @@ function odFileName(parts){
 function odProgramModel(d,r,w){
   const cat=d.form_key==='ohsu_cat2'?2:3,roman=cat===2?'II':'III';
   const K=odKit(d,r,w),B=[];
+  // July 2026 OHSU forms (definitions with layout "2026-07", from cc_006).
+  // Older definitions keep the April 2025 wording so past CCRs print as filed.
+  const jul=(d.definition&&d.definition.layout)==='2026-07';
+  const revs=revList(w);   // numbered revisions → Summary, prompt 1 (Cat II), "Other, describe:"
+  const q1=revs.length&&!revIntoSummary(d)?q1Field(d):null;
+  // With revisions, "Other, describe:" prints their titles. Anything typed in
+  // the old box stays unplaced, so it shows under "Other answers".
+  const otherTxt=k=>revs.length?revNumbered(revs,' '):K.V(k);
   B.push({t:'head',title:`Curricular Modification: Category ${roman}`,
     sub:cat===2?'Substantive Program Revision':'Minor Program Revision',
-    levels:cat===2?'Program – School – University – Accreditation*':'Program – School – Provost’s Office',
-    intro:`Review the Curriculum Modifications webpage for the deadlines by which proposals need to be submitted to the Office of the Provost${cat===2?' for the proposed implementation date':''}.`});
+    levels:cat===2?'Program – School – University – Accreditation*':(jul?'Program – School – Office of the Provost':'Program – School – Provost’s Office'),
+    intro:jul
+      ?'Log in or request access to the Program and Curriculum Changes SharePoint site for the deadlines by which proposals need to be submitted to the Office of the Provost for the proposed implementation date.'
+      :`Review the Curriculum Modifications webpage for the deadlines by which proposals need to be submitted to the Office of the Provost${cat===2?' for the proposed implementation date':''}.`});
   B.push({t:'h',text:'Submission Information'},odLine('Date of Submission to the Office of the Provost:',K.date('f1')));
   B.push({t:'h',text:'Program Information'},odLine('School/College:',K.V('f2')),
     {t:'row',items:[odLine('Degree(s):',K.V('f3')),odLine('Major:',K.V('f4'))]},
@@ -2594,7 +2942,7 @@ function odProgramModel(d,r,w){
   if(cat===2){
     const on=new Set(r.change_facets||[]);
     K.used.add('whats');
-    const other=K.V('f16a');
+    const other=otherTxt('f16a');
     cols=CAT2_GRID.map(g=>({title:g.group+':',items:g.items.map(([k,l])=>({label:l,on:on.has(k),other:k==='prog_other'&&on.has(k)?(other||''):null}))}));
     B.push({t:'h',text:'Proposed Substantive Revision (Select all that apply)'});
   }else{
@@ -2603,7 +2951,7 @@ function odProgramModel(d,r,w){
     const on=new Set(Array.isArray(saved)?saved:cat3Derived(r));
     if(opts.some(o=>o.indent&&on.has(o.k)))on.add('c_desig');
     ['revs','whats'].forEach(k=>K.used.add(k));
-    const other=K.M.revs_other?K.V('revs_other'):K.V('f16a');
+    const other=otherTxt(K.M.revs_other?'revs_other':'f16a');
     const groups=[];opts.forEach(o=>{let g=groups.find(x=>x.name===o.group);if(!g)groups.push(g={name:o.group,opts:[]});g.opts.push(o);});
     cols=groups.map(g=>({title:g.name+':',items:g.opts.map(o=>({label:o.label,on:on.has(o.k),indent:!!o.indent,other:o.k==='m_other'&&on.has(o.k)?(other||''):null}))}));
     B.push({t:'h',text:'Proposed Minor Revision (Select all that apply)'});
@@ -2611,8 +2959,13 @@ function odProgramModel(d,r,w){
   B.push({t:'grid',cols},{t:'note',text:OD_REGISTRAR});
 
   B.push({t:'h',text:'Proposal Summary'},
-    {t:'p',text:`Below, provide a concise summary of each revision included in the proposal.${cat===3?' Explain how the program and/or course is currently designed, structured, described, or designated, and how this will change if the proposed revision is implemented.':''} State if the revision alters the total credits for program completion, and how.`},
-    {t:'q',n:'',text:'',val:K.V('summary')});
+    {t:'p',text:`Below, provide a concise summary of each revision included in the proposal.${cat===3?` Explain how the program and/or course ${jul?'are':'is'} currently designed, structured, described, or designated, and how this will change if the proposed revision is implemented.`:''} State if the revision alters the total credits for program completion, and how.`},
+    revs.length&&revIntoSummary(d)
+      ?(K.used.add('summary'),{t:'qrev',n:'',text:'',intro:w.summary,outro:w._sum_after,
+          revs:revs.map((rv,i)=>({head:`Change ${i+1}) ${rv.title||'(untitled)'}`,body:rv.detail||''}))})
+      :{t:'q',n:'',text:'',val:revs.length
+      ?revNumbered(revs,'\n')+(isBlank(K.raw('summary'))?'':'\n\n'+K.raw('summary'))
+      :[K.V('summary'),revIntoSummary(d)?w._sum_after:null].filter(x=>!isBlank(x)).join('\n\n')||null});
 
   B.push({t:'h',text:'Proposal'},
     {t:'p',runs:[{text:`The section is designed to gather information that is essential for accreditation purposes and to ${cat===2?'effectively facilitate the development and improvement of academic programs':'facilitate academic programs’ development and improvement'}. Respond to `},{text:'each',u:true},{text:' of the following prompts/questions:'}]});
@@ -2620,17 +2973,30 @@ function odProgramModel(d,r,w){
   ((d.definition&&d.definition.sections)||[]).forEach(s=>{
     if(s.title!=='Proposal'&&s.title!=='If applicable to your proposal')return;
     if(s.title==='If applicable to your proposal')
-      B.push({t:'p',text:'If applicable to your proposal, respond below each of the following questions. If a question is not applicable, write “Not applicable.”'});
+      B.push({t:'p',text:`If applicable to your proposal, respond below ${jul?'to ':''}each of the following questions. If a question is not applicable, write “Not applicable.”`});
     (s.fields||[]).forEach(f=>{
       if(!ANSWER_TYPES.has(f.type))return;
-      n++;B.push({t:'q',n:String(n),text:String(f.label||'').replace(/^\s*\d+[.)]\s*/,''),val:K.V(f.key)});
+      n++;
+      const text=String(f.label||'').replace(/^\s*\d+[.)]\s*/,'');
+      if(q1&&f.key===q1.key){
+        K.used.add(f.key);
+        B.push({t:'qrev',n:String(n),text,intro:w[f.key],outro:w._q1_after,
+          revs:revs.map((rv,i)=>({head:`Change ${i+1}) ${rv.title||'(untitled)'}`,body:rv.detail||''}))});
+      }else{
+        let v=K.V(f.key);
+        const q1n=revIntoSummary(d)?null:q1Field(d);   // closing text typed while revisions existed, then all removed
+        if(q1n&&f.key===q1n.key&&!isBlank(w._q1_after))v=[v,w._q1_after].filter(x=>!isBlank(x)).join('\n\n');
+        B.push({t:'q',n:String(n),text,val:v});
+      }
     });
   });
 
   const ai=((d.definition.sections||[]).find(s=>s.title==='Additional instructions')||{fields:[]});
   const tcf=(ai.fields||[]).find(f=>f.type==='links');
   const tc=tcf?K.V(tcf.key):null;
-  B.push({t:'h',text:'Additional Instructions'});
+  // July 2026: the track-changes Program Requirements item is gone from Cat II,
+  // and Cat III has no Additional Instructions at all.
+  if(cat===2||tcf)B.push({t:'h',text:'Additional Instructions'});
   if(cat===2){
     const sb=((CCR[r.id]||{}).answers||{}).ohsu_sbs;
     const sbDone=sb&&Array.isArray(sb.sbs)&&sb.sbs.length;
@@ -2640,8 +3006,8 @@ function odProgramModel(d,r,w){
       {text:'Complete Curriculum Side-by-side (Excel)',status:sbDone?'drafted in this CCR (Curriculum Side-by-side)':'not started'},
       {text:'Complete the New Course Form (as needed)',status:news.length?news.map(x=>'#'+seqLabel(x.seq)+' '+targetLabel(x)).join(', '):'no new courses linked'},
       {text:'Complete Program Suspension or Closure Request Form (as needed)',status:closure?'needed (closure/suspension is checked)':'not needed'},
-      {text:'Track changes version of the Program Requirements (needed if your proposal includes any change(s) to the program requirements)',status:tc||'not attached'}]});
-  }else{
+      ...(tcf?[{text:'Track changes version of the Program Requirements (needed if your proposal includes any change(s) to the program requirements)',status:tc||'not attached'}]:[])]});
+  }else if(tcf){
     B.push({t:'ol',intro:'If the proposal includes any change(s) to the program requirements, include this supplemental material:',items:[
       {text:'Track changes version of the Program Requirements Guide',status:tc||'not attached'}]});
   }
@@ -2669,7 +3035,7 @@ function odNewCourseModel(d,r,w){
     {t:'q',n:'',text:'D. Course Description (under 100 words):',val:K.V('f7')},
     odChoice('E. Credit Type:',['Fixed','Variable'],K.raw('f8')),
     odLine('F. Number of Credits (Fixed) or Credit Range (Variable):',K.V('f9')),
-    odChoice('G. Is the course repeatable for credit?',yn,K.raw('f10')),
+    odChoice((d.definition&&d.definition.layout)==='2026-07'?'G. Is the course repeatable for credit? (Please see instructions).':'G. Is the course repeatable for credit?',yn,K.raw('f10')),
     odLine('i. How many credits can be applied to the degree/certificate?',K.V('f10a'),true),
     odLine('H. Other Equivalent Courses (provide all subject codes and numbers):',K.V('f19')),
     odChoice('I. Course Grading:',['P/NP','Letter Grade'],K.raw('f20')),
@@ -2677,7 +3043,9 @@ function odNewCourseModel(d,r,w){
 
   const div=K.raw('f22'),dep=K.raw('f23');
   B.push({t:'h',text:'II. Additional Banner Setup Information'},
-    odLine('A. Academic division and department sponsoring course:',(div||dep)?`Division: ${div||'—'} · Department: ${dep||'—'}`:null),
+    odLine((d.definition&&d.definition.layout)==='2026-07'
+      ?'A. Academic division and department sponsoring course (provide division and department codes; see Table 1 for reference):'
+      :'A. Academic division and department sponsoring course:',(div||dep)?`Division: ${div||'—'} · Department: ${dep||'—'}`:null),
     odLine('B. Course Type/Schedule:',K.V('f24')),
     odChoice('C. Is the course excluded from course evaluations?*',yn,K.raw('f25')),
     {t:'fn',sub:true,text:'*Per OHSU Policy 02-50-035, these course types are excluded: seminars, dissertations/thesis, independent study, internship, practicum, clinical, research, journal club, reading and conference, nano courses.'},
@@ -2755,6 +3123,10 @@ function odToHTML(m,dl){
     case 'grid':return `<div class="od-grid">${b.cols.map(c=>`<div><div class="gh">${esc(c.title)}</div>${c.items.map(i=>
       `<div class="gi${i.indent?' in':''}${i.on?' on':''}">${BOX(i.on)}<span>${esc(i.label)}</span></div>${i.other!=null?`<div class="go">${odTextHTML(i.other)}</div>`:''}`).join('')}</div>`).join('')}</div>`;
     case 'q':return `<div class="od-q">${(b.n||b.text)?`<div class="od-qt">${b.n?`<span class="n">${esc(b.n)}.</span>`:''}<span${b.n?'':' style="font-weight:600"'}>${esc(b.text)}</span></div>`:''}<div class="od-a"${b.n||b.text?'':' style="margin-left:0"'}>${V(b.val)}</div></div>`;
+    case 'qrev':return `<div class="od-q">${b.n?`<div class="od-qt"><span class="n">${esc(b.n)}.</span><span>${esc(b.text)}</span></div>`:''}<div class="od-a"${b.n?'':' style="margin-left:0"'}>${[
+      isBlank(b.intro)?'':`<div class="od-rv-p">${odTextHTML(b.intro)}</div>`,
+      ...b.revs.map(x=>`<div class="od-rv-h">${esc(x.head)}</div><div class="od-rv-p">${isBlank(x.body)?blank:odTextHTML(x.body)}</div>`),
+      isBlank(b.outro)?'':`<div class="od-rv-p" style="margin-top:12px">${odTextHTML(b.outro)}</div>`].join('')}</div></div>`;
     case 'ol':return `${b.intro?`<div class="od-p">${esc(b.intro)}</div>`:''}<ol class="od-ai">${b.items.map(i=>`<li>${esc(i.text)} — <span class="st">${odTextHTML(i.status)}</span></li>`).join('')}</ol>`;
     case 'sig':{
       const sv=b.signed?'Signed (Adobe e-sign)':'';
@@ -2816,12 +3188,15 @@ function odToDocx(D,m){
   const cellM={top:80,bottom:80,left:120,right:120};
   const answerBox=(v,indent)=>{   // shaded one-cell table holding a long answer
     const lines=isBlank(v)?[[new TextRun('')]]:runsFor(v);
+    return answerBoxP(lines.map(l=>new Paragraph({children:l,spacing:{after:40}})),indent);
+  };
+  const answerBoxP=(paras,indent)=>{
     const w=W-(indent||0);
     return new Table({width:{size:w,type:WidthType.DXA},columnWidths:[w],indent:{size:indent||0,type:WidthType.DXA},
       rows:[new TableRow({children:[new TableCell({width:{size:w,type:WidthType.DXA},margins:cellM,
         shading:{type:ShadingType.CLEAR,color:'auto',fill:'F2F2F2'},
         borders:{top:{style:BorderStyle.SINGLE,size:4,color:LINE},bottom:{style:BorderStyle.SINGLE,size:4,color:LINE},left:{style:BorderStyle.SINGLE,size:4,color:LINE},right:{style:BorderStyle.SINGLE,size:4,color:LINE}},
-        children:lines.map(l=>new Paragraph({children:l,spacing:{after:40}}))})]})]});
+        children:paras})]})]});
   };
   const spacer=()=>new Paragraph({children:[],spacing:{after:80}});
   const lineP=b=>{
@@ -2849,7 +3224,7 @@ function odToDocx(D,m){
     case 'row':b.items.forEach(x=>kids.push(...lineP(x)));break;
     case 'choice':{
       const runs=b.lab?[new TextRun({text:b.lab+'  ',bold:true})]:[];
-      b.items.forEach((i,ix)=>{runs.push(box(i.on),new TextRun({text:'\u00a0'+i.label.replace(/ /g,'\u00a0')+(ix<b.items.length-1?'     ':''),bold:i.on}));});
+      b.items.forEach((i,ix)=>{runs.push(box(i.on),new TextRun({text:' '+i.label.replace(/ /g,' ')+(ix<b.items.length-1?'     ':''),bold:i.on}));});
       kids.push(P(runs,{indent:b.sub?{left:SUB}:undefined}));
       break;
     }
@@ -2874,6 +3249,21 @@ function odToDocx(D,m){
         {indent:b.n?{left:360,hanging:360}:undefined,keepNext:true,spacing:{before:120,after:60}}));
       kids.push(answerBox(b.val,b.n?360:0),spacer());
       break;
+    case 'qrev':{
+      if(b.n)kids.push(P([new TextRun({text:b.n+'.\t',bold:true}),new TextRun({text:b.text})],
+        {indent:{left:360,hanging:360},keepNext:true,spacing:{before:120,after:60}}));
+      const paras=[];
+      const addText=v=>runsFor(v).forEach(l=>paras.push(new Paragraph({children:l,spacing:{after:40}})));
+      if(!isBlank(b.intro))addText(b.intro);
+      b.revs.forEach((x,i)=>{
+        paras.push(new Paragraph({children:[new TextRun({text:x.head,bold:true,italics:true})],
+          spacing:{before:(i||!isBlank(b.intro))?200:0,after:60},keepNext:true}));
+        if(!isBlank(x.body))addText(x.body);
+      });
+      if(!isBlank(b.outro)){paras.push(new Paragraph({children:[],spacing:{after:80}}));addText(b.outro);}
+      kids.push(answerBoxP(paras,b.n?360:0),spacer());
+      break;
+    }
     case 'ol':
       if(b.intro)kids.push(P([new TextRun(b.intro)]));
       b.items.forEach((i,ix)=>{
@@ -2960,9 +3350,10 @@ async function downloadOhsuDocx(r,d,w){
 
 /* ── MODAL PLUMBING ── */
 function openM(id){$(id).classList.add('open');}
-function closeM(id){$(id).classList.remove('open');if(id==='mo-cfm')cfmCb=null;if(id==='mo-stage')cellCtx=null;}
+function closeM(id){$(id).classList.remove('open');if(id==='mo-cfm')cfmCb=null;if(id==='mo-stage')cellCtx=null;if(id==='mo-ccr'){crRevEdit={};crItemId=null;}}
 function showCfm(title,msg,onOk){
   $('cfm-title').textContent=title;$('cfm-msg').textContent=msg;
+  $('cfm-ok').textContent='Confirm';$('cfm-ok').className='btn btn-d';   // callers may relabel after this
   cfmCb=onOk||null;openM('mo-cfm');
 }
 
