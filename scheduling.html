@@ -1402,6 +1402,10 @@ function fteAY(cat,effByTerm,terms){
     :ts.reduce((n,t)=>n+Math.round((fteTerm(cat,effByTerm[t]||0)||0)*1000),0)/1000;
   return x>0?x:null;
 }
+// The terms a category's AY figures count: Summer–Spring for includeSummer
+// rules (OHSU Primary, NPS, Staff), Fall–Spring for everyone else — used for
+// AY FTE *and* the annual Eff/Raw CR columns so they always agree.
+const fteAYTerms=(cat,terms)=>{const r=fteRule(cat);return(terms||TERMS).filter(t=>(r&&r.includeSummer)||!fteIsSummer(t));};
 // Fall–Spring effective credits.
 const fteAYCredits=effByTerm=>TERMS.filter(t=>!fteIsSummer(t)).reduce((n,t)=>n+(effByTerm[t]||0),0);
 // Adjunct-only flags (never raised for other categories).
@@ -2919,7 +2923,7 @@ function renderCht(){
     <th style="${sty};text-align:left;min-width:160px">Instructor</th><th style="${sty};text-align:left">Category</th>`;
   TERMS.forEach(t=>{html+=`<th style="${sty};min-width:160px">${esc(TL[t])}</th><th style="${sty}" title="Effective credits: course credits, halved when co-taught, 0 when FTE-exempt. Hover a cell for the breakdown.">Eff CR</th><th style="${sty};background:#7a1f1f">Term FTE</th>`;});
   progs().forEach(p=>html+=`<th style="${sty}">${p}</th>`);
-  html+=`<th style="${sty}">GR CR</th><th style="${sty}">UG CR</th><th style="${sty}" title="All terms in this AY, including Summer. Hover a cell for the breakdown.">Ann Eff</th><th style="${sty};background:#C00000" title="Adjuncts, Other and PSU NTTF: Fall–Spring Eff CR ÷ 45; PSU TTF: ÷ 36; OHSU Primary, NPS and Staff: Summer–Spring Eff CR ÷ 32 (all independent of term FTEs). Others: sum of Fall–Spring term FTEs. Summer excluded except OHSU Primary, NPS and Staff.">AY FTE</th></tr></thead><tbody>`;
+  html+=`<th style="${sty}">GR CR</th><th style="${sty}">UG CR</th><th style="${sty}" title="Same terms as the FTE: Summer–Spring for OHSU Primary, NPS and Staff; Fall–Spring for everyone else. Hover a cell for the breakdown.">Ann Eff</th><th style="${sty};background:#C00000" title="Adjuncts, Other and PSU NTTF: Fall–Spring Eff CR ÷ 45; PSU TTF: ÷ 36; OHSU Primary, NPS and Staff: Summer–Spring Eff CR ÷ 32 (all independent of term FTEs). Others: sum of Fall–Spring term FTEs. Summer excluded except OHSU Primary, NPS and Staff.">AY FTE</th></tr></thead><tbody>`;
   instrs.forEach((inst,ri)=>{
     const bg=ri%2?'var(--surface-2)':'var(--surface)';
     let aR=0,aE=0;const pc={};progs().forEach(p=>pc[p]=0);const gc={GR:0,UG:0,B:0};
@@ -2937,7 +2941,7 @@ function renderCht(){
           +(o.ex?' <span style="background:var(--ltgold);color:var(--txgold);padding:0 3px;border-radius:2px;font-size:9px">EX</span>':'')
           +(o.two?' <span style="background:var(--ltbluep);color:var(--txblue);padding:0 3px;border-radius:2px;font-size:9px">2I</span>':'')+'</div>';
       }).join('');
-      aR+=tR;aE+=tE;eBy[t]=tE;
+      eBy[t]=tE;
       const eb=tE>0?'var(--ltgrn)':bg;
       tds+=`<td style="vertical-align:top;min-width:160px;padding:5px 10px;background:${bg}">${cells||'<span style="color:var(--mgray);font-size:10px">—</span>'}</td>`
           +`<td title="${esc(effTip(offs,TL[t]))}" style="text-align:center;font-weight:700;padding:5px 10px;background:${eb};vertical-align:top${offs.length?';cursor:help':''}">${tE>0?tE.toFixed(1):''}</td>`
@@ -2945,6 +2949,7 @@ function renderCht(){
             ?fteTd(fteTerm(inst.cat,tE),'var(--ltred)').replace(/<\/td>$/,`<div style="font-size:9px;font-weight:600;color:var(--red,#C00000);font-style:normal">${tE} CR &gt; ${FTE_ADJ_TERM_CR_MAX}</div></td>`)
             :fteTd(fteTerm(inst.cat,tE),bg));
     });
+    const ayT=fteAYTerms(inst.cat);aE=ayT.reduce((n,t)=>n+(eBy[t]||0),0);
     const pcells=progs().map(p=>`<td style="text-align:center;padding:5px 10px;background:${bg}">${pc[p]||''}</td>`).join('');
     const ay=fteAY(inst.cat,eBy),over=fteOverAY(inst.cat,ay);
     const fteBg=over?'var(--ltred)':bg;
@@ -2955,7 +2960,7 @@ function renderCht(){
          +tds+pcells
          +`<td style="text-align:center;padding:5px 10px;background:${bg}">${gc.GR||''}</td>`
          +`<td style="text-align:center;padding:5px 10px;background:${bg}">${gc.UG||''}</td>`
-         +`<td title="${esc(effTipAY(eBy,TERMS))}" style="text-align:center;font-weight:700;padding:5px 10px;background:${aE>0?'var(--ltgrn)':bg}${aE?';cursor:help':''}">${aE?aE.toFixed(1):''}</td>`
+         +`<td title="${esc(effTipAY(eBy,ayT))}" style="text-align:center;font-weight:700;padding:5px 10px;background:${aE>0?'var(--ltgrn)':bg}${aE?';cursor:help':''}">${aE?aE.toFixed(1):''}</td>`
          +ayCell+'</tr>';
   });
   html+='</tbody></table>';
@@ -4309,11 +4314,12 @@ function expCht(){
   const rows=[['Instructor','Category',...TERMS.map(t=>TL[t]+' Courses'),...TERMS.map(t=>TL[t]+' Eff CR'),...TERMS.map(t=>TL[t]+' Raw CR'),...TERMS.map(t=>TL[t]+' FTE'),...progs().map(p=>p+" CR"),'GR CR','UG CR','Ann Raw CR','Ann Eff CR','AY FTE','FTE Status','FTE Rule','Flag']];
   Object.values(agg).sort((a,b)=>a.name.localeCompare(b.name)).forEach(inst=>{
     let aR=0,aE=0;const pc={};progs().forEach(p=>pc[p]=0);const gc={GR:0,UG:0,B:0};
-    const tc=[],ec=[],rc=[],fc=[],eBy={};
+    const tc=[],ec=[],rc=[],fc=[],eBy={},rBy={};
     TERMS.forEach(t=>{const offs=inst.terms[t];let tR=0,tE=0;
       tc.push(offs.map(o=>o.course+(o.ex?' [EX]':'')+(o.two?' [2I]':'')).join('; '));
       offs.forEach(o=>{tR+=o.cr;tE+=o.eff;pc[o.pfx]=(pc[o.pfx]||0)+o.cr;gc[o.grugb]=(gc[o.grugb]||0)+o.cr;});
-      eBy[t]=tE;ec.push(tE||'');rc.push(tR||'');fc.push(fteFmt(fteTerm(inst.cat,tE)));aR+=tR;aE+=tE;});
+      eBy[t]=tE;ec.push(tE||'');rc.push(tR||'');fc.push(fteFmt(fteTerm(inst.cat,tE)));rBy[t]=tR;});
+    const ayT=fteAYTerms(inst.cat);aR=ayT.reduce((n,t)=>n+(rBy[t]||0),0);aE=ayT.reduce((n,t)=>n+(eBy[t]||0),0);
     const r=fteRule(inst.cat);
     const ayv=fteAY(inst.cat,eBy);
     const flag=[...TERMS.filter(t=>fteOverTerm(inst.cat,eBy[t])).map(t=>`${TL[t]}: ${eBy[t]} CR, ${FTE_FLAG_TERM_TXT}`),
@@ -4629,7 +4635,7 @@ function afrRows(){
     .map(inst=>{
       const cat=inst.category||'',rule=fteRule(cat);
       // ayTerms: what AY Eff CR / AY FTE count — Summer too for includeSummer rules.
-      const ayTerms=rule&&rule.includeSummer?TERMS.slice():terms;
+      const ayTerms=fteAYTerms(cat,rule&&rule.includeSummer?TERMS:terms);
       const loads={},eBy={};
       ayTerms.forEach(t=>{loads[t]=tfrLoad(inst,t);eBy[t]=loads[t].eff;});
       const tf={};terms.forEach(t=>{tf[t]=loads[t].offs.length&&rule&&rule.perCR?(fteTerm(cat,eBy[t])||0):null;});
