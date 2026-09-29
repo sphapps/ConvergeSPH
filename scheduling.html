@@ -249,6 +249,9 @@ td{padding:7px 10px;vertical-align:middle}
 .gantt-scroll,.cht-scroll{flex:1;overflow:auto;padding:16px}
 /* CHTool: program + GR/UG credit columns, toggled by #c-pc (class on #cht-inner, no re-render) */
 #cht-inner.hide-pc .cht-pc{display:none}
+/* CHTool: the two annual columns (Ann Eff, AY FTE) are set apart with a divider and larger figures */
+#cht-inner .cht-ann-start{border-left:3px solid var(--teal)}
+#cht-inner td.cht-ann{font-size:13px;padding-left:14px!important;padding-right:14px!important}
 .dot{cursor:pointer;font-size:16px;display:inline-block;width:100%;text-align:center;user-select:none}
 .dot.on{color:var(--teal)}.dot.off{color:var(--mgray)}.dot:hover{opacity:.7}
 .enr{width:64px;font-size:11px;padding:2px 4px;text-align:center}
@@ -2926,7 +2929,7 @@ function renderCht(){
     <th style="${sty};text-align:left;min-width:160px">Instructor</th><th style="${sty};text-align:left">Category</th>`;
   TERMS.forEach(t=>{html+=`<th style="${sty};min-width:160px">${esc(TL[t])}</th><th style="${sty}" title="Effective credits: course credits, halved when co-taught, 0 when FTE-exempt. Hover a cell for the breakdown.">Eff CR</th><th style="${sty};background:#7a1f1f">Term FTE</th>`;});
   progs().forEach(p=>html+=`<th class="cht-pc" style="${sty}">${p}</th>`);
-  html+=`<th class="cht-pc" style="${sty}">GR CR</th><th class="cht-pc" style="${sty}">UG CR</th><th style="${sty}" title="Same terms as the FTE: Summer–Spring for OHSU Primary, NPS and Staff; Fall–Spring for everyone else. Hover a cell for the breakdown.">Ann Eff</th><th style="${sty};background:#C00000" title="Adjuncts, Other and PSU NTTF: Fall–Spring Eff CR ÷ 45; PSU TTF: ÷ 36; OHSU Primary, NPS and Staff: Summer–Spring Eff CR ÷ 32 (all independent of term FTEs). Others: sum of Fall–Spring term FTEs. Summer excluded except OHSU Primary, NPS and Staff.">AY FTE</th></tr></thead><tbody>`;
+  html+=`<th class="cht-pc" style="${sty}">GR CR</th><th class="cht-pc" style="${sty}">UG CR</th><th class="cht-ann cht-ann-start" style="${sty}" title="Same terms as the FTE: Summer–Spring for OHSU Primary, NPS and Staff; Fall–Spring for everyone else. Hover a cell for the breakdown.">Ann Eff</th><th class="cht-ann" style="${sty};background:#C00000" title="Adjuncts, Other and PSU NTTF: Fall–Spring Eff CR ÷ 45; PSU TTF: ÷ 36; OHSU Primary, NPS and Staff: Summer–Spring Eff CR ÷ 32 (all independent of term FTEs). Others: sum of Fall–Spring term FTEs. Summer excluded except OHSU Primary, NPS and Staff.">AY FTE</th></tr></thead><tbody>`;
   instrs.forEach((inst,ri)=>{
     const bg=ri%2?'var(--surface-2)':'var(--surface)';
     let aR=0,aE=0;const pc={};progs().forEach(p=>pc[p]=0);const gc={GR:0,UG:0,B:0};
@@ -2953,17 +2956,17 @@ function renderCht(){
             :fteTd(fteTerm(inst.cat,tE),bg));
     });
     const ayT=fteAYTerms(inst.cat);aE=ayT.reduce((n,t)=>n+(eBy[t]||0),0);
-    const pcells=progs().map(p=>`<td class="cht-pc" style="text-align:center;padding:5px 10px;background:${bg}">${pc[p]||''}</td>`).join('');
+    const pcells=progs().map(p=>`<td class="cht-pc" style="text-align:center;vertical-align:top;padding:5px 10px;background:${bg}">${pc[p]||''}</td>`).join('');
     const ay=fteAY(inst.cat,eBy),over=fteOverAY(inst.cat,ay);
     const fteBg=over?'var(--ltred)':bg;
-    const ayCell=fteTd(ay,fteBg,'font-weight:700').replace(/<\/td>$/,
+    const ayCell=fteTd(ay,fteBg,'font-weight:700').replace('<td ','<td class="cht-ann" ').replace(/<\/td>$/,
       (over?`<div style="font-size:9px;font-weight:600;color:var(--red,#C00000);font-style:normal">&gt; .49 (${fteAYCredits(eBy)} AY CR)</div>`:'')+'</td>');
     html+=`<tr><td style="padding:5px 10px;font-weight:600;vertical-align:top;background:${bg}">${esc(inst.name)}</td>`
          +`<td style="padding:5px 10px;vertical-align:top;background:${bg};color:var(--dgray);font-size:11px">${fteCatHtml(inst.cat)}</td>`
          +tds+pcells
-         +`<td class="cht-pc" style="text-align:center;padding:5px 10px;background:${bg}">${gc.GR||''}</td>`
-         +`<td class="cht-pc" style="text-align:center;padding:5px 10px;background:${bg}">${gc.UG||''}</td>`
-         +`<td title="${esc(effTipAY(eBy,ayT))}" style="text-align:center;font-weight:700;padding:5px 10px;background:${aE>0?'var(--ltgrn)':bg}${aE?';cursor:help':''}">${aE?aE.toFixed(1):''}</td>`
+         +`<td class="cht-pc" style="text-align:center;vertical-align:top;padding:5px 10px;background:${bg}">${gc.GR||''}</td>`
+         +`<td class="cht-pc" style="text-align:center;vertical-align:top;padding:5px 10px;background:${bg}">${gc.UG||''}</td>`
+         +`<td class="cht-ann cht-ann-start" title="${esc(effTipAY(eBy,ayT))}" style="text-align:center;vertical-align:top;font-weight:700;padding:5px 10px;background:${aE>0?'var(--ltgrn)':bg}${aE?';cursor:help':''}">${aE?aE.toFixed(1):''}</td>`
          +ayCell+'</tr>';
   });
   html+='</tbody></table>';
