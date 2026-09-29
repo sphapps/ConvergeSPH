@@ -1381,6 +1381,24 @@ const fteOverCap=(cat,effByTerm)=>cat==='PSU Adjunct'&&fteAYCredits(effByTerm)>P
 const fteFmt=x=>x==null?'':(Math.round(x*1000)/1000).toFixed(3);
 // Plain-text marker for exports: '' confirmed, '*' provisional.
 const fteMark=cat=>{const r=fteRule(cat);return r&&r.status==='provisional'?'*':'';};
+// Hover text for an Eff CR cell: how each course contributes. `offs` items
+// carry {course, cr, two, ex, eff}. Raw CR columns were removed from the
+// on-screen tables (Tim, 9/29/26); this tooltip is where that detail lives.
+function effTip(offs,label){
+  if(!offs||!offs.length)return '';
+  const n=v=>+(+v).toFixed(2);
+  const lines=offs.map(o=>{const c=String(o.course).split(':')[0].trim();
+    return o.ex?`${c}: ${n(o.cr)} cr, FTE-exempt → 0`
+      :o.two?`${c}: ${n(o.cr)} cr ÷ 2 (co-taught) → ${n(o.cr/2)}`
+      :`${c}: ${n(o.cr)} cr`;});
+  return (label?label+'\n':'')+lines.join('\n')+`\n= ${n(offs.reduce((a,o)=>a+o.eff,0))} effective CR`;
+}
+// Hover text for an annual Eff CR cell: the per-term effective credits.
+function effTipAY(effByTerm,terms){
+  const n=v=>+(+v).toFixed(2);
+  const parts=terms.filter(t=>effByTerm[t]).map(t=>`${TL[t]||t}: ${n(effByTerm[t])}`);
+  return parts.length?parts.join('\n')+`\n= ${n(terms.reduce((a,t)=>a+(effByTerm[t]||0),0))} effective CR`:'';
+}
 function fteRuleLabel(cat){const r=fteRule(cat);return r?r.text:(cat?'No FTE rule for this category':'No category set — no FTE');}
 const GDAYS=['MON','TUE','WED','THU','FRI'];
 // Single-token → Gantt column (Mon–Fri). The Gantt parses each offering's
@@ -2863,9 +2881,9 @@ function renderCht(){
   const sty='padding:8px 10px;position:sticky;top:0;z-index:5';
   let html=`<table style="border-collapse:collapse;font-size:12px;width:100%"><thead><tr style="background:var(--navy);color:white">
     <th style="${sty};text-align:left;min-width:160px">Instructor</th><th style="${sty};text-align:left">Category</th>`;
-  TERMS.forEach(t=>{html+=`<th style="${sty};min-width:160px">${esc(TL[t])}</th><th style="${sty}">Eff CR</th><th style="${sty}">Raw CR</th><th style="${sty};background:#7a1f1f">Term FTE</th>`;});
+  TERMS.forEach(t=>{html+=`<th style="${sty};min-width:160px">${esc(TL[t])}</th><th style="${sty}" title="Effective credits: course credits, halved when co-taught, 0 when FTE-exempt. Hover a cell for the breakdown.">Eff CR</th><th style="${sty};background:#7a1f1f">Term FTE</th>`;});
   progs().forEach(p=>html+=`<th style="${sty}">${p}</th>`);
-  html+=`<th style="${sty}">GR CR</th><th style="${sty}">UG CR</th><th style="${sty}">Ann Raw</th><th style="${sty}">Ann Eff</th><th style="${sty};background:#C00000" title="Sum of Fall, Winter and Spring term FTEs (Summer excluded)">AY FTE</th></tr></thead><tbody>`;
+  html+=`<th style="${sty}">GR CR</th><th style="${sty}">UG CR</th><th style="${sty}" title="All terms in this AY, including Summer. Hover a cell for the breakdown.">Ann Eff</th><th style="${sty};background:#C00000" title="Sum of Fall, Winter and Spring term FTEs (Summer excluded)">AY FTE</th></tr></thead><tbody>`;
   instrs.forEach((inst,ri)=>{
     const bg=ri%2?'var(--surface-2)':'var(--surface)';
     let aR=0,aE=0;const pc={};progs().forEach(p=>pc[p]=0);const gc={GR:0,UG:0,B:0};
@@ -2886,8 +2904,7 @@ function renderCht(){
       aR+=tR;aE+=tE;eBy[t]=tE;
       const eb=tE>0?'var(--ltgrn)':bg;
       tds+=`<td style="vertical-align:top;min-width:160px;padding:5px 10px;background:${bg}">${cells||'<span style="color:var(--mgray);font-size:10px">—</span>'}</td>`
-          +`<td style="text-align:center;font-weight:700;padding:5px 10px;background:${eb};vertical-align:top">${tE>0?tE.toFixed(1):''}</td>`
-          +`<td style="text-align:center;padding:5px 10px;background:${bg};vertical-align:top">${tR||''}</td>`
+          +`<td title="${esc(effTip(offs,TL[t]))}" style="text-align:center;font-weight:700;padding:5px 10px;background:${eb};vertical-align:top${offs.length?';cursor:help':''}">${tE>0?tE.toFixed(1):''}</td>`
           +fteTd(fteTerm(inst.cat,tE),bg);
     });
     const pcells=progs().map(p=>`<td style="text-align:center;padding:5px 10px;background:${bg}">${pc[p]||''}</td>`).join('');
@@ -2902,8 +2919,7 @@ function renderCht(){
          +tds+pcells
          +`<td style="text-align:center;padding:5px 10px;background:${bg}">${gc.GR||''}</td>`
          +`<td style="text-align:center;padding:5px 10px;background:${bg}">${gc.UG||''}</td>`
-         +`<td style="text-align:center;padding:5px 10px;background:${bg}">${aR||''}</td>`
-         +`<td style="text-align:center;font-weight:700;padding:5px 10px;background:${aE>0?'var(--ltgrn)':bg}">${aE?aE.toFixed(1):''}</td>`
+         +`<td title="${esc(effTipAY(eBy,TERMS))}" style="text-align:center;font-weight:700;padding:5px 10px;background:${aE>0?'var(--ltgrn)':bg}${aE?';cursor:help':''}">${aE?aE.toFixed(1):''}</td>`
          +ayCell+'</tr>';
   });
   html+='</tbody></table>';
@@ -4470,7 +4486,7 @@ function tfrRecompute(){
     <th style="padding:6px 8px;text-align:left">${TFR.mode==='roster'?'Roster name':'Instructor'}</th>
     <th style="padding:6px 8px;text-align:left">Converge instructor</th>
     <th style="padding:6px 8px;text-align:left">${esc(tl)} courses in Converge</th>
-    <th style="padding:6px 8px">Raw CR</th><th style="padding:6px 8px">Eff CR</th><th style="padding:6px 8px;background:#C00000">FTE</th>
+    <th style="padding:6px 8px" title="Effective credits: course credits, halved when co-taught, 0 when FTE-exempt. Hover a cell for the breakdown.">Eff CR</th><th style="padding:6px 8px;background:#C00000">FTE</th>
     <th style="padding:6px 8px;text-align:left">NOTES (written to sheet)</th></tr></thead><tbody>`;
   TFR.rows.forEach((r,ix)=>{
     const ev=tfrEvaluate(r,term);r._ev=ev;
@@ -4489,8 +4505,7 @@ function tfrRecompute(){
       <td style="padding:5px 8px;font-weight:600">${esc(r.last)}, ${esc(r.first)}</td>
       <td style="padding:5px 8px">${sel}</td>
       <td style="padding:5px 8px">${courses}</td>
-      <td style="padding:5px 8px;text-align:center">${ev.ld.offs.length?ev.ld.raw:''}</td>
-      <td style="padding:5px 8px;text-align:center;font-weight:700">${ev.ld.offs.length?ev.ld.eff.toFixed(1):''}</td>
+      <td title="${esc(effTip(ev.ld.offs))}" style="padding:5px 8px;text-align:center;font-weight:700${ev.ld.offs.length?';cursor:help':''}">${ev.ld.offs.length?ev.ld.eff.toFixed(1):''}</td>
       <td title="${esc(fteRuleLabel(ev.inst&&ev.inst.category))}" style="padding:5px 8px;text-align:center;font-weight:700${ev.inst&&fteMark(ev.inst.category)?';font-style:italic;color:var(--dgray)':''}">${ev.fte!=null?ev.fte.toFixed(3)+(ev.inst?fteMark(ev.inst.category):''):''}</td>
       <td style="padding:5px 8px;font-size:11px">${esc(ev.notes.join(' | '))}${extra}</td></tr>`;
   });
@@ -4612,9 +4627,9 @@ function afrRender(){
         +(o.ex?' <span style="background:var(--ltgold);color:var(--txgold);padding:0 3px;border-radius:2px;font-size:9px">EX</span>':'')
         +(o.two?' <span style="background:var(--ltbluep);color:var(--txblue);padding:0 3px;border-radius:2px;font-size:9px">2I</span>':'')+'</div>').join('')
         ||'<span style="color:var(--mgray);font-size:10px">—</span>'}</td>
-        <td style="padding:5px 8px;text-align:center">${L.offs.length?L.eff.toFixed(1):''}</td>
+        <td title="${esc(effTip(L.offs))}" style="padding:5px 8px;text-align:center${L.offs.length?';cursor:help':''}">${L.offs.length?L.eff.toFixed(1):''}</td>
         <td title="${tip}" style="padding:5px 8px;text-align:center${it}">${r.tf[t]!=null?fteFmt(r.tf[t])+mk:''}</td>`;});
-    html+=`<td style="padding:5px 8px;text-align:center;font-weight:700">${r.ayEff.toFixed(1)}</td>
+    html+=`<td title="${esc(effTipAY(r.eBy,terms))}" style="padding:5px 8px;text-align:center;font-weight:700;cursor:help">${r.ayEff.toFixed(1)}</td>
       <td title="${tip}" style="padding:5px 8px;text-align:center;font-weight:700;background:${hot?'var(--ltred)':bg}${it}">${r.ay!=null?fteFmt(r.ay)+mk:''}</td>
       <td style="padding:5px 8px;font-size:11px">${esc(r.flags.join(' | '))}</td></tr>`;
   });
