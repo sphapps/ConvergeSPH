@@ -576,7 +576,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
         <button class="btn btn-s" id="btn-tfr" title="FTE for one term, optionally filling in a roster spreadsheet (e.g. the annual ASPPH adjunct/secondary faculty request)">📄 Term FTE Report</button>
         <button class="btn btn-s" id="btn-afr" title="Fall, Winter and Spring FTE per instructor with the academic-year total, as a spreadsheet">📊 Annual FTE Report</button>
         <div class="tb-sp"></div>
-        <span class="tb-hint" id="cht-hint" title="PSU Adjunct: term FTE = CR ÷ 15.&#10;OHSU Adjunct: term FTE = CR × 0.075 (3 hrs/wk per credit ÷ 40).&#10;Adjuncts (both) and Other: AY FTE = Fall–Spring CR ÷ 45, figured separately from the term FTEs. Flagged when a term is over 8 CR or AY FTE is over .49.&#10;OHSU Primary, NPS and Staff: 0.03 FTE per CR; Summer counts (the only exceptions) — AY FTE = Summer–Spring CR × 0.03.&#10;Other: same as PSU Adjunct — term FTE = CR ÷ 15; AY FTE = Fall–Spring CR ÷ 45; adjunct flags apply. Highlighted in the Category column.&#10;PSU TTF: term FTE = CR ÷ 8; AY FTE = Fall–Spring CR ÷ 24 (24 CR = 1.00), figured separately from the term FTEs.&#10;PSU NTTF: 0.1 FTE per class regardless of CR (½ if co-taught, 0 if FTE-exempt); AY FTE = Fall–Spring classes × 0.1.&#10;Everyone else: AY FTE = sum of Fall + Winter + Spring term FTEs. Summer excluded except for OHSU Primary, NPS and Staff.&#10;Hover any FTE cell for its rule.">FTE by category (hover for rules) · <span style="background:var(--ltred);padding:0 4px;border-radius:2px">red</span> = adjunct or Other over 8 CR in a term or AY FTE over .49</span>
+        <span class="tb-hint" id="cht-hint" title="PSU Adjunct: term FTE = CR ÷ 15.&#10;OHSU Adjunct: term FTE = CR × 0.075 (3 hrs/wk per credit ÷ 40).&#10;Adjuncts (both) and Other: AY FTE = Fall–Spring CR ÷ 45, figured separately from the term FTEs. Flagged when a term is over 8 CR or AY FTE is over .49.&#10;OHSU Primary, NPS and OHSU Staff: 0.03 FTE per CR; Summer counts (the only exceptions) — AY FTE = Summer–Spring CR × 0.03.&#10;Other: same as PSU Adjunct — term FTE = CR ÷ 15; AY FTE = Fall–Spring CR ÷ 45; adjunct flags apply. Highlighted in the Category column.&#10;PSU TTF: term FTE = CR ÷ 8; AY FTE = Fall–Spring CR ÷ 24 (24 CR = 1.00), figured separately from the term FTEs.&#10;PSU NTTF and PSU Staff: 0.1 FTE per class regardless of CR (½ if co-taught, 0 if FTE-exempt); AY FTE = Fall–Spring classes × 0.1.&#10;Everyone else: AY FTE = sum of Fall + Winter + Spring term FTEs. Summer excluded except for OHSU Primary, NPS and OHSU Staff.&#10;Hover any FTE cell for its rule.">FTE by category (hover for rules) · <span style="background:var(--ltred);padding:0 4px;border-radius:2px">red</span> = adjunct or Other over 8 CR in a term or AY FTE over .49</span>
       </div>
       <div class="cht-scroll"><div id="cht-inner"></div></div>
     </div>
@@ -1072,7 +1072,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       <div><label>Last Name</label><input id="im-last"></div>
       <div><label>First Name</label><input id="im-first"></div>
       <div class="s2"><label>Display Name</label><input id="im-dn"><div class="fhint">Auto: Last F. — extended if duplicate: Last Fi., Last Fir.</div></div>
-      <div><label>Category</label><select id="im-cat"><option value="">— Select —</option><option>OHSU Primary</option><option>OHSU Adjunct</option><option>NPS</option><option>PSU TTF</option><option>PSU NTTF</option><option>PSU Adjunct</option><option>Staff</option><option>Other</option><option>TBD</option></select></div>
+      <div><label>Category</label><select id="im-cat"><option value="">— Select —</option><option>OHSU Primary</option><option>OHSU Adjunct</option><option>NPS</option><option>OHSU Staff</option><option>PSU TTF</option><option>PSU NTTF</option><option>PSU Adjunct</option><option>PSU Staff</option><option>Other</option><option>TBD</option></select></div>
       <div class="s2"><label>Email</label><input id="im-email" type="email"></div>
       <div class="s2"><label>Email 2 / OHSU Email</label><input id="im-email2" type="email"></div>
       <div><label>EID</label><input id="im-eid"></div>
@@ -1186,7 +1186,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       <div class="fg">
         <div><label>Term</label><select id="tfr-term"></select><div class="fhint">Terms in the AY selected in the header.</div></div>
         <div><label>Roster spreadsheet (optional)</label><input type="file" id="tfr-file" accept=".xlsx"><div class="fhint">A sheet with last name, first name and an FTE column. Leave blank to report everyone teaching that term.</div></div>
-        <div class="s2"><div class="fhint" id="tfr-rule">Term FTE for the chosen term by category: <b>PSU Adjunct</b> CR ÷ 15 · <b>OHSU Adjunct</b> CR × 0.075 (3 CR ≈ .22, 4 CR = .30) · <b>OHSU Primary</b>, <b>NPS</b> and <b>Staff</b> CR × 0.03 · <b>Other</b> CR ÷ 15 (as PSU Adjunct) · <b>PSU TTF</b> CR ÷ 8 · <b>PSU NTTF</b> 0.1 per class (any CR). Adjuncts and Other over 8 CR in the term are flagged. 2-instructor courses split credits; FTE-exempt courses count 0 but are listed. Provisional/missing rules and courses Converge doesn't have are flagged in NOTES.</div></div>
+        <div class="s2"><div class="fhint" id="tfr-rule">Term FTE for the chosen term by category: <b>PSU Adjunct</b> CR ÷ 15 · <b>OHSU Adjunct</b> CR × 0.075 (3 CR ≈ .22, 4 CR = .30) · <b>OHSU Primary</b>, <b>NPS</b> and <b>OHSU Staff</b> CR × 0.03 · <b>Other</b> CR ÷ 15 (as PSU Adjunct) · <b>PSU TTF</b> CR ÷ 8 · <b>PSU NTTF</b> and <b>PSU Staff</b> 0.1 per class (any CR). Adjuncts and Other over 8 CR in the term are flagged. 2-instructor courses split credits; FTE-exempt courses count 0 but are listed. Provisional/missing rules and courses Converge doesn't have are flagged in NOTES.</div></div>
       </div>
       <div id="tfr-status" class="fhint" style="margin:12px 0 6px"></div>
       <div id="tfr-preview" style="overflow:auto;max-height:52vh"></div>
@@ -1206,7 +1206,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       <div class="fg">
         <div><label>Category</label><select id="afr-cat"><option value="">All categories</option></select><div class="fhint">Academic year = the AY selected in the header.</div></div>
         <div><label>Include</label><select id="afr-scope"><option value="rule">Categories with an FTE rule</option><option value="all">Everyone teaching Fall–Spring</option></select></div>
-        <div class="s2"><div class="fhint">Fall, Winter and Spring (Summer is outside the 9-month AY) — except <b>OHSU Primary</b>, <b>NPS</b> and <b>Staff</b>, whose Summer credits also count toward AY Eff CR and AY FTE (shown in Notes). Term FTE per the category rules; <b>AY FTE</b>: adjuncts and Other = Fall–Spring Eff CR ÷ 45 and PSU TTF = ÷ 24, figured separately (term FTEs won't necessarily add up to it); everyone else = Fall + Winter + Spring term FTEs. Adjuncts and Other are flagged in red for a term over 8 CR or AY FTE over .49.</div></div>
+        <div class="s2"><div class="fhint">Fall, Winter and Spring (Summer is outside the 9-month AY) — except <b>OHSU Primary</b>, <b>NPS</b> and <b>OHSU Staff</b>, whose Summer credits also count toward AY Eff CR and AY FTE (shown in Notes). Term FTE per the category rules; <b>AY FTE</b>: adjuncts and Other = Fall–Spring Eff CR ÷ 45 and PSU TTF = ÷ 24, figured separately (term FTEs won't necessarily add up to it); everyone else = Fall + Winter + Spring term FTEs. Adjuncts and Other are flagged in red for a term over 8 CR or AY FTE over .49.</div></div>
       </div>
       <div id="afr-status" class="fhint" style="margin:12px 0 6px"></div>
       <div id="afr-preview" style="overflow:auto;max-height:52vh"></div>
@@ -1337,7 +1337,7 @@ const CATALOG_URL_DEFAULTS=[
    OHSU Adjunct (confirmed per term): 1 credit = 33 hrs over 11 weeks
      = 3 hrs/wk; FTE = hrs/wk ÷ 40.
      Term FTE = CR × 3 ÷ 40 (3 → .225 "about .22", 4 → .30)
-   OHSU Primary, NPS and Staff (confirmed, Tim 9/29/26 — NPS and Staff have
+   OHSU Primary, NPS and OHSU Staff (confirmed, Tim 9/29/26 — NPS and OHSU Staff have
    the same rules as OHSU Primary): 0.03 FTE per credit (Tim 9/29/26;
    replaced the earlier 32:1 and 16:1 ratios). Term FTE = CR × 0.03;
      AY FTE = Summer–Spring CR × 0.03 (= sum of the term FTEs).
@@ -1355,15 +1355,18 @@ const CATALOG_URL_DEFAULTS=[
      counts ½, an FTE-exempt class 0 — same treatment credits get.
      Term FTE = classes × 0.1; AY FTE = Fall–Spring classes × 0.1 (= sum of
      the term FTEs). Not flagged.
+   PSU Staff (Tim, 9/29/26): same rules as PSU NTTF. The old "Staff"
+     category was split that day — existing Staff became OHSU Staff
+     (fte_category_staff_split_v1.sql).
    AY FTE (fteAY) — a rule with `ayCR` (credits per 1.0 AY FTE) is
    calculated from Fall–Spring Eff CR, independently of its term FTEs
    (Tim, 9/29/26), so the term FTEs need NOT add up to the AY FTE:
      Adjuncts (PSU and OHSU) and Other: ÷ 45 (22 CR = .489, 22.5 CR = .50).
      PSU TTF: ÷ 24.
-     Everyone else (OHSU Primary/NPS/Staff per credit, PSU NTTF per class):
+     Everyone else (OHSU Primary/NPS/OHSU Staff per credit, PSU NTTF/PSU Staff per class):
        sum of the term FTEs over the AY terms.
    Summer is outside the 9-month AY: it gets its own term FTE but never
-   counts toward AY FTE — except OHSU Primary, NPS and Staff (includeSummer).
+   counts toward AY FTE — except OHSU Primary, NPS and OHSU Staff (includeSummer).
    Adjunct flags — PSU Adjunct, OHSU Adjunct and Other (no other category
    is flagged):
      term: more than 8 Eff CR in a term (flag is on credits, not FTE — the
@@ -1381,14 +1384,16 @@ const FTE_RULES={
     text:'OHSU Primary — 0.03 FTE per CR, Summer included: term FTE = CR × 0.03; AY FTE = Summer–Spring CR × 0.03'},
   'NPS':{status:'confirmed',perCR:0.03,includeSummer:true,
     text:'NPS — same rules as OHSU Primary: 0.03 FTE per CR, Summer included: term FTE = CR × 0.03; AY FTE = Summer–Spring CR × 0.03'},
-  'Staff':{status:'confirmed',perCR:0.03,includeSummer:true,
-    text:'Staff — same rules as OHSU Primary: 0.03 FTE per CR, Summer included: term FTE = CR × 0.03; AY FTE = Summer–Spring CR × 0.03'},
+  'OHSU Staff':{status:'confirmed',perCR:0.03,includeSummer:true,
+    text:'OHSU Staff — same rules as OHSU Primary: 0.03 FTE per CR, Summer included: term FTE = CR × 0.03; AY FTE = Summer–Spring CR × 0.03'},
   'Other':{status:'confirmed',perCR:1/15,ayCR:45,
     text:'Other — same rules as PSU Adjunct: term FTE = CR ÷ 15; AY FTE = Fall–Spring CR ÷ 45. Flagged: term over 8 CR, AY FTE over .49'},
   'PSU TTF':{status:'confirmed',perCR:1/8,ayCR:24,
     text:'PSU TTF — 24 CR per AY = 1.00 FTE: term FTE = CR ÷ 8; AY FTE = Fall–Spring CR ÷ 24'},
   'PSU NTTF':{status:'confirmed',perClass:0.1,
-    text:'PSU NTTF — 0.1 FTE per class regardless of credits (½ class if co-taught, 0 if FTE-exempt): term FTE = classes × 0.1; AY FTE = Fall–Spring classes × 0.1'}
+    text:'PSU NTTF — 0.1 FTE per class regardless of credits (½ class if co-taught, 0 if FTE-exempt): term FTE = classes × 0.1; AY FTE = Fall–Spring classes × 0.1'},
+  'PSU Staff':{status:'confirmed',perClass:0.1,
+    text:'PSU Staff — same rules as PSU NTTF: 0.1 FTE per class regardless of credits (½ class if co-taught, 0 if FTE-exempt): term FTE = classes × 0.1; AY FTE = Fall–Spring classes × 0.1'}
 };
 Object.values(FTE_RULES).forEach(r=>{
   if(r.status==='provisional')r.text='Provisional — legacy Eff CR × 0.03 until HR confirms the OHSU non-adjunct rule (ask '+r.contact+')';
@@ -1410,7 +1415,7 @@ const fteClsUnit=(ex,two)=>ex?0:(two?0.5:1);
 // Fall–Spring Eff CR ÷ ayCR, independent of the term FTEs. Others: sum of the Fall–Spring term FTEs as displayed
 // (rounded to .001) so those columns foot in Excel. `terms` defaults to the
 // active AY; summer terms are skipped unless the rule has includeSummer
-// (OHSU Primary, NPS and Staff only).
+// (OHSU Primary, NPS and OHSU Staff only).
 function fteAY(cat,effByTerm,terms,clsByTerm){
   const r=fteRule(cat);if(!fteHas(cat))return null;clsByTerm=clsByTerm||{};
   const ts=(terms||TERMS).filter(t=>r.includeSummer||!fteIsSummer(t));
@@ -1420,7 +1425,7 @@ function fteAY(cat,effByTerm,terms,clsByTerm){
   return x>0?x:null;
 }
 // The terms a category's AY figures count: Summer–Spring for includeSummer
-// rules (OHSU Primary, NPS, Staff), Fall–Spring for everyone else — used for
+// rules (OHSU Primary, NPS, OHSU Staff), Fall–Spring for everyone else — used for
 // AY FTE *and* the annual Eff/Raw CR columns so they always agree.
 const fteAYTerms=(cat,terms)=>{const r=fteRule(cat);return(terms||TERMS).filter(t=>(r&&r.includeSummer)||!fteIsSummer(t));};
 // Fall–Spring effective credits.
@@ -2940,7 +2945,7 @@ function renderCht(){
     <th style="${sty};text-align:left;min-width:160px">Instructor</th><th style="${sty};text-align:left">Category</th>`;
   TERMS.forEach(t=>{html+=`<th style="${sty};min-width:160px">${esc(TL[t])}</th><th style="${sty}" title="Effective credits: course credits, halved when co-taught, 0 when FTE-exempt. Hover a cell for the breakdown.">Eff CR</th><th style="${sty};background:#7a1f1f">Term FTE</th>`;});
   progs().forEach(p=>html+=`<th class="cht-pc" style="${sty}">${p}</th>`);
-  html+=`<th class="cht-pc" style="${sty}">GR CR</th><th class="cht-pc" style="${sty}">UG CR</th><th class="cht-ann cht-ann-start" style="${sty}" title="Same terms as the FTE: Summer–Spring for OHSU Primary, NPS and Staff; Fall–Spring for everyone else. Hover a cell for the breakdown.">Ann Eff</th><th class="cht-ann" style="${sty};background:#C00000" title="Adjuncts and Other: Fall–Spring Eff CR ÷ 45; PSU TTF: ÷ 24 (independent of term FTEs). OHSU Primary, NPS and Staff: Summer–Spring CR × 0.03. PSU NTTF: Fall–Spring classes × 0.1. Summer excluded except OHSU Primary, NPS and Staff.">AY FTE</th></tr></thead><tbody>`;
+  html+=`<th class="cht-pc" style="${sty}">GR CR</th><th class="cht-pc" style="${sty}">UG CR</th><th class="cht-ann cht-ann-start" style="${sty}" title="Same terms as the FTE: Summer–Spring for OHSU Primary, NPS and OHSU Staff; Fall–Spring for everyone else. Hover a cell for the breakdown.">Ann Eff</th><th class="cht-ann" style="${sty};background:#C00000" title="Adjuncts and Other: Fall–Spring Eff CR ÷ 45; PSU TTF: ÷ 24 (independent of term FTEs). OHSU Primary, NPS and OHSU Staff: Summer–Spring CR × 0.03. PSU NTTF and PSU Staff: Fall–Spring classes × 0.1. Summer excluded except OHSU Primary, NPS and OHSU Staff.">AY FTE</th></tr></thead><tbody>`;
   instrs.forEach((inst,ri)=>{
     const bg=ri%2?'var(--surface-2)':'var(--surface)';
     let aR=0,aE=0;const pc={};progs().forEach(p=>pc[p]=0);const gc={GR:0,UG:0,B:0};
@@ -4611,7 +4616,7 @@ async function tfrDownload(){
   const old=wb.getWorksheet('FTE Detail');if(old)wb.removeWorksheet(old.id);
   const d=wb.addWorksheet('FTE Detail');
   d.getCell('A1').value=`FTE detail — ${tl} — from ConvergeSPH, ${new Date().toLocaleDateString()}`;d.getCell('A1').font={bold:true,size:12};
-  d.getCell('A2').value='Term FTE by category — PSU Adjunct: CR ÷ 15. OHSU Adjunct: CR × 3 hrs/wk ÷ 40 (= CR × 0.075). OHSU Primary, NPS and Staff: CR × 0.03. Other: CR ÷ 15 (as PSU Adjunct). PSU TTF: CR ÷ 8. PSU NTTF: 0.1 per class (½ if co-taught). Effective credits = course credits, halved when two instructors share the course (2I); FTE-exempt courses count 0.';
+  d.getCell('A2').value='Term FTE by category — PSU Adjunct: CR ÷ 15. OHSU Adjunct: CR × 3 hrs/wk ÷ 40 (= CR × 0.075). OHSU Primary, NPS and OHSU Staff: CR × 0.03. Other: CR ÷ 15 (as PSU Adjunct). PSU TTF: CR ÷ 8. PSU NTTF and PSU Staff: 0.1 per class (½ if co-taught). Effective credits = course credits, halved when two instructors share the course (2I); FTE-exempt courses count 0.';
   d.getCell('A2').font={italic:true,size:9};
   const H=['Last','First','Converge instructor','Category','Match','Course','Status','Raw CR','2I','FTE-exempt','Eff CR','FTE','FTE rule'];
   H.forEach((h,ix)=>{d.getRow(4).getCell(ix+1).value=h;});d.getRow(4).font={bold:true};d.views=[{state:'frozen',ySplit:4}];
@@ -4730,7 +4735,7 @@ async function afrDownload(){
   // Detail: one line per course per term, with the arithmetic.
   const d=wb.addWorksheet('FTE Detail');
   d.getCell('A1').value=`Annual FTE detail — ${ay} (${terms.map(t=>TL[t]||t).join(', ')}) — from ConvergeSPH, ${new Date().toLocaleDateString()}`;d.getCell('A1').font={bold:true,size:12};
-  d.getCell('A2').value='Term FTE — PSU Adjunct: CR ÷ 15. OHSU Adjunct: CR × 3 hrs/wk ÷ 40 (= CR × 0.075). OHSU Primary, NPS and Staff: CR × 0.03. Other: CR ÷ 15 (as PSU Adjunct). PSU TTF: CR ÷ 8. PSU NTTF: 0.1 per class (½ if co-taught). AY FTE — adjuncts and Other: Fall–Spring Eff CR ÷ 45; PSU TTF: ÷ 24 (independent of term FTEs); OHSU Primary, NPS and Staff: Summer–Spring CR × 0.03; PSU NTTF: Fall–Spring classes × 0.1. Adjunct/Other flags: term over 8 CR, AY FTE over .49. Eff CR = credits, halved for 2 instructors (2I); FTE-exempt = 0. Summer excluded except for OHSU Primary, NPS and Staff, whose Summer courses are listed and counted.';
+  d.getCell('A2').value='Term FTE — PSU Adjunct: CR ÷ 15. OHSU Adjunct: CR × 3 hrs/wk ÷ 40 (= CR × 0.075). OHSU Primary, NPS and OHSU Staff: CR × 0.03. Other: CR ÷ 15 (as PSU Adjunct). PSU TTF: CR ÷ 8. PSU NTTF and PSU Staff: 0.1 per class (½ if co-taught). AY FTE — adjuncts and Other: Fall–Spring Eff CR ÷ 45; PSU TTF: ÷ 24 (independent of term FTEs); OHSU Primary, NPS and OHSU Staff: Summer–Spring CR × 0.03; PSU NTTF and PSU Staff: Fall–Spring classes × 0.1. Adjunct/Other flags: term over 8 CR, AY FTE over .49. Eff CR = credits, halved for 2 instructors (2I); FTE-exempt = 0. Summer excluded except for OHSU Primary, NPS and OHSU Staff, whose Summer courses are listed and counted.';
   d.getCell('A2').font={italic:true,size:9};
   ['Instructor','Category','Term','Course','Raw CR','2I','FTE-exempt','Eff CR','Term FTE','FTE rule'].forEach((h,ix)=>{d.getRow(4).getCell(ix+1).value=h;});
   d.getRow(4).font={bold:true};d.views=[{state:'frozen',ySplit:4}];
