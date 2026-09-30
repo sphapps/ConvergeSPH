@@ -1906,7 +1906,18 @@ function latestDefs(){
   return m;
 }
 function defFor(key,ver){return FORM_DEFS.find(d=>d.form_key===key&&Number(d.version)===Number(ver))||null;}
+// A graduate course change with an OHSU category also gets that category's
+// OHSU form (Category II → ohsu_cat2, Category III → ohsu_cat3), on top of
+// whatever the form definition's own "applies" rules allow. Category I has
+// no form here yet.
+const CAT_FORM={ohsu_cat2:2,ohsu_cat3:3};
+function courseCatForm(d,r){
+  const cat=CAT_FORM[d.form_key];
+  return !!cat&&r.target_kind==='course'&&(r.student_level==='GR'||r.student_level==='both')&&
+    r.institutions!=='PSU'&&Number(r.ohsu_category)===cat;
+}
 function formApplies(d,r){
+  if(courseCatForm(d,r))return true;
   const a=(d.definition&&d.definition.applies)||{};
   if(a.action&&!a.action.includes(r.action))return false;
   if(a.target&&!a.target.includes(r.target_kind))return false;
@@ -2047,7 +2058,8 @@ function progSbs(pid){
 }
 function ccrCtx(r,key){
   const c=r.target_kind==='course'&&!r.is_external?COURSES[r.course_id]:null;
-  const p=r.target_kind==='program'&&!r.is_external?PROGRAMS[r.program_id]:null;
+  // A course change reads program.* values from its associated program.
+  const p=r.target_kind==='program'?(!r.is_external?PROGRAMS[r.program_id]:null):(r.program_id!=null?PROGRAMS[r.program_id]||null:null);
   switch(key){
     case 'item.prefix':return r.proposed_prefix||'';
     case 'item.number':return r.proposed_number||'';
@@ -2178,7 +2190,7 @@ function renderCcr(){
   if(none){
     $('cr-tabs').style.display='none';
     let why='No CCR forms apply to this change. Forms are chosen from the action, whether it is a course or a program, the approval tracks, the level, and the OHSU category.';
-    if(r.target_kind==='program'&&r.institutions!=='PSU'&&!r.ohsu_category)why+=' For the OHSU Category II or III form, set the OHSU category on the change.';
+    if(r.institutions!=='PSU'&&!r.ohsu_category&&(r.target_kind==='program'||r.student_level!=='UG'))why+=' For the OHSU Category II or III form, set the OHSU category on the change.';
     $('cr-body').innerHTML=`<div class="ccr-empty">${esc(why)}</div>`;
     ccrHint();return;
   }
@@ -2234,7 +2246,8 @@ function revWork(id){if(!crRevEdit[id]&&REVS[id])crRevEdit[id]=clone(REVS[id]);r
 // Course changes a revision can cover: this program's first, then the rest of the season.
 function revPickable(r,rv){
   const have=new Set(rv.item_ids||[]),rel=new Set(relatedCourseItems(r).map(x=>x.id));
-  const all=ITEMS.filter(x=>x.season_id===r.season_id&&x.id!==r.id&&x.target_kind==='course'&&x.approval_state!=='pending_delete'&&!have.has(x.id))
+  // A course change's own form can list the change itself.
+  const all=ITEMS.filter(x=>x.season_id===r.season_id&&x.target_kind==='course'&&x.approval_state!=='pending_delete'&&!have.has(x.id))
     .sort((a,b)=>(a.seq??0)-(b.seq??0));
   return {rel:all.filter(x=>rel.has(x.id)),other:all.filter(x=>!rel.has(x.id))};
 }
@@ -2280,7 +2293,7 @@ function revEditorHTML(d,r,w){
         const u=revUses(x.id,r.id);return `<option value="${esc(x.id)}">${esc(x.title||'(untitled)')}${u.length?' — on '+esc(u.map(itemProgramLabel).join(', ')):''}</option>`;}).join('')}</select>`:''}</div>`;
   }
   const covered=new Set(revs.flatMap(x=>x.item_ids||[]));
-  const loose=relatedCourseItems(r).filter(x=>!covered.has(x.id));
+  const loose=r.target_kind==='program'?relatedCourseItems(r).filter(x=>!covered.has(x.id)):[];
   if(revs.length&&loose.length)h+=`<div class="rv-warn">Tied to this program but not in any revision yet: ${esc(loose.map(itemRef).join('; '))}</div>`;
   return h+'</div></div>';
 }
@@ -2444,7 +2457,8 @@ function revOnClick(e,w){
   const r=ITEM_BY_ID[crItemId];
   if(e.target.closest('[data-rv-new]')){
     const id=(window.crypto&&crypto.randomUUID)?crypto.randomUUID():'10000000-1000-4000-8000-100000000000'.replace(/[018]/g,c=>(c^Math.random()*16>>c/4).toString(16));
-    crRevEdit[id]={id,season_id:r.season_id,title:'',detail:'',item_ids:[],shared:false,created_by:MY_UID,_new:true};
+    // On a course change's form, a new revision starts out covering that change.
+    crRevEdit[id]={id,season_id:r.season_id,title:'',detail:'',item_ids:r.target_kind==='course'?[r.id]:[],shared:false,created_by:MY_UID,_new:true};
     (Array.isArray(w._revs)?w._revs:(w._revs=[])).splice(revIdsOf(w).length,0,id);
     w._revs=revIdsOf(w);
     markDirty();reRenderBody();
@@ -2833,7 +2847,7 @@ function relatedCourseItems(r){
 // Category III checkboxes implied by the linked changes (starting value; editable on the form).
 function cat3Derived(r){
   const s=new Set();
-  relatedCourseItems(r).forEach(x=>{
+  (r.target_kind==='course'?[r]:relatedCourseItems(r)).forEach(x=>{
     if(x.action==='add')s.add('c_add');
     else if(x.action==='remove')s.add('c_elim');
     else{
@@ -3000,7 +3014,7 @@ function odProgramModel(d,r,w){
   if(cat===2){
     const sb=((CCR[r.id]||{}).answers||{}).ohsu_sbs;
     const sbDone=sb&&Array.isArray(sb.sbs)&&sb.sbs.length;
-    const news=relatedCourseItems(r).filter(x=>x.action==='add');
+    const news=(r.target_kind==='course'?[r]:relatedCourseItems(r)).filter(x=>x.action==='add');
     const closure=(r.change_facets||[]).includes('prog_closure');
     B.push({t:'ol',intro:'Attach the following documents or information as supplemental material:',items:[
       {text:'Complete Curriculum Side-by-side (Excel)',status:sbDone?'drafted in this CCR (Curriculum Side-by-side)':'not started'},
