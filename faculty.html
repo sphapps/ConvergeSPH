@@ -291,7 +291,7 @@ tbody tr.rowflash td{animation:rowflash 1.4s ease-out}
 /* Blank start date on a PSU adjunct — profile field and edit-modal input. */
 .fld.hi{background:var(--ltgold);box-shadow:inset 3px 0 0 var(--txgold)}
 .fld.hi .k,.fld.hi .v{color:var(--txgold)}
-.f input.hi{border-color:var(--txgold);background:var(--ltgold);box-shadow:0 0 0 1px var(--txgold)}
+.f input.hi,.f select.hi{border-color:var(--txgold);background:var(--ltgold);box-shadow:0 0 0 1px var(--txgold)}
 .fhint.hi{color:var(--txgold);font-weight:600}
 .adjcell{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
 /* Read-only block inside the edit modal's Review & Promotion section. */
@@ -401,6 +401,8 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
           <option value="notcurrent">PSU Adjuncts — not current</option>
           <option value="eligible">PSU Adjuncts — review eligible</option>
           <option value="nostart">PSU Adjuncts — missing start date</option>
+          <option value="noct">PSU Adjuncts — missing contract type</option>
+          <option value="order">PSU Adjuncts — in appointment order</option>
         </select>
         <select id="f-ceph" class="signed-only">
           <option value="">All CEPH statuses</option>
@@ -486,6 +488,19 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
         <!-- PSU Adjunct tracking: shown only while the PSUAdjunct category box is
              ticked. Read-only — values are derived or pending calculation. -->
         <div class="full" id="fm-adj" style="display:none"></div>
+        <!-- Contract type: the one EDITABLE adjunct field. Saved to the
+             admin-only faculty_psu_adjunct table, not to faculty. Kept outside
+             #fm-adj so re-rendering that block never resets the selection. -->
+        <div id="fm-adj-ct-wrap" style="display:none">
+          <label>PSU Adjunct Contract Type</label>
+          <select id="fm-adj-ct">
+            <option value="">— Not set —</option>
+            <option value="2yr">2-year</option>
+            <option value="9mo">9-month</option>
+            <option value="term">Term-by-term</option>
+          </select>
+          <div class="fhint" id="fm-adj-ct-hint"></div>
+        </div>
 
         <div class="sect">Roles</div>
         <div class="full">
@@ -1006,6 +1021,7 @@ async function loadData(){
   // enforces the same thing at the DB. Best-effort: if the table isn't there
   // yet every value just reads as "Calculation pending".
   ADJ={};
+  ADJ_RANK_CACHE=null;   // ranking depends on ADJ, FAC and TEACHING — all reloaded here
   if(TIER==='admin'){
     try{
       const{data,error}=await paginate(()=>sb.from('faculty_psu_adjunct').select('*'));
@@ -1221,14 +1237,70 @@ function adjLightHTML(f,withLabel){
     `</span>`;
 }
 
-/* ── Forthcoming rules ── Review eligibility and appointment order return null
-   until defined; a value stored in faculty_psu_adjunct (set via SQL for now)
-   is shown if present. Replace each body when the rules arrive. */
-function adjReviewEligible(f){        // criteria forthcoming
+/* ── Review eligibility ── criteria forthcoming; returns null until defined.
+   A value stored in faculty_psu_adjunct (set via SQL for now) is shown if
+   present. Replace the body when the rule arrives. */
+function adjReviewEligible(f){
   const r=ADJ[f.id];return (r&&r.review_eligible!=null)?!!r.review_eligible:null;
 }
-function adjApptOrder(f){             // logic forthcoming
-  const r=ADJ[f.id];return (r&&r.appointment_order!=null)?+r.appointment_order:null;
+
+/* ── CONTRACT TYPE + APPOINTMENT ORDER (PSUFA CBA) ───────────────
+   "Appointment order is a ranked list of Adjuncts maintained by each
+   department determined from their total accumulated credit load from date
+   of hire within the department and the length of their appointment. Those
+   on 2-year appointments with the highest number of accumulated credits come
+   first, followed by those on 9-month appointments, and lastly those on
+   term-by-term appointments."
+
+   As implemented:
+   · One list for all of SPH (department = SPH, as for credit load).
+   · Sorted by contract tier (2-year → 9-month → term-by-term), then
+     accumulated credit load, highest first.
+   · Who's on it: PSUAdjunct category, contract type set, NOT also Inactive.
+   · No contract type → not ranked; the profile and directory flag it.
+   · Ties (same tier, same credits) share a rank: 1, 2, 2, 4. The CBA names
+     no tiebreaker. */
+const CONTRACT_TYPES=[
+  {v:'2yr', label:'2-year'},
+  {v:'9mo', label:'9-month'},
+  {v:'term',label:'Term-by-term'}
+];
+const contractTier=v=>CONTRACT_TYPES.findIndex(c=>c.v===v);
+const contractLabel=v=>(CONTRACT_TYPES.find(c=>c.v===v)||{}).label||'';
+const adjContract=f=>{const r=ADJ[f.id];return (r&&contractTier(r.contract_type)>=0)?r.contract_type:null;};
+let ADJ_RANK_CACHE=null;   // cleared on every load; see loadData()
+/* override = {facultyId: contractType} — lets the edit modal preview the
+   rank for a contract type that hasn't been saved yet. Never cached. */
+function adjRanking(override){
+  if(!override&&ADJ_RANK_CACHE)return ADJ_RANK_CACHE;
+  const ct=f=>(override&&f.id in override)?override[f.id]:adjContract(f);
+  const list=FAC.filter(f=>(isPSUAdj(f)||(override&&f.id in override))&&!isInactive(f)&&contractTier(ct(f))>=0)
+    .map(f=>({f,tier:contractTier(ct(f)),cr:adjCreditLoad(f)||0}))
+    .sort((a,b)=>(a.tier-b.tier)||(b.cr-a.cr));
+  const rank={}; let prev=null;
+  list.forEach((x,i)=>{
+    const r=(prev&&prev.tier===x.tier&&prev.cr===x.cr)?rank[prev.f.id]:i+1;
+    rank[x.f.id]=r; prev=x;
+  });
+  const counts={}; Object.values(rank).forEach(r=>{counts[r]=(counts[r]||0)+1;});
+  const out={rank,size:list.length,tied:id=>counts[rank[id]]>1};
+  if(!override)ADJ_RANK_CACHE=out;
+  return out;
+}
+function adjApptOrder(f){const r=adjRanking().rank[f.id];return r==null?null:r;}
+function adjApptOrderHTML(f,override){
+  const ct=(override&&f.id in override)?override[f.id]:adjContract(f);
+  if(contractTier(ct)<0)
+    return '<span class="chip review" title="Set the contract type in Edit record">⚠ Contract type not set</span>'+
+           '<div class="hint">Appointment order can\'t be determined until it is.</div>';
+  if(isInactive(f))
+    return `<span class="muted">Not ranked — also Inactive</span><div class="hint">${esc(contractLabel(ct))} contract</div>`;
+  const R=adjRanking(override), r=R.rank[f.id];
+  if(r==null)return '<span class="muted">Not ranked</span>';
+  const flagged=adjCreditLoadDetail(f).flagged.length;
+  return `<span style="font-weight:600">#${r}</span> <span class="muted">of ${R.size}${R.tied(f.id)?' · tied':''}</span>`+
+    `<div class="hint">${esc(contractLabel(ct))} contract`+
+    (flagged?' · provisional: credit load has courses to check':'')+`</div>`;
 }
 
 /* ── ACCUMULATED CREDIT LOAD (PSUFA CBA) ─────────────────────────
@@ -1335,28 +1407,33 @@ function adjEligibleHTML(f){
   if(v===null)return '<span class="pending">Criteria pending</span>';
   return v?'<span class="chip warn">Review eligible</span>':'<span class="muted">Not eligible</span>';
 }
-function adjFields(f){
-  const ao=adjApptOrder(f);
+function adjFields(f,override){
+  const ct=(override&&f.id in override)?override[f.id]:adjContract(f);
   return [
     ['Current (last '+ADJ_WINDOW+' terms)',adjLightHTML(f,true)],
     ['Review Eligible',adjEligibleHTML(f)],
+    ['Contract Type',ct?esc(contractLabel(ct)):'<span class="chip review">Not set</span>'],
     ['Accumulated Credit Load',adjCreditLoadHTML(f)],
-    ['Appointment Order',ao===null?PENDING:esc('#'+ao)]
+    ['Appointment Order',adjApptOrderHTML(f,override)]
   ];
 }
 // Directory cell: light + eligibility (only once criteria exist) + a warning
 // chip when the start date is blank.
 function adjDirCell(f){
-  const el=adjReviewEligible(f);
+  const el=adjReviewEligible(f), ao=adjApptOrder(f);
   return `<span class="adjcell">${adjLightHTML(f,true)}`+
+    (ao!=null?`<span class="chip" title="Appointment order (${esc(contractLabel(adjContract(f)))})">#${ao}</span>`:'')+
     (el===true?'<span class="chip warn">Review eligible</span>':'')+
+    (!adjContract(f)?'<span class="chip review" title="Contract type not set — appointment order can\'t be determined">No contract type</span>':'')+
     (adjNoStart(f)?'<span class="chip warn" title="PSU adjunct with no start date on the record">No start date</span>':'')+
     `</span>`;
 }
 // Profile card section: appended inside the admin Review & Promotion card.
 function adjProfileHTML(f){
   if(TIER!=='admin'||!isPSUAdj(f))return '';
-  return `<div class="subh">PSU Adjunct Tracking <span class="lock">🔒 faculty admin</span></div><div class="grid">`+
+  return `<div class="subh">PSU Adjunct Tracking <span class="lock">🔒 faculty admin</span></div>`+
+    (!adjContract(f)?`<div class="gate" style="background:var(--ltred);color:var(--red);border-bottom:1px solid var(--mgray)">⚠ <b style="color:inherit">Contract type not set</b> — appointment order can't be determined. Set it in ✎ Edit record.</div>`:'')+
+    `<div class="grid">`+
     adjFields(f).map(([k,v])=>`<div class="fld"><div class="k">${esc(k)}</div><div class="v">${v}</div></div>`).join('')+
     `</div>`;
 }
@@ -1385,6 +1462,7 @@ function filtered(){
       if(adj==='notcurrent'&&adjCurrent(f).state!=='off')return false;
       if(adj==='eligible'&&adjReviewEligible(f)!==true)return false;
       if(adj==='nostart'&&!adjNoStart(f))return false;
+      if(adj==='noct'&&adjContract(f))return false;
     }
     // Public view lists only faculty with a PUBLISHED web profile. For the anon
     // tier WEBPROF is sourced from faculty_web_profile_public, which already
@@ -1422,7 +1500,13 @@ function renderDir(){
   cols.push('Teaching');
   $('dir-th').innerHTML=cols.map(c=>`<th>${c}</th>`).join('');
 
-  const rows=filtered();
+  let rows=filtered();
+  // "In appointment order": ranked adjuncts first by rank, then everyone the
+  // ranking can't place (no contract type, or also Inactive) alphabetically.
+  if(TIER==='admin'&&val('f-adj')==='order'){
+    const rk=adjRanking().rank;
+    rows=rows.slice().sort((a,b)=>((rk[a.id]??1e9)-(rk[b.id]??1e9)));
+  }
   $('dir-cnt').textContent=TIER==='public'
     ? `${rows.length} facult${rows.length===1?'y':'ies'}`
     : `${rows.length} of ${FAC.length}`;
@@ -2117,6 +2201,7 @@ function openFM(id){
   $('fm-admin').onchange=()=>roleDetailSync('fm-admin','fm-admin-detail');
   roleDetailSync('fm-pd','fm-pd-detail');
   roleDetailSync('fm-admin','fm-admin-detail');
+  setv('fm-adj-ct',(f&&adjContract(f))||'');
   syncAdjModal();
   openM('mo-fac');
 }
@@ -2134,17 +2219,27 @@ function syncAdjModal(){
   hint.classList.toggle('hi',noStart);
   hint.style.display=noStart?'':'none';
   hint.textContent=noStart?'⚠ Needed for PSU adjunct tracking':'';
-  if(!on){box.style.display='none';box.innerHTML='';return;}
+  if(!on){box.style.display='none';box.innerHTML='';
+    $('fm-adj-ct-wrap').style.display='none';return;}
+  const ctSel=$('fm-adj-ct'), ctHint=$('fm-adj-ct-hint');
+  $('fm-adj-ct-wrap').style.display='';
+  const ctMissing=!ctSel.value;
+  ctSel.classList.toggle('hi',ctMissing);
+  ctHint.classList.toggle('hi',ctMissing);
+  ctHint.textContent=ctMissing?'⚠ Needed to determine appointment order':'Sets this adjunct\'s tier in appointment order';
   const f=eid?FAC.find(x=>String(x.id)===String(eid)):null;
   // A brand-new record has no id yet, so there's no teaching to derive from.
   const probe=f?Object.assign({},f,{categories:chosenCats()}):null;
+  // Preview the rank with the contract type as currently selected (unsaved).
+  const override=probe?{[probe.id]:ctSel.value||null}:null;
   box.style.display='';
-  box.innerHTML=`<div class="sect" style="margin:6px 0 8px">PSU Adjunct Tracking <span class="hintr">🔒 admin only · read-only</span></div>`+
+  box.innerHTML=`<div class="sect" style="margin:6px 0 8px">PSU Adjunct Tracking <span class="hintr">🔒 admin only</span></div>`+
     `<div class="adjbox">`+
     (probe
-      ? adjFields(probe).map(([k,v])=>`<div><div class="k">${esc(k)}</div><div class="v">${v}</div></div>`).join('')
+      ? adjFields(probe,override).filter(([k])=>k!=='Contract Type')
+          .map(([k,v])=>`<div><div class="k">${esc(k)}</div><div class="v">${v}</div></div>`).join('')
       : `<div class="note">Save the record first — tracking values are derived from teaching history.</div>`)+
-    `<div class="note">Hidden from the faculty member, including on their own profile.</div></div>`;
+    `<div class="note">Hidden from the faculty member, including on their own profile. Appointment order previews the contract type selected below; it's saved with the record.</div></div>`;
 }
 /* ─── DOCUMENTS MODAL ──────────────────────────────────────── */
 let dmId=null;   // faculty id whose documents are being edited
@@ -2227,6 +2322,7 @@ async function saveFac(){
     const ok=await sbSave(sb.from('faculty').update(row).eq('id',eid),'● Saved');
     if(!ok)return;
     if(!await syncCats(eid,before?before.categories:[],cats))return;
+    if(!await saveAdjContract(eid,cats))return;
     closeM('mo-fac');
     await reload();
     const after=snap(FAC.find(x=>String(x.id)===String(eid)));
@@ -2237,6 +2333,7 @@ async function saveFac(){
     const {data,error}=await sb.from('faculty').insert(row).select().single();
     if(error){setSS('⚠ Not added: '+error.message);return;}
     if(!await syncCats(data.id,[],cats))return;
+    if(!await saveAdjContract(data.id,cats))return;
     closeM('mo-fac');
     await reload();
     const after=snap(FAC.find(x=>String(x.id)===String(data.id)));
@@ -2244,6 +2341,19 @@ async function saveFac(){
     setSS('● Faculty added');
     go(data.id);
   }
+}
+
+/* PSU adjunct contract type → faculty_psu_adjunct (admin-only table), never
+   the faculty row. Only written when the PSUAdjunct box is ticked and the
+   value actually changed. Unticking PSUAdjunct leaves any stored value alone,
+   so re-ticking it later doesn't lose the contract type. */
+async function saveAdjContract(fid,cats){
+  if(!cats.includes(ADJ_CAT))return true;
+  const want=val('fm-adj-ct')||null;
+  const have=(ADJ[fid]&&ADJ[fid].contract_type)||null;
+  if(want===have)return true;
+  return await sbSave(sb.from('faculty_psu_adjunct').upsert(
+    {faculty_id:fid,contract_type:want,updated_by:currentUserEmail},{onConflict:'faculty_id'}),null);
 }
 
 /* ─── DOCUMENTS MODAL SAVE ─────────────────────────────────── */
@@ -2439,6 +2549,7 @@ function snap(f){
   o.is_program_director=!!f.is_program_director;
   o.is_administrator=!!f.is_administrator;
   o.categories=(f.categories||[]).slice();
+  o.psu_adj_contract=(ADJ[f.id]&&ADJ[f.id].contract_type)||null;
   o.documents=(DOCS[f.id]||[]).map(d=>({category:d.category,subcategory:d.subcategory,description:d.description,doc_date:d.doc_date,sp_url:d.sp_url}));
   return o;
 }
@@ -2470,7 +2581,8 @@ const RP_FAC_LABELS={
   is_program_director:'Program Director',is_administrator:'Administrator',categories:'Categories',
   category:'Profile Category',subcategory:'Profile Subcategory',ceph_flag:'CEPH Flag',
   photo_url:'Photo URL',is_published:'Published',biography_md:'Biography',
-  education:'Education',research:'Research',awards:'Awards',documents:'Documents'
+  education:'Education',research:'Research',awards:'Awards',documents:'Documents',
+  psu_adj_contract:'PSU Adjunct Contract Type'
 };
 function _facLabel(k){return RP_FAC_LABELS[k]||(k.charAt(0).toUpperCase()+k.slice(1)).replace(/_/g,' ');}
 // Render any snapshot value (string, boolean, array of strings, array of
@@ -2845,6 +2957,7 @@ function wire(){
   $('fm-cats').addEventListener('change',syncAdjModal);
   $('fm-start').addEventListener('input',syncAdjModal);
   $('fm-start').addEventListener('change',syncAdjModal);
+  $('fm-adj-ct').addEventListener('change',syncAdjModal);
   $('btn-del-fac').onclick=delFac;
   $('btn-save-prof').onclick=savePM;
   $('pm-edu-add').onclick=()=>$('pm-edu').insertAdjacentHTML('beforeend',eduRowHTML());
