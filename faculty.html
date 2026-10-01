@@ -401,7 +401,6 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
           <option value="notcurrent">PSU Adjuncts — not current</option>
           <option value="eligible">PSU Adjuncts — review eligible</option>
           <option value="nostart">PSU Adjuncts — missing start date</option>
-          <option value="noct">PSU Adjuncts — missing contract type</option>
           <option value="order">PSU Adjuncts — in appointment order</option>
         </select>
         <select id="f-ceph" class="signed-only">
@@ -488,16 +487,17 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
         <!-- PSU Adjunct tracking: shown only while the PSUAdjunct category box is
              ticked. Read-only — values are derived or pending calculation. -->
         <div class="full" id="fm-adj" style="display:none"></div>
-        <!-- Contract type: the one EDITABLE adjunct field. Saved to the
-             admin-only faculty_psu_adjunct table, not to faculty. Kept outside
-             #fm-adj so re-rendering that block never resets the selection. -->
+        <!-- Contract type OVERRIDE: the one editable adjunct field. Blank =
+             Auto (calculated from CBA 3.2-3.4). Saved to the admin-only
+             faculty_psu_adjunct table, not to faculty. Kept outside #fm-adj
+             so re-rendering that block never resets the selection. -->
         <div id="fm-adj-ct-wrap" style="display:none">
           <label>PSU Adjunct Contract Type</label>
           <select id="fm-adj-ct">
-            <option value="">— Not set —</option>
-            <option value="2yr">2-year</option>
-            <option value="9mo">9-month</option>
-            <option value="term">Term-by-term</option>
+            <option value="">Auto (calculated)</option>
+            <option value="2yr">Override: 2-year</option>
+            <option value="9mo">Override: 9-month</option>
+            <option value="term">Override: Term-by-term</option>
           </select>
           <div class="fhint" id="fm-adj-ct-hint"></div>
         </div>
@@ -1022,6 +1022,8 @@ async function loadData(){
   // yet every value just reads as "Calculation pending".
   ADJ={};
   ADJ_RANK_CACHE=null;   // ranking depends on ADJ, FAC and TEACHING — all reloaded here
+  for(const k in ADJ_CL_CACHE)delete ADJ_CL_CACHE[k];
+  for(const k in ADJ_CT_CACHE)delete ADJ_CT_CACHE[k];
   if(TIER==='admin'){
     try{
       const{data,error}=await paginate(()=>sb.from('faculty_psu_adjunct').select('*'));
@@ -1244,65 +1246,6 @@ function adjReviewEligible(f){
   const r=ADJ[f.id];return (r&&r.review_eligible!=null)?!!r.review_eligible:null;
 }
 
-/* ── CONTRACT TYPE + APPOINTMENT ORDER (PSUFA CBA) ───────────────
-   "Appointment order is a ranked list of Adjuncts maintained by each
-   department determined from their total accumulated credit load from date
-   of hire within the department and the length of their appointment. Those
-   on 2-year appointments with the highest number of accumulated credits come
-   first, followed by those on 9-month appointments, and lastly those on
-   term-by-term appointments."
-
-   As implemented:
-   · One list for all of SPH (department = SPH, as for credit load).
-   · Sorted by contract tier (2-year → 9-month → term-by-term), then
-     accumulated credit load, highest first.
-   · Who's on it: PSUAdjunct category, contract type set, NOT also Inactive.
-   · No contract type → not ranked; the profile and directory flag it.
-   · Ties (same tier, same credits) share a rank: 1, 2, 2, 4. The CBA names
-     no tiebreaker. */
-const CONTRACT_TYPES=[
-  {v:'2yr', label:'2-year'},
-  {v:'9mo', label:'9-month'},
-  {v:'term',label:'Term-by-term'}
-];
-const contractTier=v=>CONTRACT_TYPES.findIndex(c=>c.v===v);
-const contractLabel=v=>(CONTRACT_TYPES.find(c=>c.v===v)||{}).label||'';
-const adjContract=f=>{const r=ADJ[f.id];return (r&&contractTier(r.contract_type)>=0)?r.contract_type:null;};
-let ADJ_RANK_CACHE=null;   // cleared on every load; see loadData()
-/* override = {facultyId: contractType} — lets the edit modal preview the
-   rank for a contract type that hasn't been saved yet. Never cached. */
-function adjRanking(override){
-  if(!override&&ADJ_RANK_CACHE)return ADJ_RANK_CACHE;
-  const ct=f=>(override&&f.id in override)?override[f.id]:adjContract(f);
-  const list=FAC.filter(f=>(isPSUAdj(f)||(override&&f.id in override))&&!isInactive(f)&&contractTier(ct(f))>=0)
-    .map(f=>({f,tier:contractTier(ct(f)),cr:adjCreditLoad(f)||0}))
-    .sort((a,b)=>(a.tier-b.tier)||(b.cr-a.cr));
-  const rank={}; let prev=null;
-  list.forEach((x,i)=>{
-    const r=(prev&&prev.tier===x.tier&&prev.cr===x.cr)?rank[prev.f.id]:i+1;
-    rank[x.f.id]=r; prev=x;
-  });
-  const counts={}; Object.values(rank).forEach(r=>{counts[r]=(counts[r]||0)+1;});
-  const out={rank,size:list.length,tied:id=>counts[rank[id]]>1};
-  if(!override)ADJ_RANK_CACHE=out;
-  return out;
-}
-function adjApptOrder(f){const r=adjRanking().rank[f.id];return r==null?null:r;}
-function adjApptOrderHTML(f,override){
-  const ct=(override&&f.id in override)?override[f.id]:adjContract(f);
-  if(contractTier(ct)<0)
-    return '<span class="chip review" title="Set the contract type in Edit record">⚠ Contract type not set</span>'+
-           '<div class="hint">Appointment order can\'t be determined until it is.</div>';
-  if(isInactive(f))
-    return `<span class="muted">Not ranked — also Inactive</span><div class="hint">${esc(contractLabel(ct))} contract</div>`;
-  const R=adjRanking(override), r=R.rank[f.id];
-  if(r==null)return '<span class="muted">Not ranked</span>';
-  const flagged=adjCreditLoadDetail(f).flagged.length;
-  return `<span style="font-weight:600">#${r}</span> <span class="muted">of ${R.size}${R.tied(f.id)?' · tied':''}</span>`+
-    `<div class="hint">${esc(contractLabel(ct))} contract`+
-    (flagged?' · provisional: credit load has courses to check':'')+`</div>`;
-}
-
 /* ── ACCUMULATED CREDIT LOAD (PSUFA CBA) ─────────────────────────
    "Cumulative number of credits, in a department, an Adjunct faculty member
    has taught starting from initial date of hire excluding courses taught
@@ -1318,7 +1261,7 @@ function adjApptOrderHTML(f,override){
    · Summer credits never count. Summer teaching IS service, though — it
      interrupts a break.
    · Co-taught (both instructor slots filled) = credits ÷ 2, as in CHTool.
-     FTE-exempt courses still count — they're still credits taught.
+     FTE-exempt courses still count (adjuncts rarely teach them).
    · Break = ADJ_BREAK_TERMS consecutive terms (any four, summer included,
      not tied to AY boundaries) with no teaching. The total restarts at the
      next term taught. If the break is the most recent stretch through
@@ -1330,6 +1273,7 @@ function adjApptOrderHTML(f,override){
      offerings are left out and flagged for a manual check. */
 const ADJ_BREAK_TERMS=4;
 const isSummerTerm=t=>/^summer/i.test(String(t.code||''))||/^summer/i.test(String(t.label||''));
+const isFallTerm=t=>/^fall/i.test(String(t.code||''))||/^fall/i.test(String(t.label||''));
 function parseCredits(v){
   const s=String(v??'').trim();
   if(!s||/[-‐-―]/.test(s))return null;   // blank or ranged
@@ -1337,8 +1281,11 @@ function parseCredits(v){
   return isNaN(n)?null:n;
 }
 const r1=x=>Math.round(x*100)/100;
+const ADJ_CL_CACHE={};   // faculty id → detail; cleared on every load
 function adjCreditLoadDetail(f){
-  const out={total:null,since:null,resetAfter:null,reset:false,rows:[],flagged:[],notes:[]};
+  if(ADJ_CL_CACHE[f.id])return ADJ_CL_CACHE[f.id];
+  const out={total:null,since:null,resetAfter:null,reset:false,hadBreak:false,runStartIdx:null,
+             byTerm:[],rows:[],flagged:[],notes:[]};
   if(CUR_TERM_IDX<0){out.notes.push('Term dates not set — can\'t tell which terms have happened.');return out;}
   const hire=N(f.start_date)?String(f.start_date).slice(0,10):null;
   const afterHire=t=>{if(!hire)return true;const end=String(t.end_date||t.start_date||'').slice(0,10);return !end||end>=hire;};
@@ -1362,12 +1309,14 @@ function adjCreditLoadDetail(f){
       gap=0;
     }else if(runStart!==null)gap++;
   }
+  out.hadBreak=lastBreakEnd!==null;
+  out.runStartIdx=runStart;
   if(runStart!==null&&gap>=ADJ_BREAK_TERMS){        // break is the current stretch
-    out.reset=true; out.total=0;
+    out.reset=true; out.hadBreak=true; out.total=0;
     out.resetAfter=TERM_SEQ[CUR_TERM_IDX-gap].code;   // last term taught
     out.notes.push(`Break in service: no teaching since ${termLabel(out.resetAfter)} (${gap} terms). Count restarts with the next appointment.`);
   }else{
-    let tot=0;
+    let tot=0; const per={};
     offs.filter(x=>runStart!==null&&x.i>=runStart).sort((a,b)=>a.i-b.i).forEach(({o,i})=>{
       const t=TERM_SEQ[i], c=COURSES[o.course_id];
       const name=c?String(c.full_name).split(':')[0].trim():'(course removed)';
@@ -1376,18 +1325,22 @@ function adjCreditLoadDetail(f){
       if(cr===null){out.flagged.push(`${termLabel(t.code)} ${name} (credits: ${c&&N(c.credits)?c.credits:'blank'})`);return;}
       const two=!!(o.instructor1_id&&o.instructor2_id);
       const eff=two?cr/2:cr;
-      tot+=eff;
+      tot+=eff; per[i]=(per[i]||0)+eff;
       out.rows.push(`${termLabel(t.code)}  ${name}: ${r1(cr)} cr${two?' ÷ 2 (co-taught) → '+r1(eff):''}`);
     });
+    // Running total per term — used to find the term a credit threshold was crossed.
+    let cum=0;
+    Object.keys(per).map(Number).sort((a,b)=>a-b).forEach(i=>{cum+=per[i];out.byTerm.push({i,cum:r1(cum)});});
     out.total=r1(tot);
     out.since=runStart!==null?TERM_SEQ[runStart].code:null;
-    if(lastBreakEnd!==null)out.notes.push(`Reset by a break in service; counting since ${termLabel(out.since)}.`);
+    if(out.hadBreak)out.notes.push(`Reset by a break in service; counting since ${termLabel(out.since)}.`);
   }
   if(!hire)out.notes.push('No start date on record — counting all teaching in Converge.');
   const first=TERM_SEQ[0];
   if(first&&(!hire||(first.start_date&&hire<String(first.start_date).slice(0,10))))
     out.notes.push(`Converge history begins ${termLabel(first.code)}; earlier credits and any taught outside the PSUFA unit aren't included.`);
   if(out.flagged.length)out.notes.push(`${out.flagged.length} course(s) with ranged/blank credits left out — check manually.`);
+  ADJ_CL_CACHE[f.id]=out;
   return out;
 }
 function adjCreditLoad(f){return adjCreditLoadDetail(f).total;}
@@ -1401,6 +1354,174 @@ function adjCreditLoadHTML(f){
     (d.flagged.length?` <span class="chip warn" title="${esc(d.flagged.join('\n'))}">check ${d.flagged.length}</span>`:'')+
     (d.notes.length?`<div class="hint">${d.notes.map(esc).join('<br>')}</div>`:'');
 }
+
+/* ── CONTRACT TYPE (PSUFA CBA 3.2–3.4) ───────────────────────────
+   Calculated, with an admin override for cases Converge can't see (2-year
+   rights retained from a previous CBA, etc.). faculty_psu_adjunct.contract_type
+   holds the OVERRIDE: NULL = use the calculation.
+
+   3.2  New hires: term-by-term.
+   3.3  9-month: after 2 years employed in the department OR 8 credits,
+        whichever first. Offered at the start of the following AY.
+   3.4  2-year: after 3 years employed OR 20 credits, whichever first, AND
+        the professional evaluation (Art. 8 §4). Offered at the start of the
+        AY following eligibility. 2-year thereafter.
+        Exception: employed since before Sept 16, 2014 → 2-year, no evaluation.
+
+   As implemented (decisions, Tim 10/1/26):
+   · "Credits" = accumulated credit load (above): no summer, co-taught ÷ 2,
+     reset by a break in service.
+   · Years employed count from the Start Date — or, after a break in service,
+     from the first term taught after it (the break resets appointments too).
+     A break that is the current stretch → term-by-term.
+   · "Following AY" = the first FALL term after the term eligibility was
+     reached. (Fall 2020 + 8 cr in Fall 2020 → 9-month from Fall 2021.)
+   · Evaluation: assumed complete for now (ADJ_EVAL_ASSUMED). When it's
+     tracked, a 2-year upgrade takes effect the first Fall after BOTH
+     eligibility and the evaluation — which is what makes the CBA's
+     "eligible Winter 2020 → Fall 2021" example come out right.
+   · Pre-9/16/2014 exception uses the Start Date (SPH's), as a stand-in for
+     "employed by PSU", and only when there's been no break since.
+   · Eligibility dated before Converge's term history is treated as already
+     in effect.
+   · No Start Date → can't be calculated (the only flag); an override still
+     works. */
+const CONTRACT_TYPES=[
+  {v:'2yr', label:'2-year'},
+  {v:'9mo', label:'9-month'},
+  {v:'term',label:'Term-by-term'}
+];
+const contractTier=v=>CONTRACT_TYPES.findIndex(c=>c.v===v);
+const contractLabel=v=>(CONTRACT_TYPES.find(c=>c.v===v)||{}).label||'';
+const ADJ_9MO={years:2,credits:8};
+const ADJ_2YR={years:3,credits:20};
+const ADJ_PRE2014='2014-09-16';
+const ADJ_EVAL_ASSUMED=true;   // Art. 8 §4 evaluation not tracked yet
+const addYears=(iso,n)=>(+iso.slice(0,4)+n)+iso.slice(4,10);
+// Term in which a date falls: the latest term started on or before it.
+// -1 = before Converge's history; null = the date hasn't arrived yet.
+function termAtDate(iso){
+  if(iso>localISODate())return null;
+  let best=-1;
+  TERM_SEQ.forEach((t,i)=>{if(t.start_date&&String(t.start_date).slice(0,10)<=iso)best=i;});
+  return best;
+}
+// First Fall term after term index i ('pre' when i is before history).
+function nextFallAfter(i){
+  if(i===-1)return 'pre';
+  for(let j=i+1;j<TERM_SEQ.length;j++)if(isFallTerm(TERM_SEQ[j]))return j;
+  return null;   // that Fall isn't in the terms table yet
+}
+const inEffect=j=>j==='pre'||(j!=null&&j<=CUR_TERM_IDX);
+const fallLabel=j=>j==='pre'?'before Converge history':j==null?'the next Fall (not yet in terms)':termLabel(TERM_SEQ[j].code);
+/* One appointment level: when eligibility was reached (time or credits,
+   whichever first) and when the appointment takes effect. */
+function adjTier(serviceStart,d,rule){
+  const byTime=termAtDate(addYears(serviceStart,rule.years));
+  const hit=d.byTerm.find(x=>x.cum>=rule.credits);
+  const byCr=hit?hit.i:null;
+  const c=[byTime,byCr].filter(x=>x!=null);
+  if(!c.length)return {elig:null,eff:null,why:`${rule.years} yrs (${fmtDate(addYears(serviceStart,rule.years))}) or ${rule.credits} cr (now ${d.total})`};
+  const elig=Math.min(...c);
+  const why=(byCr!=null&&byCr===elig&&(byTime==null||byCr<=byTime))
+    ?`${rule.credits} credits reached ${elig===-1?'before Converge history':termLabel(TERM_SEQ[elig].code)}`
+    :`${rule.years} years employed (${fmtDate(addYears(serviceStart,rule.years))})`;
+  return {elig,eff:nextFallAfter(elig),why};
+}
+const ADJ_CT_CACHE={};   // faculty id → calculation; cleared on every load
+function adjContractCalc(f){
+  if(ADJ_CT_CACHE[f.id])return ADJ_CT_CACHE[f.id];
+  const save=r=>(ADJ_CT_CACHE[f.id]=r);
+  const hire=N(f.start_date)?String(f.start_date).slice(0,10):null;
+  if(!hire)return save({type:null,lines:['No start date — can\'t calculate.']});
+  if(CUR_TERM_IDX<0)return save({type:null,lines:['Term dates not set — can\'t calculate.']});
+  const d=adjCreditLoadDetail(f);
+  if(d.reset)return save({type:'term',lines:[`Term-by-term: break in service since ${termLabel(d.resetAfter)}. Eligibility restarts with the next appointment.`]});
+  if(!d.hadBreak&&hire<ADJ_PRE2014)
+    return save({type:'2yr',lines:[`2-year: employed since before Sept 16, 2014 (start ${fmtDate(hire)}) — automatically eligible, no evaluation required.`]});
+  const serviceStart=d.hadBreak&&d.runStartIdx!=null&&TERM_SEQ[d.runStartIdx].start_date
+    ?String(TERM_SEQ[d.runStartIdx].start_date).slice(0,10):hire;
+  const t9=adjTier(serviceStart,d,ADJ_9MO), t2=adjTier(serviceStart,d,ADJ_2YR);
+  const lines=[];
+  if(d.hadBreak)lines.push(`Clock restarted after a break in service: counting from ${termLabel(d.since)}.`);
+  let type='term';
+  if(inEffect(t2.eff))type='2yr';
+  else if(inEffect(t9.eff))type='9mo';
+  // Explain both levels: in effect / upcoming / not yet eligible.
+  const desc=(lbl,t)=>t.elig==null?`${lbl}: not yet eligible — needs ${t.why}.`
+    :inEffect(t.eff)?`${lbl}: from ${fallLabel(t.eff)} (eligible: ${t.why}).`
+    :`${lbl}: eligible (${t.why}) — offered ${fallLabel(t.eff)}.`;
+  if(type!=='2yr')lines.push(desc('9-month',t9));
+  lines.push(desc('2-year',t2)+(t2.elig!=null&&ADJ_EVAL_ASSUMED?' Evaluation assumed complete.':''));
+  return save({type,lines});
+}
+// Effective contract type. ovr: undefined → stored override; '' → force
+// auto; a type → that type (the edit modal's unsaved selection).
+function adjContractInfo(f,ovr){
+  const manual=ovr===undefined?((ADJ[f.id]&&contractTier(ADJ[f.id].contract_type)>=0)?ADJ[f.id].contract_type:null)
+                              :(contractTier(ovr)>=0?ovr:null);
+  const calc=adjContractCalc(f);
+  return {type:manual||calc.type,manual:!!manual,calc};
+}
+const adjContract=f=>adjContractInfo(f).type;
+function adjContractHTML(f,ovr){
+  const ci=adjContractInfo(f,ovr);
+  if(!ci.type)return `<span class="chip review">Can't determine</span><div class="hint">${esc(ci.calc.lines[0])}</div>`;
+  const tip=ci.calc.lines.join('\n');
+  return `<span style="font-weight:600;cursor:help" title="${esc(tip)}">${esc(contractLabel(ci.type))}</span> `+
+    `<span class="muted">${ci.manual?'· set manually':'· calculated'}</span>`+
+    `<div class="hint">${ci.manual
+      ?esc('Calculated would be: '+(ci.calc.type?contractLabel(ci.calc.type):'unknown'))
+      :ci.calc.lines.map(esc).join('<br>')}</div>`;
+}
+
+/* ── APPOINTMENT ORDER (PSUFA CBA) ───────────────────────────────
+   "A ranked list of Adjuncts maintained by each department determined from
+   their total accumulated credit load from date of hire within the
+   department and the length of their appointment. Those on 2-year
+   appointments with the highest number of accumulated credits come first,
+   followed by those on 9-month appointments, and lastly those on
+   term-by-term appointments."
+   · One list for all of SPH. Tier (2-year → 9-month → term-by-term), then
+     accumulated credit load, highest first.
+   · Who's on it: PSUAdjunct category with a determinable contract type,
+     NOT also Inactive.
+   · Ties (same tier, same credits) share a rank: 1, 2, 2, 4. */
+let ADJ_RANK_CACHE=null;   // cleared on every load; see loadData()
+/* override = {facultyId: contractOverride} — lets the edit modal preview the
+   rank for an unsaved override selection ('' = auto). Never cached. */
+function adjRanking(override){
+  if(!override&&ADJ_RANK_CACHE)return ADJ_RANK_CACHE;
+  const ct=f=>adjContractInfo(f,(override&&f.id in override)?override[f.id]:undefined).type;
+  const list=FAC.filter(f=>(isPSUAdj(f)||(override&&f.id in override))&&!isInactive(f)&&contractTier(ct(f))>=0)
+    .map(f=>({f,tier:contractTier(ct(f)),cr:adjCreditLoad(f)||0}))
+    .sort((a,b)=>(a.tier-b.tier)||(b.cr-a.cr));
+  const rank={}; let prev=null;
+  list.forEach((x,i)=>{
+    const r=(prev&&prev.tier===x.tier&&prev.cr===x.cr)?rank[prev.f.id]:i+1;
+    rank[x.f.id]=r; prev=x;
+  });
+  const counts={}; Object.values(rank).forEach(r=>{counts[r]=(counts[r]||0)+1;});
+  const out={rank,size:list.length,tied:id=>counts[rank[id]]>1};
+  if(!override)ADJ_RANK_CACHE=out;
+  return out;
+}
+function adjApptOrder(f){const r=adjRanking().rank[f.id];return r==null?null:r;}
+function adjApptOrderHTML(f,override){
+  const ovr=(override&&f.id in override)?override[f.id]:undefined;
+  const ct=adjContractInfo(f,ovr).type;
+  if(contractTier(ct)<0)
+    return '<span class="muted">Can\'t determine</span><div class="hint">Needs a start date (or a contract type override).</div>';
+  if(isInactive(f))
+    return `<span class="muted">Not ranked — also Inactive</span>`;
+  const R=adjRanking(override), r=R.rank[f.id];
+  if(r==null)return '<span class="muted">Not ranked</span>';
+  const flagged=adjCreditLoadDetail(f).flagged.length;
+  return `<span style="font-weight:600">#${r}</span> <span class="muted">of ${R.size}${R.tied(f.id)?' · tied':''}</span>`+
+    `<div class="hint">${esc(contractLabel(ct))} tier`+
+    (flagged?' · provisional: credit load has courses to check':'')+`</div>`;
+}
+
 const PENDING='<span class="pending">Calculation pending</span>';
 function adjEligibleHTML(f){
   const v=adjReviewEligible(f);
@@ -1408,31 +1529,31 @@ function adjEligibleHTML(f){
   return v?'<span class="chip warn">Review eligible</span>':'<span class="muted">Not eligible</span>';
 }
 function adjFields(f,override){
-  const ct=(override&&f.id in override)?override[f.id]:adjContract(f);
+  const ovr=(override&&f.id in override)?override[f.id]:undefined;
   return [
     ['Current (last '+ADJ_WINDOW+' terms)',adjLightHTML(f,true)],
     ['Review Eligible',adjEligibleHTML(f)],
-    ['Contract Type',ct?esc(contractLabel(ct)):'<span class="chip review">Not set</span>'],
+    ['Contract Type',adjContractHTML(f,ovr)],
     ['Accumulated Credit Load',adjCreditLoadHTML(f)],
     ['Appointment Order',adjApptOrderHTML(f,override)]
   ];
 }
-// Directory cell: light + eligibility (only once criteria exist) + a warning
-// chip when the start date is blank.
+// Directory cell: light, rank, eligibility (once criteria exist), and the
+// one flag — a blank start date.
 function adjDirCell(f){
-  const el=adjReviewEligible(f), ao=adjApptOrder(f);
+  const el=adjReviewEligible(f), ao=adjApptOrder(f), ct=adjContract(f);
   return `<span class="adjcell">${adjLightHTML(f,true)}`+
-    (ao!=null?`<span class="chip" title="Appointment order (${esc(contractLabel(adjContract(f)))})">#${ao}</span>`:'')+
+    (ao!=null?`<span class="chip" title="Appointment order · ${esc(contractLabel(ct))}">#${ao}</span>`:'')+
+    (ct?`<span class="muted" style="font-size:11px">${esc(contractLabel(ct))}</span>`:'')+
     (el===true?'<span class="chip warn">Review eligible</span>':'')+
-    (!adjContract(f)?'<span class="chip review" title="Contract type not set — appointment order can\'t be determined">No contract type</span>':'')+
-    (adjNoStart(f)?'<span class="chip warn" title="PSU adjunct with no start date on the record">No start date</span>':'')+
+    (adjNoStart(f)?'<span class="chip review" title="No start date — contract type and appointment order can\'t be calculated">No start date</span>':'')+
     `</span>`;
 }
 // Profile card section: appended inside the admin Review & Promotion card.
 function adjProfileHTML(f){
   if(TIER!=='admin'||!isPSUAdj(f))return '';
   return `<div class="subh">PSU Adjunct Tracking <span class="lock">🔒 faculty admin</span></div>`+
-    (!adjContract(f)?`<div class="gate" style="background:var(--ltred);color:var(--red);border-bottom:1px solid var(--mgray)">⚠ <b style="color:inherit">Contract type not set</b> — appointment order can't be determined. Set it in ✎ Edit record.</div>`:'')+
+    (adjNoStart(f)?`<div class="gate" style="background:var(--ltred);color:var(--red);border-bottom:1px solid var(--mgray)">⚠ <b style="color:inherit">Start date not set</b> — contract type and appointment order can't be calculated. Add it in ✎ Edit record.</div>`:'')+
     `<div class="grid">`+
     adjFields(f).map(([k,v])=>`<div class="fld"><div class="k">${esc(k)}</div><div class="v">${v}</div></div>`).join('')+
     `</div>`;
@@ -1462,7 +1583,6 @@ function filtered(){
       if(adj==='notcurrent'&&adjCurrent(f).state!=='off')return false;
       if(adj==='eligible'&&adjReviewEligible(f)!==true)return false;
       if(adj==='nostart'&&!adjNoStart(f))return false;
-      if(adj==='noct'&&adjContract(f))return false;
     }
     // Public view lists only faculty with a PUBLISHED web profile. For the anon
     // tier WEBPROF is sourced from faculty_web_profile_public, which already
@@ -2223,10 +2343,15 @@ function syncAdjModal(){
     $('fm-adj-ct-wrap').style.display='none';return;}
   const ctSel=$('fm-adj-ct'), ctHint=$('fm-adj-ct-hint');
   $('fm-adj-ct-wrap').style.display='';
-  const ctMissing=!ctSel.value;
-  ctSel.classList.toggle('hi',ctMissing);
-  ctHint.classList.toggle('hi',ctMissing);
-  ctHint.textContent=ctMissing?'⚠ Needed to determine appointment order':'Sets this adjunct\'s tier in appointment order';
+  {
+    const cur=eid?FAC.find(x=>String(x.id)===String(eid)):null;
+    const calc=cur?adjContractCalc(cur):null;
+    const calcTxt=!cur?'calculated once the record is saved'
+      :calc.type?'calculated: '+contractLabel(calc.type):'can\'t calculate — '+String(calc.lines[0]||'').replace(/\.$/,'');
+    ctHint.textContent=ctSel.value
+      ?`Overrides the calculation (${calcTxt}). Use for rights retained from a previous CBA or other exceptions.`
+      :`Auto — ${calcTxt}.`;
+  }
   const f=eid?FAC.find(x=>String(x.id)===String(eid)):null;
   // A brand-new record has no id yet, so there's no teaching to derive from.
   const probe=f?Object.assign({},f,{categories:chosenCats()}):null;
@@ -2239,7 +2364,7 @@ function syncAdjModal(){
       ? adjFields(probe,override).filter(([k])=>k!=='Contract Type')
           .map(([k,v])=>`<div><div class="k">${esc(k)}</div><div class="v">${v}</div></div>`).join('')
       : `<div class="note">Save the record first — tracking values are derived from teaching history.</div>`)+
-    `<div class="note">Hidden from the faculty member, including on their own profile. Appointment order previews the contract type selected below; it's saved with the record.</div></div>`;
+    `<div class="note">Hidden from the faculty member, including on their own profile. Appointment order previews the contract type selection below; it's saved with the record.</div></div>`;
 }
 /* ─── DOCUMENTS MODAL ──────────────────────────────────────── */
 let dmId=null;   // faculty id whose documents are being edited
@@ -2582,7 +2707,7 @@ const RP_FAC_LABELS={
   category:'Profile Category',subcategory:'Profile Subcategory',ceph_flag:'CEPH Flag',
   photo_url:'Photo URL',is_published:'Published',biography_md:'Biography',
   education:'Education',research:'Research',awards:'Awards',documents:'Documents',
-  psu_adj_contract:'PSU Adjunct Contract Type'
+  psu_adj_contract:'PSU Adjunct Contract Override'
 };
 function _facLabel(k){return RP_FAC_LABELS[k]||(k.charAt(0).toUpperCase()+k.slice(1)).replace(/_/g,' ');}
 // Render any snapshot value (string, boolean, array of strings, array of
@@ -3034,7 +3159,7 @@ function wire(){
 
 /* ─── BOOT ─────────────────────────────────────────────────── */
 (async function boot(){
-  console.log('%c[SPH faculty] build 2026-10-01a — PSU adjunct tracking','color:#0a7');
+  console.log('%c[SPH faculty] build 2026-10-01c — PSU adjunct: calculated contract type','color:#0a7');
   wire();
   // A magic-link return lands here with tokens in the hash; the subscription
   // registered inside initSupabase() gives Supabase a beat to consume them
