@@ -272,6 +272,34 @@ tbody tr.clickable{cursor:pointer}
 tbody tr.rowflash td{animation:rowflash 1.4s ease-out}
 @keyframes rowflash{0%{background:var(--ltgold)}100%{background:transparent}}
 .phead .pact{flex-direction:column;align-items:stretch}
+
+/* ═══ PSU ADJUNCT TRACKING (admin only) ═══════════════════════
+   "Current" light: taught within the last 8 terms (see ADJ below). The light
+   is a coloured dot PLUS a text label — never colour alone. */
+.light{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;
+  border:1px solid var(--mgray);background:var(--surface-2);flex-shrink:0}
+.light.on{background:var(--txgrn);border-color:var(--txgrn);box-shadow:0 0 0 2px var(--ltgrn)}
+.light.unk{background:transparent;border-style:dashed}
+.lightlbl{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.lightlbl .lt{font-size:12px;font-weight:600;color:var(--dgray)}
+.lightlbl.on .lt{color:var(--txgrn)}
+.pending{color:var(--muted);font-style:italic;font-size:12px}
+.subh{font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--teal);
+  padding:9px 16px 7px;background:var(--surface-2);border-top:1px solid var(--mgray);
+  border-bottom:1px solid var(--mgray);display:flex;align-items:center;gap:8px}
+.subh .lock{margin-left:auto;font-weight:400;text-transform:none;letter-spacing:0;color:var(--dgray)}
+/* Blank start date on a PSU adjunct — profile field and edit-modal input. */
+.fld.hi{background:var(--ltgold);box-shadow:inset 3px 0 0 var(--txgold)}
+.fld.hi .k,.fld.hi .v{color:var(--txgold)}
+.f input.hi{border-color:var(--txgold);background:var(--ltgold);box-shadow:0 0 0 1px var(--txgold)}
+.fhint.hi{color:var(--txgold);font-weight:600}
+.adjcell{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+/* Read-only block inside the edit modal's Review & Promotion section. */
+.adjbox{border:1px solid var(--mgray);border-radius:6px;background:var(--surface-2);padding:10px 12px;
+  display:grid;grid-template-columns:repeat(auto-fill,minmax(170px,1fr));gap:8px 14px}
+.adjbox .k{font-size:10px;text-transform:uppercase;letter-spacing:.4px;color:var(--muted);font-weight:600}
+.adjbox .v{font-size:13px;margin-top:2px}
+.adjbox .note{grid-column:1/-1;font-size:11px;color:var(--dgray)}
 .trow a:hover{text-decoration:underline}
 .trow .meta{color:var(--dgray);font-size:12px;margin-left:auto;text-align:right;white-space:nowrap}
 
@@ -366,6 +394,14 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
         <select id="f-unit"><option value="">All units</option></select>
         <select id="f-employer"><option value="">All employers</option><option value="OHSU">OHSU</option><option value="PSU">PSU</option><option value="Other">Other</option></select>
         <select id="f-pub" class="admin-only"><option value="">All profiles</option><option value="pub">Published</option><option value="draft">Draft / unpublished</option></select>
+        <select id="f-adj" class="admin-only" title="PSU Adjunct tracking — admin only">
+          <option value="">PSU Adjunct: all</option>
+          <option value="all">PSU Adjuncts only</option>
+          <option value="current">PSU Adjuncts — current</option>
+          <option value="notcurrent">PSU Adjuncts — not current</option>
+          <option value="eligible">PSU Adjuncts — review eligible</option>
+          <option value="nostart">PSU Adjuncts — missing start date</option>
+        </select>
         <select id="f-ceph" class="signed-only">
           <option value="">All CEPH statuses</option>
           <option value="primary_instructional">CEPH Primary</option>
@@ -430,7 +466,7 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
         <div><label>OHSU Employment Org</label><input id="fm-org"></div>
         <div><label>Role When Active</label><input id="fm-role"></div>
         <div><label>FTE in SPH</label><input id="fm-fte" type="number" step="0.01"></div>
-        <div><label>Start Date</label><input id="fm-start" type="date"></div>
+        <div><label>Start Date</label><input id="fm-start" type="date"><div class="fhint" id="fm-start-hint" style="display:none"></div></div>
         <div><label>End Date</label><input id="fm-end" type="date" placeholder="Leave date, if applicable"></div>
         <div><label>Appt Expiration Date</label><input id="fm-exp" type="date"></div>
 
@@ -447,6 +483,9 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
         <div><label>Previous Promotion Date</label><input id="fm-ppd"></div>
         <div><label>Promotion Eligible Year</label><input id="fm-pey"></div>
         <div><label>Promotion Target</label><input id="fm-pt"></div>
+        <!-- PSU Adjunct tracking: shown only while the PSUAdjunct category box is
+             ticked. Read-only — values are derived or pending calculation. -->
+        <div class="full" id="fm-adj" style="display:none"></div>
 
         <div class="sect">Roles</div>
         <div class="full">
@@ -745,6 +784,11 @@ let DOCS={};                        // faculty id → [faculty_documents row, �
                                      // separately once SELF_ID resolves — mirrors the
                                      // self-view admin-columns fetch just below.
 let CEPH={};                        // faculty id → ceph_flag  (ALL tiers, incl. anon)
+let ADJ={};                         // faculty id → faculty_psu_adjunct row. ADMIN ONLY —
+                                     // never fetched for any other tier (RLS refuses it
+                                     // anyway), including a PSU adjunct viewing themselves.
+let TERM_SEQ=[];                    // every term, oldest → newest (AY, then sort_order)
+let CUR_TERM_IDX=-1;                // index into TERM_SEQ of today's term; -1 = unknown
 let DB={lists:{}};                  // app_lists rows keyed by list_key — admin-editable
                                      // lists (Document Categories, and whatever else
                                      // lands here later). Publicly readable, best-effort.
@@ -845,13 +889,13 @@ async function loadData(){
     paginate(()=> TIER==='admin'
       ? sb.from('faculty').select('*').eq('is_placeholder',false)
       : sb.from(src).select('*')),
-    paginate(()=> sb.from('courses').select('id,full_name,prefix')),
+    paginate(()=> sb.from('courses').select('id,full_name,prefix,credits')),
     paginate(()=> sb.from('offerings').select('id,term,course_id,instructor1_id,instructor2_id,days,time,modality')),
     // The admin source is the base table, which has no `categories` array —
     // membership lives in faculty_category. Fetch it separately for that tier.
     TIER==='admin' ? paginate(()=> sb.from('faculty_category').select('faculty_id,category'))
                    : noRows,
-    paginate(()=> sb.from('terms').select('code,label,academic_year,sort_order')),
+    paginate(()=> sb.from('terms').select('code,label,academic_year,sort_order,start_date,end_date')),
     paginate(()=> sb.from('faculty_web_profile'+pfx).select('*')),
     paginate(()=> sb.from('faculty_education'  +pfx).select('*')),
     paginate(()=> sb.from('faculty_research'   +pfx).select('*')),
@@ -879,6 +923,7 @@ async function loadData(){
   TERM_MAP={};
   (tR.data||[]).forEach(t=>{TERM_MAP[t.code]=t;});
   AY_ORDER=[...new Set((tR.data||[]).map(t=>t.academic_year))].sort().reverse();
+  buildTermSeq(tR.data||[]);
   DB.lists={};
   if(!lsR.error)(lsR.data||[]).forEach(row=>{DB.lists[row.list_key]=row.items;});
   {
@@ -952,6 +997,19 @@ async function loadData(){
       const{count,error}=await sb.from('faculty_edit_requests')
         .select('id',{count:'exact',head:true}).eq('status','pending');
       if(!error)PENDING_REQ_COUNT=count||0;
+    }catch(e){}
+  }
+
+  // PSU Adjunct tracking values — admin tier ONLY. Not fetched for viewers,
+  // and that includes an adjunct on their own profile: this is a deliberate
+  // exception to the self-view carve-out. RLS (faculty_psu_adjunct_v1.sql)
+  // enforces the same thing at the DB. Best-effort: if the table isn't there
+  // yet every value just reads as "Calculation pending".
+  ADJ={};
+  if(TIER==='admin'){
+    try{
+      const{data,error}=await paginate(()=>sb.from('faculty_psu_adjunct').select('*'));
+      if(!error)(data||[]).forEach(r=>{ADJ[r.faculty_id]=r;});
     }catch(e){}
   }
 
@@ -1087,6 +1145,222 @@ function needsReview(f){
   return (TEACHING[f.id]||[]).some(o=>{const t=TERM_MAP[o.term];return t&&t.academic_year===CURRENT_AY;});
 }
 
+/* ─── PSU ADJUNCT TRACKING (admin only) ────────────────────────
+   Everything adjunct-specific lives here, so the forthcoming rules
+   (review eligibility, accumulated credit load, appointment order) drop into
+   one place. Each of those three returns null until its rule exists, and
+   null renders as "Calculation pending" everywhere.
+
+   Nothing here gates visibility by itself: callers only invoke these for
+   TIER==='admin', and ADJ is only ever populated for admin. */
+const ADJ_CAT='PSUAdjunct';
+const ADJ_WINDOW=8;   // "Current" = taught in today's term or the 7 before it
+
+/* All terms in true chronological order. AY codes sort as strings
+   (AY25-26 < AY26-27) and sort_order runs Summer→Fall→Winter→Spring inside
+   an AY, so the pair gives the real sequence across years. */
+function buildTermSeq(rows){
+  TERM_SEQ=rows.slice().sort((a,b)=>
+    String(a.academic_year).localeCompare(String(b.academic_year))||(a.sort_order-b.sort_order));
+  CUR_TERM_IDX=currentTermIdx(localISODate());
+}
+// Local calendar date, not UTC — after 5pm Pacific, UTC is already tomorrow.
+function localISODate(d){
+  d=d||new Date();
+  const p=n=>String(n).padStart(2,'0');
+  return d.getFullYear()+'-'+p(d.getMonth()+1)+'-'+p(d.getDate());
+}
+/* Today's term from the start/end dates set in the scheduling app's Terms &
+   Academic Years tool. Between terms (a break), the EARLIER term counts as
+   current — i.e. the latest term that has already started. Terms without a
+   start date can't be placed in time, so they're skipped here (they still
+   count as a step in the 8-term window). Returns -1 if no term has started. */
+function currentTermIdx(today){
+  const inRange=TERM_SEQ.findIndex(t=>t.start_date&&t.end_date&&
+    String(t.start_date).slice(0,10)<=today&&today<=String(t.end_date).slice(0,10));
+  if(inRange>=0)return inRange;
+  let best=-1;
+  TERM_SEQ.forEach((t,i)=>{if(t.start_date&&String(t.start_date).slice(0,10)<=today)best=i;});
+  return best;
+}
+const termIdx=code=>TERM_SEQ.findIndex(t=>t.code===code);
+const termLabel=code=>(TERM_MAP[code]&&TERM_MAP[code].label)||code;
+const isPSUAdj=f=>(f.categories||[]).includes(ADJ_CAT);
+const adjNoStart=f=>isPSUAdj(f)&&!N(f.start_date);
+
+/* Current light. Counts either instructor slot. Future terms already on the
+   schedule don't count — the window ends at today's term. */
+function adjCurrent(f){
+  const idxs=(TEACHING[f.id]||[]).map(o=>termIdx(o.term)).filter(i=>i>=0);
+  if(CUR_TERM_IDX<0){
+    const last=idxs.length?TERM_SEQ[Math.max(...idxs)].code:null;
+    return {state:'unk',last,from:null,to:null,short:false};
+  }
+  const lo=Math.max(0,CUR_TERM_IDX-(ADJ_WINDOW-1));
+  const past=idxs.filter(i=>i<=CUR_TERM_IDX);
+  const lastIdx=past.length?Math.max(...past):-1;
+  return {
+    state:(lastIdx>=lo)?'on':'off',
+    last:lastIdx>=0?TERM_SEQ[lastIdx].code:null,
+    from:TERM_SEQ[lo].code, to:TERM_SEQ[CUR_TERM_IDX].code,
+    short:(CUR_TERM_IDX-(ADJ_WINDOW-1))<0   // fewer than 8 terms on record
+  };
+}
+function adjCurrentTitle(c){
+  if(c.state==='unk')return 'Current status unknown — no term has a start date on or before today. Set term dates in Scheduling → Terms & Academic Years.';
+  const win=`Window: ${termLabel(c.from)} – ${termLabel(c.to)}`+
+    (c.short?` (only ${CUR_TERM_IDX+1} of ${ADJ_WINDOW} terms on record)`:'');
+  return (c.last?`Last taught ${termLabel(c.last)}`:'No teaching on record')+'. '+win+'.';
+}
+function adjLightHTML(f,withLabel){
+  const c=adjCurrent(f);
+  const txt=c.state==='on'?'Current':c.state==='off'?'Not current':'Unknown';
+  return `<span class="lightlbl ${c.state==='on'?'on':''}" title="${esc(adjCurrentTitle(c))}">`+
+    `<span class="light ${c.state==='on'?'on':c.state==='unk'?'unk':''}" aria-hidden="true"></span>`+
+    (withLabel?`<span class="lt">${txt}</span>`:`<span class="lt" style="position:absolute;left:-9999px">${txt}</span>`)+
+    `</span>`;
+}
+
+/* ── Forthcoming rules ── Review eligibility and appointment order return null
+   until defined; a value stored in faculty_psu_adjunct (set via SQL for now)
+   is shown if present. Replace each body when the rules arrive. */
+function adjReviewEligible(f){        // criteria forthcoming
+  const r=ADJ[f.id];return (r&&r.review_eligible!=null)?!!r.review_eligible:null;
+}
+function adjApptOrder(f){             // logic forthcoming
+  const r=ADJ[f.id];return (r&&r.appointment_order!=null)?+r.appointment_order:null;
+}
+
+/* ── ACCUMULATED CREDIT LOAD (PSUFA CBA) ─────────────────────────
+   "Cumulative number of credits, in a department, an Adjunct faculty member
+   has taught starting from initial date of hire excluding courses taught
+   during a summer session … excluding any credits taught while working
+   outside of the PSUFA bargaining unit. A break in service of a full academic
+   year (including summer) will reset cumulative load calculations."
+
+   As implemented (decisions, Tim 10/1/26):
+   · Department = SPH as a whole — one total across every prefix.
+   · From the faculty record's Start Date. Teaching in a term that ended
+     before it isn't counted (and isn't service). No start date → everything
+     on record counts, and the profile says so.
+   · Summer credits never count. Summer teaching IS service, though — it
+     interrupts a break.
+   · Co-taught (both instructor slots filled) = credits ÷ 2, as in CHTool.
+     FTE-exempt courses still count — they're still credits taught.
+   · Break = ADJ_BREAK_TERMS consecutive terms (any four, summer included,
+     not tied to AY boundaries) with no teaching. The total restarts at the
+     next term taught. If the break is the most recent stretch through
+     today's term, the load is 0 now.
+   · Through today's term only; future scheduled terms don't count yet.
+   · Converge data only: history before the earliest term on record, and
+     credits taught outside the bargaining unit, are not accounted for.
+   · Ranged/blank credits (e.g. "1-4") can't be summed honestly, so those
+     offerings are left out and flagged for a manual check. */
+const ADJ_BREAK_TERMS=4;
+const isSummerTerm=t=>/^summer/i.test(String(t.code||''))||/^summer/i.test(String(t.label||''));
+function parseCredits(v){
+  const s=String(v??'').trim();
+  if(!s||/[-‐-―]/.test(s))return null;   // blank or ranged
+  const n=parseFloat(s);
+  return isNaN(n)?null:n;
+}
+const r1=x=>Math.round(x*100)/100;
+function adjCreditLoadDetail(f){
+  const out={total:null,since:null,resetAfter:null,reset:false,rows:[],flagged:[],notes:[]};
+  if(CUR_TERM_IDX<0){out.notes.push('Term dates not set — can\'t tell which terms have happened.');return out;}
+  const hire=N(f.start_date)?String(f.start_date).slice(0,10):null;
+  const afterHire=t=>{if(!hire)return true;const end=String(t.end_date||t.start_date||'').slice(0,10);return !end||end>=hire;};
+  // Offerings through today's term, after hire. De-duped by offering id
+  // (someone listed in both slots would otherwise appear twice).
+  const seen=new Set(), offs=[];
+  (TEACHING[f.id]||[]).forEach(o=>{
+    if(seen.has(o.id))return; seen.add(o.id);
+    const i=termIdx(o.term);
+    if(i<0||i>CUR_TERM_IDX||!afterHire(TERM_SEQ[i]))return;
+    offs.push({o,i});
+  });
+  const taught=new Set(offs.map(x=>x.i));
+  // Walk the term sequence: a run of ADJ_BREAK_TERMS untaught terms after
+  // some teaching is a break; counting restarts at the next term taught.
+  let runStart=null, gap=0, lastBreakEnd=null;
+  for(let i=0;i<=CUR_TERM_IDX;i++){
+    if(taught.has(i)){
+      if(runStart===null)runStart=i;
+      else if(gap>=ADJ_BREAK_TERMS){lastBreakEnd=i-1;runStart=i;}
+      gap=0;
+    }else if(runStart!==null)gap++;
+  }
+  if(runStart!==null&&gap>=ADJ_BREAK_TERMS){        // break is the current stretch
+    out.reset=true; out.total=0;
+    out.resetAfter=TERM_SEQ[CUR_TERM_IDX-gap].code;   // last term taught
+    out.notes.push(`Break in service: no teaching since ${termLabel(out.resetAfter)} (${gap} terms). Count restarts with the next appointment.`);
+  }else{
+    let tot=0;
+    offs.filter(x=>runStart!==null&&x.i>=runStart).sort((a,b)=>a.i-b.i).forEach(({o,i})=>{
+      const t=TERM_SEQ[i], c=COURSES[o.course_id];
+      const name=c?String(c.full_name).split(':')[0].trim():'(course removed)';
+      if(isSummerTerm(t))return;
+      const cr=parseCredits(c&&c.credits);
+      if(cr===null){out.flagged.push(`${termLabel(t.code)} ${name} (credits: ${c&&N(c.credits)?c.credits:'blank'})`);return;}
+      const two=!!(o.instructor1_id&&o.instructor2_id);
+      const eff=two?cr/2:cr;
+      tot+=eff;
+      out.rows.push(`${termLabel(t.code)}  ${name}: ${r1(cr)} cr${two?' ÷ 2 (co-taught) → '+r1(eff):''}`);
+    });
+    out.total=r1(tot);
+    out.since=runStart!==null?TERM_SEQ[runStart].code:null;
+    if(lastBreakEnd!==null)out.notes.push(`Reset by a break in service; counting since ${termLabel(out.since)}.`);
+  }
+  if(!hire)out.notes.push('No start date on record — counting all teaching in Converge.');
+  const first=TERM_SEQ[0];
+  if(first&&(!hire||(first.start_date&&hire<String(first.start_date).slice(0,10))))
+    out.notes.push(`Converge history begins ${termLabel(first.code)}; earlier credits and any taught outside the PSUFA unit aren't included.`);
+  if(out.flagged.length)out.notes.push(`${out.flagged.length} course(s) with ranged/blank credits left out — check manually.`);
+  return out;
+}
+function adjCreditLoad(f){return adjCreditLoadDetail(f).total;}
+function adjCreditLoadHTML(f){
+  const d=adjCreditLoadDetail(f);
+  if(d.total===null)return `<span class="pending">${esc(d.notes[0]||'Unavailable')}</span>`;
+  const tip=[...(d.rows.length?d.rows:['No Fall–Spring credits counted']),
+             ...(d.flagged.length?['','Left out (ranged/blank credits):',...d.flagged]:[]),
+             '',`= ${d.total} credits`].join('\n');
+  return `<span title="${esc(tip)}" style="cursor:help;font-weight:600">${esc(d.total)} cr</span>`+
+    (d.flagged.length?` <span class="chip warn" title="${esc(d.flagged.join('\n'))}">check ${d.flagged.length}</span>`:'')+
+    (d.notes.length?`<div class="hint">${d.notes.map(esc).join('<br>')}</div>`:'');
+}
+const PENDING='<span class="pending">Calculation pending</span>';
+function adjEligibleHTML(f){
+  const v=adjReviewEligible(f);
+  if(v===null)return '<span class="pending">Criteria pending</span>';
+  return v?'<span class="chip warn">Review eligible</span>':'<span class="muted">Not eligible</span>';
+}
+function adjFields(f){
+  const ao=adjApptOrder(f);
+  return [
+    ['Current (last '+ADJ_WINDOW+' terms)',adjLightHTML(f,true)],
+    ['Review Eligible',adjEligibleHTML(f)],
+    ['Accumulated Credit Load',adjCreditLoadHTML(f)],
+    ['Appointment Order',ao===null?PENDING:esc('#'+ao)]
+  ];
+}
+// Directory cell: light + eligibility (only once criteria exist) + a warning
+// chip when the start date is blank.
+function adjDirCell(f){
+  const el=adjReviewEligible(f);
+  return `<span class="adjcell">${adjLightHTML(f,true)}`+
+    (el===true?'<span class="chip warn">Review eligible</span>':'')+
+    (adjNoStart(f)?'<span class="chip warn" title="PSU adjunct with no start date on the record">No start date</span>':'')+
+    `</span>`;
+}
+// Profile card section: appended inside the admin Review & Promotion card.
+function adjProfileHTML(f){
+  if(TIER!=='admin'||!isPSUAdj(f))return '';
+  return `<div class="subh">PSU Adjunct Tracking <span class="lock">🔒 faculty admin</span></div><div class="grid">`+
+    adjFields(f).map(([k,v])=>`<div class="fld"><div class="k">${esc(k)}</div><div class="v">${v}</div></div>`).join('')+
+    `</div>`;
+}
+
 // Employer bucket: OHSU/PSU are exact (case/whitespace-insensitive) matches;
 // "Other" is any non-blank value that isn't OHSU or PSU; blank matches neither.
 function employerBucket(f){
@@ -1100,8 +1374,18 @@ function filtered(){
   const q=val('f-q').toLowerCase().trim(),
         cat=val('f-cat'), unit=val('f-unit'), ceph=val('f-ceph'), employer=val('f-employer'),
         teachOnly=$('f-teach').checked,
-        showInact=$('f-inact').checked, reviewOnly=$('f-review').checked, pub=val('f-pub');
+        showInact=$('f-inact').checked, reviewOnly=$('f-review').checked, pub=val('f-pub'),
+        adj=TIER==='admin'?val('f-adj'):'';
   return FAC.filter(f=>{
+    // PSU Adjunct filter — admin only (the control is admin-only, and adj is
+    // forced blank for other tiers above in case it was left set).
+    if(adj){
+      if(!isPSUAdj(f))return false;
+      if(adj==='current'&&adjCurrent(f).state!=='on')return false;
+      if(adj==='notcurrent'&&adjCurrent(f).state!=='off')return false;
+      if(adj==='eligible'&&adjReviewEligible(f)!==true)return false;
+      if(adj==='nostart'&&!adjNoStart(f))return false;
+    }
     // Public view lists only faculty with a PUBLISHED web profile. For the anon
     // tier WEBPROF is sourced from faculty_web_profile_public, which already
     // filters is_published=true — so mere presence of a row means published,
@@ -1134,6 +1418,7 @@ function renderDir(){
   // and Teaching; Rank, Categories and Employer are signed-in only.
   const cols=['Name','SPH Unit'];
   if(TIER!=='public')cols.push('Rank','Categories','Employer');
+  if(TIER==='admin')cols.push('PSU Adjunct');
   cols.push('Teaching');
   $('dir-th').innerHTML=cols.map(c=>`<th>${c}</th>`).join('');
 
@@ -1153,6 +1438,7 @@ function renderDir(){
       ${TIER!=='public'?`<td>${esc(f.rank||'')||'<span class="muted">—</span>'}</td>
       <td>${(f.categories||[]).map(c=>`<span class="chip">${esc(c)}</span>`).join('')||'<span class="muted">—</span>'}</td>
       <td>${esc(f.employer||'')||'<span class="muted">—</span>'}</td>`:''}
+      ${TIER==='admin'?`<td>${isPSUAdj(f)?adjDirCell(f):''}</td>`:''}
       <td>${n?`<span class="chip warn">${n} course${n>1?'s':''}</span>`:'<span class="muted">—</span>'}</td>
     </tr>`;
   }).join('');
@@ -1556,6 +1842,9 @@ function renderProf(id){
      even a sign-in prompt: the public profile is web profile plus courses, and
      a placeholder does nothing but advertise what is being withheld. */
   if(TIER!=='public'){
+    // Blank start date on a PSU adjunct is highlighted for admins only — the
+    // flag is part of adjunct tracking, which the faculty member doesn't see.
+    const startHi=TIER==='admin'&&adjNoStart(f);
     h+=`<div class="card"><h3>Contact &amp; Appointment${isSelf?` <button type="button" class="btn btn-s" data-req="contact" data-table="" data-cur="${esc(contactSummary(f))}" style="float:right;font-size:11px;padding:2px 9px">Request edit</button>`:''}</h3><div class="grid">
       ${fld('Email',f.email,v=>`<a href="mailto:${esc(v)}" style="color:var(--teal)">${esc(v)}</a>`)}
       ${fld('Secondary Email',f.secondary_email,v=>`<a href="mailto:${esc(v)}" style="color:var(--teal)">${esc(v)}</a>`)}
@@ -1565,7 +1854,9 @@ function renderProf(id){
       ${fld('OHSU Employment Org',f.ohsu_employment_org)}
       ${fld('Role When Active',f.role_when_active)}
       ${fld('FTE in SPH',f.fte_in_sph)}
-      ${fld('Start Date',f.start_date,fmtDate)}
+      ${startHi
+        ?`<div class="fld hi" title="PSU adjuncts need a start date for adjunct tracking"><div class="k">Start Date ⚠</div><div class="v">Missing — needed for PSU adjunct tracking</div></div>`
+        :fld('Start Date',f.start_date,fmtDate)}
       ${fld('End Date',f.end_date,fmtDate)}
     </div></div>`;
   }
@@ -1584,7 +1875,7 @@ function renderProf(id){
       ${fld('Promotion Eligible',f.promotion_eligible_year)}
       ${fld('Promotion Target',f.promotion_target)}
       ${fld('Appt Expiration',f.appt_expiration_date,fmtDate)}
-    </div></div>`;
+    </div>${adjProfileHTML(f)}</div>`;
 
     h+=`<div class="card"><h3>Identifiers <span class="lock">🔒 faculty admin</span></h3><div class="grid">
       ${fld('Primary ID',f.primary_id)}
@@ -1826,7 +2117,34 @@ function openFM(id){
   $('fm-admin').onchange=()=>roleDetailSync('fm-admin','fm-admin-detail');
   roleDetailSync('fm-pd','fm-pd-detail');
   roleDetailSync('fm-admin','fm-admin-detail');
+  syncAdjModal();
   openM('mo-fac');
+}
+/* Edit modal, PSU Adjunct pieces. Follows the PSUAdjunct checkbox live (not
+   the saved categories), so ticking it while editing shows the block and the
+   start-date warning straight away. Read-only: Current is derived from
+   teaching, and the other three are pending their rules. The modal itself is
+   admin-only, so no extra tier check is needed here. */
+function syncAdjModal(){
+  const box=$('fm-adj'), start=$('fm-start'), hint=$('fm-start-hint');
+  if(!box||!start||!hint)return;
+  const on=chosenCats().includes(ADJ_CAT);
+  const noStart=on&&!N(start.value);
+  start.classList.toggle('hi',noStart);
+  hint.classList.toggle('hi',noStart);
+  hint.style.display=noStart?'':'none';
+  hint.textContent=noStart?'⚠ Needed for PSU adjunct tracking':'';
+  if(!on){box.style.display='none';box.innerHTML='';return;}
+  const f=eid?FAC.find(x=>String(x.id)===String(eid)):null;
+  // A brand-new record has no id yet, so there's no teaching to derive from.
+  const probe=f?Object.assign({},f,{categories:chosenCats()}):null;
+  box.style.display='';
+  box.innerHTML=`<div class="sect" style="margin:6px 0 8px">PSU Adjunct Tracking <span class="hintr">🔒 admin only · read-only</span></div>`+
+    `<div class="adjbox">`+
+    (probe
+      ? adjFields(probe).map(([k,v])=>`<div><div class="k">${esc(k)}</div><div class="v">${v}</div></div>`).join('')
+      : `<div class="note">Save the record first — tracking values are derived from teaching history.</div>`)+
+    `<div class="note">Hidden from the faculty member, including on their own profile.</div></div>`;
 }
 /* ─── DOCUMENTS MODAL ──────────────────────────────────────── */
 let dmId=null;   // faculty id whose documents are being edited
@@ -2499,7 +2817,7 @@ async function reload(){
 
 /* ─── WIRING ───────────────────────────────────────────────── */
 function wire(){
-  ['f-q','f-cat','f-unit','f-employer','f-pub','f-ceph','f-teach','f-inact','f-review'].forEach(id=>{
+  ['f-q','f-cat','f-unit','f-employer','f-pub','f-adj','f-ceph','f-teach','f-inact','f-review'].forEach(id=>{
     const e=$(id);if(!e)return;
     e.addEventListener(id==='f-q'?'input':'change',renderDir);
   });
@@ -2510,7 +2828,7 @@ function wire(){
   /* Resets every control in the toolbar to its default, including the two
      checkboxes — 'Show inactive' returns to hidden, matching a fresh load. */
   $('btn-clear').onclick=()=>{
-    ['f-q','f-cat','f-unit','f-employer','f-pub','f-ceph'].forEach(id=>{const e=$(id);if(e)e.value='';});
+    ['f-q','f-cat','f-unit','f-employer','f-pub','f-adj','f-ceph'].forEach(id=>{const e=$(id);if(e)e.value='';});
     ['f-teach','f-inact','f-review'].forEach(id=>{const e=$(id);if(e)e.checked=false;});
     renderDir();
   };
@@ -2521,6 +2839,12 @@ function wire(){
   $('btn-log').onclick=openLog;
   $('btn-rp-gen').onclick=genFacReport;
   $('btn-save-fac').onclick=saveFac;
+  // PSU Adjunct block + start-date warning follow the live form state. The
+  // category checkboxes are re-rendered on every open, so delegate on their
+  // (persistent) container.
+  $('fm-cats').addEventListener('change',syncAdjModal);
+  $('fm-start').addEventListener('input',syncAdjModal);
+  $('fm-start').addEventListener('change',syncAdjModal);
   $('btn-del-fac').onclick=delFac;
   $('btn-save-prof').onclick=savePM;
   $('pm-edu-add').onclick=()=>$('pm-edu').insertAdjacentHTML('beforeend',eduRowHTML());
@@ -2597,7 +2921,7 @@ function wire(){
 
 /* ─── BOOT ─────────────────────────────────────────────────── */
 (async function boot(){
-  console.log('%c[SPH faculty] build 2026-07-30a — session persistence fix','color:#0a7');
+  console.log('%c[SPH faculty] build 2026-10-01a — PSU adjunct tracking','color:#0a7');
   wire();
   // A magic-link return lands here with tokens in the hash; the subscription
   // registered inside initSupabase() gives Supabase a beat to consume them
