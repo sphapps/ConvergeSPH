@@ -14,7 +14,7 @@
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Shared PSU adjunct calculations (also loaded by scheduling.html). Bump ?v= on every change. -->
-<script src="adjunct.js?v=2026-10-01g"></script>
+<script src="adjunct.js?v=2026-10-01h"></script>
 <style>
 /* ═══ TOKENS (shared with the scheduling app) ════════════════
    Kept in sync with scheduling.html — if you change a value here, change it there.
@@ -3194,7 +3194,7 @@ function wire(){
 
 /* ─── BOOT ─────────────────────────────────────────────────── */
 (async function boot(){
-  console.log('%c[SPH faculty] build 2026-10-01g — shared adjunct.js + assignment rights','color:#0a7');
+  console.log('%c[SPH faculty] build 2026-10-01h — appointment order tiebreak by start date','color:#0a7');
   wire();
   // A magic-link return lands here with tokens in the hash; the subscription
   // registered inside initSupabase() gives Supabase a beat to consume them

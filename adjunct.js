@@ -7,7 +7,7 @@
    page renders the results its own way.
 
    Load it with a version query so GitHub Pages / browser caches pick up
-   changes:  <script src="adjunct.js?v=2026-10-01g"></script>
+   changes:  <script src="adjunct.js?v=2026-10-01h"></script>
    …and bump the query whenever this file changes.
 
    USAGE
@@ -368,8 +368,10 @@ function adjReviewEligible(f){
 
 /* ─── APPOINTMENT ORDER (PSUFA CBA) ──────────────────────────────
    One list for all of SPH: tier (2-year → 9-month → term-by-term), then
-   accumulated credit load, highest first. Who's on it: PSUAdjunct, Current,
-   a determinable contract type, and NOT also Inactive. Ties share a rank
+   accumulated credit load, highest first, then appointment (Start) date,
+   earliest first (Tim, 10/1/26). No start date sorts last in its group.
+   Who's on it: PSUAdjunct, Current, a determinable contract type, and NOT
+   also Inactive. Only a full tie (tier, credits AND date) shares a rank
    (1, 2, 2, 4).
    override = {facultyId: contractOverride} previews an unsaved override
    ('' = auto). Never cached. */
@@ -378,11 +380,12 @@ function adjRanking(override){
   const ct=f=>adjContractInfo(f,(override&&f.id in override)?override[f.id]:undefined).type;
   const list=FAC.filter(f=>(isPSUAdj(f)||(override&&f.id in override))&&!isInactive(f)
       &&adjCurrent(f).state==='on'&&contractTier(ct(f))>=0)
-    .map(f=>({f,tier:contractTier(ct(f)),cr:adjCreditLoad(f)||0}))
-    .sort((a,b)=>(a.tier-b.tier)||(b.cr-a.cr));
+    .map(f=>({f,tier:contractTier(ct(f)),cr:adjCreditLoad(f)||0,
+              dt:N(f.start_date)?String(f.start_date).slice(0,10):'9999-12-31'}))
+    .sort((a,b)=>(a.tier-b.tier)||(b.cr-a.cr)||a.dt.localeCompare(b.dt));
   const rank={}; let prev=null;
   list.forEach((x,i)=>{
-    const r=(prev&&prev.tier===x.tier&&prev.cr===x.cr)?rank[prev.f.id]:i+1;
+    const r=(prev&&prev.tier===x.tier&&prev.cr===x.cr&&prev.dt===x.dt)?rank[prev.f.id]:i+1;
     rank[x.f.id]=r; prev=x;
   });
   const counts={}; Object.values(rank).forEach(r=>{counts[r]=(counts[r]||0)+1;});
