@@ -1913,6 +1913,7 @@ function enableAdmin(pdOnly){
   // Admin Tools / Lock Down reachable while everything else is frozen.
   document.body.classList.toggle('is-full-admin',!pdOnly);
   updateUndoBtn();
+  maybeShowEnrBanner();
   setSS(pdOnly?'PD mode':'Admin mode');
 }
 function disableAdmin(){
@@ -1921,6 +1922,7 @@ function disableAdmin(){
   document.querySelectorAll('.admin-only').forEach(e=>e.style.display='none');
   document.querySelectorAll('.admin-strict').forEach(e=>e.style.display='none');
   document.body.classList.remove('is-full-admin');
+  maybeShowEnrBanner();
   setSS('Read-only');
 }
 
@@ -5131,11 +5133,15 @@ function initDropdowns(){
 
 /* ─── ENROLLMENT REMINDER BANNER ────────────────────────────────
    Shows during days 1–14 of term-start months (Jan/Apr/Jul/Oct),
-   nudging PDs to enter actual enrollment. Dismissible per session
+   nudging admins to enter actual enrollment. Full Scheduling Admins
+   only — PDs, viewers and signed-out visitors never see it. Re-run
+   from enableAdmin()/disableAdmin() so it appears on sign-in and
+   disappears on sign-out without a reload. Dismissible per session
    only (a page reload brings it back within the window). */
 let enrBannerDismissed=false;
 function maybeShowEnrBanner(){
   const el=$('enr-banner');if(!el)return;
+  if(!isAdmin){el.style.display='none';return;}   // admins only
   const now=new Date(),mo=now.getMonth(),day=now.getDate();
   const inWindow=[0,3,6,9].includes(mo)&&day<=14;   // Jan=0, Apr=3, Jul=6, Oct=9
   if(!inWindow||enrBannerDismissed){el.style.display='none';return;}
@@ -7476,7 +7482,7 @@ function wireTaEvents(){
 
 /* ─── BOOTSTRAP ─────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded',async()=>{
-  console.log('%c[SPH scheduling] build 2026-10-02a — fix Add Course/Section freeze (course-code loop past _p)','color:#0a7');
+  console.log('%c[SPH scheduling] build 2026-10-02b — enrollment reminder banner admins only','color:#0a7');
   wireEvents();
   wireTdbEvents();
   wireReportingEvents();
