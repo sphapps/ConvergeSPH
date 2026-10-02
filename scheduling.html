@@ -3973,7 +3973,11 @@ async function saveCrs(){
     // can share a prefix+number).
     const base=`${pfx}_${num}`;id=base;
     const letters='bcdefghijklmnop';let k=0;
-    while(DB.courses.some(c=>c.id===id)){id=base+'_'+letters[k++];}
+    // Letters b–p first (existing codes keep their form), then numbers, so the
+    // loop always terminates. Previously letters[k++] ran past 'p' to
+    // undefined, and once "<base>_undefined" existed the loop never ended —
+    // which froze the page on Save for any prefix+number with 16+ courses.
+    while(DB.courses.some(c=>c.id===id)){k++;id=base+'_'+(k<=letters.length?letters[k-1]:k+1);}
   }
   const data={id,_uuid:uuid,prefix:pfx,number:num,number2:num2,title,fullName:crsFullName(pfx,num,num2,title,''),
     credits:val('cm-cr'),pnp:val('cm-pnp'),permission:val('cm-perm'),grugb:val('cm-grugb'),fteExempt:val('cm-fte'),
@@ -4210,7 +4214,8 @@ async function saveSec(){
   }else{
     let code=`${p.id}-${secCodeSafe(sec)}`;const stem=code;
     const letters='bcdefghijklmnop';let k=0;
-    while(DB.courses.some(c=>c.id===code)){code=stem+'_'+letters[k++];}
+    // Same terminating sequence as saveCrs(): b–p, then numbers.
+    while(DB.courses.some(c=>c.id===code)){k++;code=stem+'_'+(k<=letters.length?letters[k-1]:k+1);}
     // Attributes are copied from the base at insert AND re-inherited on every
     // load, so the stored copy is a convenience for readers outside this app.
     const row=Object.assign({},crsRow(Object.assign({},p,{id:code,fullName})),
@@ -7471,7 +7476,7 @@ function wireTaEvents(){
 
 /* ─── BOOTSTRAP ─────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded',async()=>{
-  console.log('%c[SPH scheduling] build 2026-10-01a — adjunct assignment rights roster (shared adjunct.js)','color:#0a7');
+  console.log('%c[SPH scheduling] build 2026-10-02a — fix Add Course/Section freeze (course-code loop past _p)','color:#0a7');
   wireEvents();
   wireTdbEvents();
   wireReportingEvents();
