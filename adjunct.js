@@ -7,7 +7,7 @@
    page renders the results its own way.
 
    Load it with a version query so GitHub Pages / browser caches pick up
-   changes:  <script src="adjunct.js?v=2026-10-14b"></script>
+   changes:  <script src="adjunct.js?v=2026-10-14c"></script>
    …and bump the query whenever this file changes — in BOTH pages.
 
    USAGE
@@ -106,7 +106,7 @@ function currentTermIdx(today){
 }
 
 const ADJ_CAT='PSUAdjunct';
-const ADJ_WINDOW=8;   // "Current" = taught in today's term or the 7 before it
+const ADJ_WINDOW=12;  // "Current" = taught in today's term or the 11 before it (was 8; Tim, 10/14/26)
 const termIdx=code=>TERM_SEQ.findIndex(t=>t.code===code);
 const termLabel=code=>(TERM_MAP[code]&&TERM_MAP[code].label)||code;
 const isPSUAdj=f=>(f.categories||[]).includes(ADJ_CAT);
@@ -129,7 +129,7 @@ function adjCurrent(f){
     state:(lastIdx>=lo)?'on':'off',
     last:lastIdx>=0?TERM_SEQ[lastIdx].code:null,
     from:TERM_SEQ[lo].code, to:TERM_SEQ[CUR_TERM_IDX].code,
-    short:(CUR_TERM_IDX-(ADJ_WINDOW-1))<0   // fewer than 8 terms on record
+    short:(CUR_TERM_IDX-(ADJ_WINDOW-1))<0   // fewer than ADJ_WINDOW terms on record
   };
 }
 function adjCurrentTitle(c){

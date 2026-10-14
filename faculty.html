@@ -14,7 +14,7 @@
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Shared PSU adjunct calculations (also loaded by scheduling.html). Bump ?v= on every change. -->
-<script src="adjunct.js?v=2026-10-14b"></script>
+<script src="adjunct.js?v=2026-10-14c"></script>
 <style>
 /* ═══ TOKENS (shared with the scheduling app) ════════════════
    Kept in sync with scheduling.html — if you change a value here, change it there.
@@ -280,7 +280,7 @@ tbody tr.rowflash td{animation:rowflash 1.4s ease-out}
 .phead .pact{flex-direction:column;align-items:stretch}
 
 /* ═══ PSU ADJUNCT TRACKING (admin only) ═══════════════════════
-   "Current" light: taught within the last 8 terms (see ADJ below). The light
+   "Current" light: taught within the last ADJ_WINDOW (12) terms — set in adjunct.js. The light
    is a coloured dot PLUS a text label — never colour alone. */
 .light{display:inline-block;width:10px;height:10px;border-radius:50%;vertical-align:middle;
   border:1px solid var(--mgray);background:var(--surface-2);flex-shrink:0}
@@ -3313,7 +3313,7 @@ function wire(){
 
 /* ─── BOOT ─────────────────────────────────────────────────── */
 (async function boot(){
-  console.log('%c[SPH faculty] build 2026-10-14c — manual Review Eligible override','color:#0a7');
+  console.log('%c[SPH faculty] build 2026-10-14d — Current = last 12 terms','color:#0a7');
   wire();
   // A magic-link return lands here with tokens in the hash; the subscription
   // registered inside initSupabase() gives Supabase a beat to consume them
