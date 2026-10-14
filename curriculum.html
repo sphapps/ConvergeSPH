@@ -183,6 +183,49 @@ td.cell.ed:hover{outline:2px solid var(--teal);outline-offset:-2px}
 .rpt-sec td.note{color:var(--dgray);font-size:12px}
 .rpt-empty{font-size:13px;color:var(--dgray);padding:30px 0;text-align:center}
 
+/* ═══ STAGE PROGRESS REPORT ═══ */
+:root{--sp-done:#2F855A;--sp-next:#2E75B6;--sp-dec:#DC2626;--sp-todo:#CBD5E1;--sp-ontx:#FFFFFF}
+html[data-theme="dark"]{--sp-done:#4FBF85;--sp-next:#6FB2E8;--sp-dec:#F1867F;--sp-todo:#3B4A63;--sp-ontx:#0E1626}
+.sp-key{background:var(--surface);border:1px solid var(--rowline);border-radius:6px;padding:10px 14px;margin-bottom:18px;font-size:12px;break-inside:avoid}
+.sp-key h3,.sp-chart h3{font-size:13px;color:var(--navytx);margin-bottom:6px}
+.sp-key ol{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:3px 16px}
+.sp-key li{display:flex;gap:6px;align-items:baseline}
+.sp-key .k{font-weight:700;color:var(--navytx);min-width:18px;text-align:right;font-variant-numeric:tabular-nums}
+.sp-chart{background:var(--surface);border:1px solid var(--rowline);border-radius:6px;padding:12px 14px;margin-bottom:22px;break-inside:avoid}
+.sp-chart .sub{font-size:11.5px;color:var(--dgray);margin:-2px 0 8px}
+.sp-crow{display:grid;grid-template-columns:minmax(150px,230px) 1fr 190px;gap:10px;align-items:center;font-size:12px;padding:3px 0}
+.sp-clab{display:flex;gap:6px;align-items:center;min-width:0}
+.sp-clab .k{font-weight:700;color:var(--navytx);min-width:18px;text-align:right;font-variant-numeric:tabular-nums}
+.sp-clab .t{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.sp-ctrack{height:16px}
+.sp-cbar{display:flex;height:16px;border-radius:3px;overflow:hidden;min-width:2px}
+.sp-cbar i{display:block;height:100%;min-width:0}
+.sp-cbar i.d{background:var(--sp-done)}
+.sp-cbar i.n{background:var(--sp-next)}
+.sp-cbar i.l{background:var(--sp-todo)}
+.sp-cbar i.x{background:var(--sp-dec)}
+.sp-cnum{font-variant-numeric:tabular-nums;color:var(--dgray);font-size:11.5px}
+.sp-legend{display:flex;gap:14px;flex-wrap:wrap;font-size:11px;color:var(--dgray);margin:8px 0 2px}
+.sp-legend span{display:inline-flex;align-items:center;gap:5px}
+.sp-legend .sg{display:inline-block;width:18px;height:12px;flex:none}
+.sp-note{font-size:11.5px;color:var(--dgray);margin-top:6px}
+.sp-bar,.sp-nums{display:flex;gap:2px}
+.sp-bar .sg{flex:1 1 0;min-width:0;height:20px;border-radius:3px;font-style:normal;font-size:9px;line-height:20px;text-align:center;
+  font-variant-numeric:tabular-nums;overflow:hidden;white-space:nowrap;box-sizing:border-box}
+.sg{border-radius:3px}
+.sg.done{background:var(--sp-done);color:var(--sp-ontx);font-weight:600}
+.sg.next{background:var(--sp-next);color:var(--sp-ontx)}
+.sg.todo{background:var(--surface);border:1px solid var(--mgray)}
+.sg.dec{background:var(--sp-dec);color:var(--sp-ontx);font-weight:700}
+.sg.na{background:var(--surface-2);color:var(--muted);border:1px dashed var(--mgray)}
+.sg.off{background:repeating-linear-gradient(135deg,transparent 0 3px,var(--mgray) 3px 4px);opacity:.6}
+.sp-nums span{flex:1 1 0;min-width:0;text-align:center;font-size:9.5px;font-weight:700;color:var(--navytx);text-transform:none;letter-spacing:0}
+.sp-t thead th{vertical-align:bottom}
+.sp-t td.pr{font-variant-numeric:tabular-nums;white-space:nowrap}
+.sp-t td.pr .p{font-size:11px;color:var(--dgray)}
+.sp-t td.nx{font-size:12px;color:var(--dgray)}
+.sp-t td{vertical-align:middle}
+
 /* ═══ APPROVALS / SETUP ═══ */
 .pane-scroll{flex:1;overflow:auto}
 .pane{max-width:1000px;margin:0 auto;padding:20px 24px 60px;display:flex;flex-direction:column;gap:18px}
@@ -449,6 +492,8 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
 }
 
 /* ═══ PRINT — prints the active view; forces light colors ═══ */
+/* Stage progress prints landscape so the stage bars have room for dates */
+@page sp-land{size:letter landscape;margin:0.5in}
 @media print{
   html[data-theme="dark"]{
     color-scheme:light;
@@ -475,6 +520,9 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
   .od{break-before:page;border:none;box-shadow:none;padding:0;margin:0}
   .od.od-first{break-before:auto;margin-top:14px}
   .od-a{background:#fff}
+  html[data-theme="dark"]{--sp-done:#2F855A;--sp-next:#2E75B6;--sp-dec:#DC2626;--sp-todo:#CBD5E1;--sp-ontx:#FFFFFF}
+  .sp-chart,.sp-key{break-inside:avoid}
+  #v-prog{page:sp-land}
   *{-webkit-print-color-adjust:exact;print-color-adjust:exact}
 }
 </style>
@@ -501,6 +549,7 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
   <div class="tabs" id="tabs">
     <button class="tab-btn active" id="tab-track" data-view="v-track">Tracker</button>
     <button class="tab-btn" id="tab-report" data-view="v-report">Status report (CCSR)</button>
+    <button class="tab-btn" id="tab-prog" data-view="v-prog">Stage progress</button>
     <button class="tab-btn" id="tab-ccr" data-view="v-ccr">CCR packets</button>
     <button class="tab-btn admin-only" id="tab-appr" data-view="v-appr">Approvals <span class="tab-badge" id="appr-badge">0</span></button>
     <button class="tab-btn admin-only" id="tab-setup" data-view="v-setup">Season setup</button>
@@ -566,6 +615,21 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
         <button class="btn btn-p btn-s" id="btn-print" style="margin-left:auto">🖨 Print / save as PDF</button>
       </div>
       <div class="rpt-scroll"><div class="rpt" id="r-body"></div></div>
+    </section>
+
+    <!-- ── STAGE PROGRESS ────────────────────────────────────── -->
+    <section class="view" id="v-prog">
+      <div class="tb">
+        <select id="p-season" aria-label="Season"></select>
+        <select id="p-level" aria-label="Level">
+          <option value="">Graduate and undergraduate</option><option value="GR">Graduate only</option><option value="UG">Undergraduate only</option>
+        </select>
+        <label class="ck"><input type="checkbox" id="p-done" checked> Include completed</label>
+        <label class="ck"><input type="checkbox" id="p-closed"> Include on hold / withdrawn</label>
+        <button class="btn btn-s" id="btn-p-pptx" style="margin-left:auto" title="Download this report as an editable PowerPoint deck">⬇ PowerPoint</button>
+        <button class="btn btn-p btn-s" id="btn-p-print">🖨 Print / save as PDF</button>
+      </div>
+      <div class="rpt-scroll"><div class="rpt" id="p-body"></div></div>
     </section>
 
     <!-- ── CCR PACKETS ───────────────────────────────────────── -->
@@ -1108,6 +1172,7 @@ function renderAll(){
   fillProgFilter();
   renderTracker();
   renderReport();
+  renderProgress();
   renderPackets();
   if(isAdmin()){renderApprovals();renderSetup();}
   updateApprovalBadge();
@@ -1119,6 +1184,7 @@ function seasonOptionsHTML(selected){
 function fillSeasonSelects(){
   $('t-season').innerHTML=seasonOptionsHTML(SEASON_ID);
   $('r-season').innerHTML=seasonOptionsHTML(SEASON_ID);
+  $('p-season').innerHTML=seasonOptionsHTML(SEASON_ID);
   $('k-season').innerHTML=seasonOptionsHTML(SEASON_ID);
   $('sc-season').innerHTML=seasonOptionsHTML(SETUP_SEASON_ID);
 }
@@ -3362,6 +3428,280 @@ async function downloadOhsuDocx(r,d,w){
   }catch(e){setSS('⚠ '+(e.message||e));}
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   STAGE PROGRESS REPORT
+   How far each change has come through the season's stages. One model
+   (spModel) feeds both outputs: the page (printed to PDF from the browser)
+   and a PowerPoint deck built in the browser with PptxGenJS.
+   Each change gets one segment per stage:
+     done  recorded done (shows the date)      dec   declined
+     next  the next step on its PSU/OHSU track  todo  required, not done yet
+     na    recorded N/A                         off   not required for it
+   Progress = done ÷ stages the change needs (N/A and not-required left out).
+   ══════════════════════════════════════════════════════════════════════ */
+const SP_LBL={done:'done',dec:'declined',na:'not applicable',next:'next step',todo:'not yet done',off:'not required for this change'};
+function stageProgress(r,stages){
+  const ev=EVENTS[r.id]||{},p=PROG[r.id]||{},st=itemStatus(r);
+  const open=st==='not_started'||st==='in_progress';
+  let total=0,done=0;
+  const segs=stages.map(s=>{
+    const e=ev[s.id];
+    let k;
+    if(e)k=e.state==='done'?'done':e.state==='na'?'na':'dec';
+    else if(!stageApplies(s.institution,r.institutions))k='off';
+    else if(open&&(s.id===p.next_psu_stage_id||s.id===p.next_ohsu_stage_id))k='next';
+    else k='todo';
+    if(k!=='na'&&k!=='off')total++;
+    if(k==='done')done++;
+    return {s,k,date:(e&&e.event_date)||'',note:(e&&e.note)||''};
+  });
+  return {segs,total,done,pct:total?Math.round(done*100/total):0};
+}
+function spModel(){
+  const season=SEASONS.find(s=>s.id===SEASON_ID);
+  if(!season)return null;
+  const lvl=val('p-level'),incDone=$('p-done').checked,incClosed=$('p-closed').checked;
+  const all=ITEMS.filter(r=>r.season_id===season.id&&r.approval_state!=='pending_delete')
+    .filter(r=>!lvl||r.student_level===lvl||r.student_level==='both');
+  const stages=seasonStages(season.id);
+  const cnt={open:0,complete:0,declined:0,closed:0};
+  all.forEach(r=>{const s=itemStatus(r);
+    if(s==='complete')cnt.complete++;else if(s==='declined')cnt.declined++;
+    else if(s==='on_hold'||s==='withdrawn')cnt.closed++;else cnt.open++;});
+  const items=all.filter(r=>{const s=itemStatus(r);
+    if(s==='complete')return incDone;if(s==='on_hold'||s==='withdrawn')return incClosed;return true;});
+  const prog=new Map(items.map(r=>[r.id,stageProgress(r,stages)]));
+  const chart=stages.map((s,i)=>{
+    const c={s,n:i+1,done:0,next:0,todo:0,dec:0};
+    items.forEach(r=>{const k=prog.get(r.id).segs[i].k;if(c[k]!=null)c[k]++;});
+    return c;
+  });
+  const openIt=items.filter(r=>{const s=itemStatus(r);return s==='not_started'||s==='in_progress';});
+  const avg=openIt.length?Math.round(openIt.reduce((a,r)=>a+prog.get(r.id).pct,0)/openIt.length):null;
+  const order=new Map(sortedPrograms().map((p,i)=>[String(p.id),i]));
+  const gm=new Map();
+  items.forEach(r=>{
+    let key,label,ord;
+    if(r.target_kind==='program'&&r.is_external){key='ext:'+(r.external_name||'');label=(r.external_name||'Non-SPH program')+' (non-SPH)';ord=1e6;}
+    else if(r.program_id!=null&&PROGRAMS[r.program_id]){key='prog:'+r.program_id;label=progTitle(PROGRAMS[r.program_id]);ord=order.has(String(r.program_id))?order.get(String(r.program_id)):1e5;}
+    else{key='none';label='Other / no program';ord=2e6;}
+    if(!gm.has(key))gm.set(key,{key,label,ord,rows:[]});
+    gm.get(key).rows.push(r);
+  });
+  const groups=[...gm.values()].sort((a,b)=>a.ord-b.ord||a.label.localeCompare(b.label));
+  groups.forEach(g=>g.rows.sort(packetOrder));
+  const lvlTxt=lvl==='GR'?'Graduate changes':lvl==='UG'?'Undergraduate changes':'Graduate and undergraduate changes';
+  return {season,lvl,lvlTxt,asof:todayISO(),stages,cnt,items,prog,chart,avg,groups};
+}
+function spNext(r){
+  const t=nextStepText(r);
+  return r.approval_state==='pending_add'?t+' · awaiting admin approval':t;
+}
+function spSegHTML(g){
+  const tip=`${g.s.label}: ${SP_LBL[g.k]}${g.date?' '+fmtLong(g.date):''}${g.note?' — '+g.note:''}`;
+  const txt=g.k==='done'?(g.date?fmtShort(g.date):'✓'):g.k==='dec'?'✕':g.k==='na'?'n/a':'';
+  return `<i class="sg ${g.k}" title="${esc(tip)}">${esc(txt)}</i>`;
+}
+function spLegendHTML(){
+  return `<div class="sp-legend">${['done','next','todo','dec','na','off'].map(k=>
+    `<span><i class="sg ${k}"></i>${esc({done:'Done (date)',next:'Next step',todo:'Not yet done',dec:'Declined',na:'N/A',off:'Not required'}[k])}</span>`).join('')}</div>`;
+}
+function renderProgress(){
+  const box=$('p-body');if(!box)return;
+  const m=spModel();
+  if(!m){box.innerHTML='<div class="rpt-empty">No season selected.</div>';return;}
+  let h=`<div class="rpt-head">
+    <div><h2>Curricular Change Stage Progress</h2><div class="rpt-season">${esc(m.season.label)} · ${esc(m.lvlTxt)}</div></div>
+    <div class="rpt-asof">As of ${esc(fmtLong(m.asof))}<br>OHSU-PSU School of Public Health</div>
+  </div>
+  <div class="rpt-sum">
+    <div class="rpt-stat"><b>${m.cnt.open}</b><span>In process</span></div>
+    <div class="rpt-stat"><b>${m.cnt.complete}</b><span>Complete</span></div>
+    <div class="rpt-stat"><b>${m.cnt.declined}</b><span>Declined</span></div>
+    <div class="rpt-stat"><b>${m.cnt.closed}</b><span>On hold or withdrawn</span></div>
+    <div class="rpt-stat"><b>${m.avg==null?'—':m.avg+'%'}</b><span>Average progress, changes in process</span></div>
+  </div>`;
+  if(!m.items.length){box.innerHTML=h+'<div class="rpt-empty">No curricular changes match these settings.</div>';return;}
+  if(!m.stages.length){box.innerHTML=h+'<div class="rpt-empty">This season has no stages.</div>';return;}
+  // Where changes stand at each stage
+  const max=Math.max(1,...m.chart.map(c=>c.done+c.next+c.todo+c.dec));
+  h+=`<div class="sp-chart"><h3>Where changes stand at each stage</h3>
+    <div class="sub">${m.items.length} change${m.items.length===1?'':'s'} in this report. A change on both the PSU and OHSU tracks is counted on each track's stages; stages it doesn't need are left out.</div>
+    ${m.chart.map(c=>{
+      const tot=c.done+c.next+c.todo+c.dec;
+      const parts=[c.done&&c.done+' done',c.next&&c.next+' waiting here',c.todo&&c.todo+' not yet',c.dec&&c.dec+' declined'].filter(Boolean).join(' · ')||'none';
+      return `<div class="sp-crow"><span class="sp-clab"><span class="k">${c.n}</span><span class="ib inst-${esc(c.s.institution)}">${esc(c.s.institution)}</span><span class="t" title="${esc(c.s.label)}">${esc(c.s.label)}</span></span>
+        <span class="sp-ctrack"><span class="sp-cbar" style="width:${(tot/max*100).toFixed(1)}%">${
+          c.done?`<i class="d" style="flex:${c.done}"></i>`:''}${c.next?`<i class="n" style="flex:${c.next}"></i>`:''}${
+          c.todo?`<i class="l" style="flex:${c.todo}"></i>`:''}${c.dec?`<i class="x" style="flex:${c.dec}"></i>`:''}</span></span>
+        <span class="sp-cnum">${esc(parts)}</span></div>`;
+    }).join('')}
+    <div class="sp-legend"><span><i class="sg done"></i>Done</span><span><i class="sg next"></i>Waiting here (next step)</span><span><i class="sg" style="background:var(--sp-todo)"></i>Not yet done</span><span><i class="sg dec"></i>Declined</span></div>
+  </div>`;
+  // Stage key (numbers used in the per-change bars)
+  h+=`<div class="sp-key"><h3>Stages</h3><ol>${m.stages.map((s,i)=>
+    `<li><span class="k">${i+1}</span><span class="ib inst-${esc(s.institution)}">${esc(s.institution)}</span><span>${esc(s.label)}</span></li>`).join('')}</ol>
+    ${spLegendHTML()}</div>`;
+  // Per-change detail by program
+  const nums=`<div class="sp-nums">${m.stages.map((s,i)=>`<span title="${esc(s.label)}">${i+1}</span>`).join('')}</div>`;
+  m.groups.forEach(g=>{
+    h+=`<div class="rpt-sec"><h3>${esc(g.label)} <span class="n">${g.rows.length} change${g.rows.length===1?'':'s'}</span></h3>
+    <table class="sp-t"><colgroup><col style="width:44px"><col style="width:28%"><col><col style="width:78px"><col style="width:19%"></colgroup>
+    <thead><tr><th>#</th><th>Change</th><th>Stages${nums}</th><th>Done</th><th>Where it stands</th></tr></thead><tbody>${
+      g.rows.map(r=>{
+        const p=m.prog.get(r.id);
+        return `<tr><td class="seq">${seqLabel(r.seq)}</td>
+          <td><div class="nm">${esc(r.title)}</div><div style="font-size:11.5px;color:var(--dgray);margin-top:2px">${esc(kindLabel(r))} · ${esc(r.student_level)}${r.ohsu_category?' · Cat '+esc(r.ohsu_category):''}</div></td>
+          <td><div class="sp-bar">${p.segs.map(spSegHTML).join('')}</div></td>
+          <td class="pr"><b>${p.done} of ${p.total}</b><div class="p">${p.pct}%</div></td>
+          <td class="nx">${esc(spNext(r))}</td></tr>`;
+      }).join('')}</tbody></table></div>`;
+  });
+  box.innerHTML=h;
+}
+
+/* ── Stage progress → PowerPoint (PptxGenJS, loaded on first use) ── */
+const PPTX_URL='https://cdn.jsdelivr.net/npm/pptxgenjs@3.12.0/dist/pptxgen.bundle.js';
+let pptxLoading=null;
+function loadPptx(){
+  if(window.PptxGenJS)return Promise.resolve(window.PptxGenJS);
+  if(!pptxLoading)pptxLoading=new Promise((res,rej)=>{
+    const s=document.createElement('script');s.src=PPTX_URL;
+    s.onload=()=>window.PptxGenJS?res(window.PptxGenJS):rej(new Error('PowerPoint library did not load'));
+    s.onerror=()=>{pptxLoading=null;rej(new Error('Could not load the PowerPoint library (check your connection)'));};
+    document.head.appendChild(s);
+  });
+  return pptxLoading;
+}
+const SPX={navy:'1F3864',teal:'2E75B6',text:'1E293B',gray:'64748B',line:'CBD5E1',light:'F1F5F9',
+  done:'2F855A',next:'2E75B6',todo:'FFFFFF',todoBar:'CBD5E1',dec:'DC2626',na:'F8FAFC',off:'E2E8F0',
+  inst:{P:'4D6B12',O:'0B5394',E:'475569',B:'6D28D9'}};
+function spBuildPptx(PptxGenJS,m){
+  const pptx=new PptxGenJS();
+  pptx.layout='LAYOUT_WIDE';   // 13.333 × 7.5 in
+  pptx.author='ConvergeSPH';pptx.company='OHSU-PSU School of Public Health';
+  pptx.title='Curricular Change Stage Progress '+m.season.label;
+  const foot=`Curricular Change Stage Progress · ${m.season.label} · ${m.lvlTxt} · as of ${fmtLong(m.asof)}`;
+  pptx.defineSlideMaster({title:'SP',background:{color:'FFFFFF'},
+    objects:[{rect:{x:0,y:0,w:13.333,h:0.09,fill:{color:SPX.navy}}},
+      {text:{text:foot,options:{x:0.4,y:7.05,w:10.5,h:0.3,fontSize:9,color:SPX.gray,fontFace:'Calibri'}}}],
+    slideNumber:{x:12.3,y:7.05,w:0.6,h:0.3,fontSize:9,color:SPX.gray,fontFace:'Calibri'}});
+  const F='Calibri';
+  const title=(sl,t,sub)=>{
+    sl.addText(t,{x:0.4,y:0.25,w:12.5,h:0.6,fontSize:26,bold:true,color:SPX.navy,fontFace:F,margin:0});
+    if(sub)sl.addText(sub,{x:0.4,y:0.82,w:12.5,h:0.35,fontSize:13,color:SPX.gray,fontFace:F,margin:0});
+  };
+
+  // 1. Title
+  const t1=pptx.addSlide();
+  t1.background={color:SPX.navy};
+  t1.addText('Curricular Change Stage Progress',{x:0.8,y:2.3,w:11.7,h:1.0,fontSize:40,bold:true,color:'FFFFFF',fontFace:F,margin:0});
+  t1.addText(`${m.season.label} · ${m.lvlTxt}`,{x:0.8,y:3.35,w:11.7,h:0.5,fontSize:20,color:'D6E4F0',fontFace:F,margin:0});
+  t1.addText(`As of ${fmtLong(m.asof)}`,{x:0.8,y:3.9,w:11.7,h:0.4,fontSize:16,color:'D6E4F0',fontFace:F,margin:0});
+  t1.addText('OHSU-PSU School of Public Health',{x:0.8,y:6.4,w:11.7,h:0.4,fontSize:14,color:'CBD5E1',fontFace:F,margin:0});
+
+  // 2. Overview: counts + stage chart
+  const ov=pptx.addSlide({masterName:'SP'});
+  title(ov,'Overview',`${m.items.length} change${m.items.length===1?'':'s'} in this report`);
+  const stats=[[m.cnt.open,'In process'],[m.cnt.complete,'Complete'],[m.cnt.declined,'Declined'],[m.cnt.closed,'On hold or withdrawn'],[m.avg==null?'—':m.avg+'%','Average progress (in process)']];
+  const bw=2.38,gap=0.15;
+  stats.forEach(([n,l],i)=>{
+    const x=0.4+i*(bw+gap);
+    ov.addShape(pptx.ShapeType.rect,{x,y:1.35,w:bw,h:0.95,fill:{color:SPX.light},line:{color:SPX.line,width:0.75}});
+    ov.addText(String(n),{x:x+0.15,y:1.4,w:bw-0.3,h:0.5,fontSize:24,bold:true,color:SPX.navy,fontFace:F,margin:0});
+    ov.addText(l,{x:x+0.15,y:1.9,w:bw-0.3,h:0.32,fontSize:11,color:SPX.gray,fontFace:F,margin:0});
+  });
+  if(m.items.length&&m.stages.length){
+    const labels=m.chart.map(c=>`${c.n}. ${shortStage(c.s)} (${c.s.institution})`);
+    ov.addText('Where changes stand at each stage',{x:0.4,y:2.5,w:12.5,h:0.35,fontSize:14,bold:true,color:SPX.navy,fontFace:F,margin:0});
+    ov.addChart(pptx.charts.BAR,[
+      {name:'Done',labels,values:m.chart.map(c=>c.done)},
+      {name:'Waiting here (next step)',labels,values:m.chart.map(c=>c.next)},
+      {name:'Not yet done',labels,values:m.chart.map(c=>c.todo)},
+      {name:'Declined',labels,values:m.chart.map(c=>c.dec)}
+    ],{x:0.4,y:2.85,w:12.5,h:4.15,barDir:'bar',barGrouping:'stacked',barGapWidthPct:40,
+      chartColors:[SPX.done,SPX.next,SPX.todoBar,SPX.dec],catAxisOrientation:'maxMin',
+      catAxisLabelFontSize:10,catAxisLabelFontFace:F,valAxisLabelFontSize:9,valAxisLabelFontFace:F,
+      valAxisMajorUnit:1,valGridLine:{color:'E2E8F0',size:0.5},catGridLine:{style:'none'},
+      showLegend:true,legendPos:'t',legendFontSize:10,legendFontFace:F});
+  }else{
+    ov.addText(m.items.length?'This season has no stages.':'No curricular changes match these settings.',
+      {x:0.4,y:3.2,w:12.5,h:0.5,fontSize:16,color:SPX.gray,fontFace:F});
+  }
+  if(!m.items.length||!m.stages.length)return pptx;
+
+  // 3. Stage key
+  const ky=pptx.addSlide({masterName:'SP'});
+  title(ky,'Stages',`Numbers match the columns on the program slides · PSU and OHSU approvals run in parallel`);
+  const half=Math.ceil(m.stages.length/2);
+  [m.stages.slice(0,half),m.stages.slice(half)].forEach((list,col)=>{
+    if(!list.length)return;
+    const rows=list.map((s,j)=>{const i=col*half+j;return [
+      {text:String(i+1),options:{bold:true,color:SPX.navy,align:'right'}},
+      {text:s.label,options:{bold:true}},
+      {text:INST_NAME[s.institution]||s.institution,options:{color:SPX.inst[s.institution]||SPX.gray}}];});
+    ky.addTable(rows,{x:0.4+col*6.35,y:1.4,w:6.1,colW:[0.45,3.55,2.1],fontSize:12,fontFace:F,color:SPX.text,
+      rowH:0.38,valign:'middle',border:{type:'solid',pt:0.5,color:SPX.line}});
+  });
+
+  // 4+. One slide (or more) per program
+  const n=m.stages.length;
+  const sw=Math.min(0.42,4.9/n),fixed=0.45+0.75+3.0,chW=12.53-fixed-sw*n;
+  const colW=[0.45,chW,...m.stages.map(()=>sw),0.75,3.0];
+  const bd={type:'solid',pt:0.5,color:SPX.line};
+  const hdr=(t,o)=>({text:t,options:Object.assign({bold:true,color:SPX.navy,fill:{color:'D6E4F0'},fontSize:9,align:'center',valign:'bottom'},o||{})});
+  const seg=g=>{
+    const map={done:[SPX.done,'FFFFFF',g.date?fmtShort(g.date):'✓'],next:[SPX.next,'FFFFFF','next'],todo:[SPX.todo,SPX.text,''],
+      dec:[SPX.dec,'FFFFFF','✕'],na:[SPX.na,SPX.gray,'n/a'],off:[SPX.off,SPX.gray,'']};
+    const [fill,color,text]=map[g.k];
+    return {text,options:{fill:{color:fill},color,fontSize:7,bold:g.k==='done'||g.k==='dec',align:'center',valign:'middle',margin:0}};
+  };
+  const PER=10;
+  m.groups.forEach(g=>{
+    for(let i=0;i<g.rows.length;i+=PER){
+      const chunk=g.rows.slice(i,i+PER),sl=pptx.addSlide({masterName:'SP'});
+      title(sl,g.label+(i?' (continued)':''),`${g.rows.length} change${g.rows.length===1?'':'s'}`+(g.rows.length>PER?` · ${i+1}–${i+chunk.length}`:''));
+      const rows=[[hdr('#'),hdr('Change',{align:'left'}),...m.stages.map((s,j)=>hdr(String(j+1))),hdr('Done'),hdr('Where it stands',{align:'left'})]];
+      chunk.forEach(r=>{
+        const p=m.prog.get(r.id);
+        rows.push([
+          {text:seqLabel(r.seq),options:{bold:true,color:SPX.gray,align:'center',valign:'middle'}},
+          {text:[{text:r.title,options:{bold:true,color:SPX.navy,breakLine:true}},
+                 {text:`${kindLabel(r)} · ${r.student_level}${r.ohsu_category?' · Cat '+r.ohsu_category:''}`,options:{fontSize:8,color:SPX.gray}}],
+           options:{valign:'middle'}},
+          ...p.segs.map(seg),
+          {text:[{text:`${p.done} of ${p.total}`,options:{bold:true,breakLine:true}},{text:p.pct+'%',options:{fontSize:8,color:SPX.gray}}],options:{align:'center',valign:'middle'}},
+          {text:spNext(r),options:{fontSize:8.5,color:SPX.text,valign:'middle'}}
+        ]);
+      });
+      sl.addTable(rows,{x:0.4,y:1.35,w:12.53,colW,fontSize:9.5,fontFace:F,color:SPX.text,border:bd,
+        rowH:[0.32,...chunk.map(()=>0.48)],margin:[2,4,2,4],autoPage:false});
+      // Legend
+      const lg=[['done','Done (date)'],['next','Next step'],['todo','Not yet done'],['dec','Declined'],['na','N/A'],['off','Not required']];
+      lg.forEach(([k,l],j)=>{
+        const x=0.4+j*1.65,fill={done:SPX.done,next:SPX.next,todo:SPX.todo,dec:SPX.dec,na:SPX.na,off:SPX.off}[k];
+        sl.addShape(pptx.ShapeType.rect,{x,y:6.72,w:0.26,h:0.17,fill:{color:fill},line:{color:SPX.line,width:0.5}});
+        sl.addText(l,{x:x+0.32,y:6.66,w:1.3,h:0.28,fontSize:9,color:SPX.gray,fontFace:F,margin:0});
+      });
+    }
+  });
+  return pptx;
+}
+function spFileName(m){
+  return ['Stage_Progress',m.season.label,m.lvl||'',m.asof].filter(Boolean).join('_').replace(/[\\/:*?"<>|#\s]+/g,'_')+'.pptx';
+}
+async function downloadProgressPptx(){
+  const m=spModel();
+  if(!m){setSS('⚠ Choose a season first');return;}
+  const btn=$('btn-p-pptx');btn.disabled=true;setSS('Building PowerPoint…');
+  try{
+    const P=await loadPptx();
+    await spBuildPptx(P,m).writeFile({fileName:spFileName(m)});
+    setSS('● PowerPoint downloaded');
+  }catch(e){setSS('⚠ '+(e.message||e));}
+  finally{btn.disabled=false;}
+}
+
 /* ── MODAL PLUMBING ── */
 function openM(id){$(id).classList.add('open');}
 function closeM(id){$(id).classList.remove('open');if(id==='mo-cfm')cfmCb=null;if(id==='mo-stage')cellCtx=null;if(id==='mo-ccr'){crRevEdit={};crItemId=null;}}
@@ -3378,8 +3718,8 @@ function switchTab(viewId){
 }
 function setSeason(id){
   SEASON_ID=id||null;
-  setv('t-season',SEASON_ID);setv('r-season',SEASON_ID);setv('k-season',SEASON_ID);
-  renderTracker();renderReport();renderPackets();
+  setv('t-season',SEASON_ID);setv('r-season',SEASON_ID);setv('p-season',SEASON_ID);setv('k-season',SEASON_ID);
+  renderTracker();renderReport();renderProgress();renderPackets();
 }
 
 /* ── WIRING ── */
@@ -3403,6 +3743,12 @@ function wire(){
   $('r-season').addEventListener('change',()=>setSeason(val('r-season')));
   ['r-level','r-done','r-closed'].forEach(id=>$(id).addEventListener('change',renderReport));
   $('btn-print').onclick=()=>window.print();
+
+  // Stage progress
+  $('p-season').addEventListener('change',()=>setSeason(val('p-season')));
+  ['p-level','p-done','p-closed'].forEach(id=>$(id).addEventListener('change',renderProgress));
+  $('btn-p-print').onclick=()=>window.print();
+  $('btn-p-pptx').onclick=downloadProgressPptx;
 
   // CCR packets
   $('k-season').addEventListener('change',()=>{PACKET_KEY='';setSeason(val('k-season'));});
