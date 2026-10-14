@@ -14,7 +14,7 @@
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Shared PSU adjunct calculations (also loaded by scheduling.html). Bump ?v= on every change. -->
-<script src="adjunct.js?v=2026-10-14a"></script>
+<script src="adjunct.js?v=2026-10-14b"></script>
 <style>
 /* ═══ TOKENS (shared with the scheduling app) ════════════════
    Kept in sync with scheduling.html — if you change a value here, change it there.
@@ -515,6 +515,13 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
             <option value="term">Override: Term-by-term</option>
           </select>
           <div class="fhint" id="fm-adj-ct-hint"></div>
+        </div>
+        <!-- Review Eligible OVERRIDE. Blank = Auto (calculated). Options are
+             filled from ConvergeAdj.REVIEW_OVERRIDES in openFM(). -->
+        <div id="fm-adj-rv-wrap" style="display:none">
+          <label>PSU Adjunct Review Eligible</label>
+          <select id="fm-adj-rv"></select>
+          <div class="fhint" id="fm-adj-rv-hint"></div>
         </div>
         <!-- Professional evaluation (CBA Art. 8 §4). Recorded only for now —
              the contract calculation still assumes the evaluation is done
@@ -1131,10 +1138,13 @@ async function loadData(){
   // Hand everything to the shared adjunct calculations (adjunct.js). Runs for
   // every tier; without admin data (start dates, overrides, rights) the
   // results just come back "unknown", and nothing renders them anyway.
-  const overrides={};
-  Object.values(ADJ).forEach(r=>{if(r.contract_type)overrides[r.faculty_id]=r.contract_type;});
+  const overrides={}, reviewOverrides={};
+  Object.values(ADJ).forEach(r=>{
+    if(r.contract_type)overrides[r.faculty_id]=r.contract_type;
+    if(r.review_override)reviewOverrides[r.faculty_id]=r.review_override;
+  });
   ConvergeAdj.setData({terms:tR.data||[],offerings:OFFERINGS,courses:cR.data||[],
-    faculty:FAC,overrides,rights:ADJ_RIGHTS});
+    faculty:FAC,overrides,reviewOverrides,rights:ADJ_RIGHTS});
 
   // Lockdown — read-only here; the trigger lives in the scheduling app's
   // Admin Tools ▾ Lock Down control (Scheduling-Admin only), and blocks both
@@ -1296,16 +1306,31 @@ function adjApptOrderHTML(f,override){
     (flagged?' · provisional: credit load has courses to check':'')+`</div>`;
 }
 
+/* Review Eligible. A manual override (faculty_psu_adjunct.review_override)
+   replaces the calculated state; the hint then shows what the calculation
+   would say, the same way Contract Type does. */
+const REVIEW_HEAD={due:'<span class="chip warn">Review eligible — offer evaluation</span>',
+  done:'<span style="font-weight:600">Eligible</span> <span class="muted">· evaluation assumed done</span>',
+  manual:'<span class="muted">Not needed</span>',
+  exempt:'<span class="muted">Not required (pre-2014)</span>',
+  not:'<span class="muted">Not yet eligible</span>',
+  notcurrent:'<span class="muted">Not eligible</span>',
+  unknown:'<span class="muted">Can\'t determine</span>'};
+// Plain-text name for a calculated state, for "Calculated would be: …".
+const REVIEW_CALC_TXT={due:'eligible — evaluation due',done:'eligible (evaluation assumed done)',
+  manual:'not needed (2-year set manually)',exempt:'not required (pre-2014)',
+  not:'not yet eligible',notcurrent:'not eligible — not current',unknown:'can\'t determine'};
 function adjEligibleHTML(f){
   const r=adjReviewInfo(f);
-  const head={due:'<span class="chip warn">Review eligible — offer evaluation</span>',
-    done:'<span style="font-weight:600">Eligible</span> <span class="muted">· evaluation assumed done</span>',
-    manual:'<span class="muted">Not needed</span>',
-    exempt:'<span class="muted">Not required (pre-2014)</span>',
-    not:'<span class="muted">Not yet eligible</span>',
-    notcurrent:'<span class="muted">Not eligible</span>',
-    unknown:'<span class="muted">Can\'t determine</span>'}[r.state];
-  return head+`<div class="hint">${esc(r.text)}</div>`;
+  if(r.manual){
+    const head={due:'<span class="chip warn">Review eligible — offer evaluation</span>',
+      done:'<span style="font-weight:600">Eligible</span> <span class="muted">· evaluation complete</span>',
+      not:'<span class="muted">Not eligible</span>',
+      exempt:'<span class="muted">Not required</span>'}[r.state];
+    return head+` <span class="muted">· set manually</span>`+
+      `<div class="hint">Calculated would be: ${esc(REVIEW_CALC_TXT[r.calc.state]||r.calc.state)}.</div>`;
+  }
+  return REVIEW_HEAD[r.state]+` <span class="muted">· calculated</span><div class="hint">${esc(r.text)}</div>`;
 }
 
 /* Professional evaluation dates (CBA Art. 8 §4) — stored on the admin-only
@@ -1444,7 +1469,7 @@ function adjFields(f,override){
   ];
 }
 // Fields the edit modal has inputs for — left out of its read-only preview.
-const ADJ_MODAL_SKIP=new Set(['Contract Type',...Object.values(ADJ_EVAL_COLS)]);
+const ADJ_MODAL_SKIP=new Set(['Contract Type','Review Eligible',...Object.values(ADJ_EVAL_COLS)]);
 // Directory cell: light, rank, review-eligible (evaluation due), assignment
 // rights that need attention, and the one data flag — a blank start date.
 function adjDirCell(f){
@@ -2381,6 +2406,9 @@ function openFM(id){
   roleDetailSync('fm-pd','fm-pd-detail');
   roleDetailSync('fm-admin','fm-admin-detail');
   setv('fm-adj-ct',(f&&adjContract(f))||'');
+  $('fm-adj-rv').innerHTML='<option value="">Auto (calculated)</option>'+
+    ConvergeAdj.REVIEW_OVERRIDES.map(o=>`<option value="${esc(o.v)}">Override: ${esc(o.label)}</option>`).join('');
+  setv('fm-adj-rv',(f&&ADJ[f.id]&&ADJ[f.id].review_override)||'');
   setv('fm-adj-evo',f?adjEvalDate(f.id,'eval_offered_date'):'');
   setv('fm-adj-evc',f?adjEvalDate(f.id,'eval_completed_date'):'');
   syncAdjModal();
@@ -2401,7 +2429,7 @@ function syncAdjModal(){
   hint.classList.toggle('hi',noStart);
   hint.style.display=noStart?'':'none';
   hint.textContent=noStart?'⚠ Needed for PSU adjunct tracking':'';
-  ['fm-adj-ct-wrap','fm-adj-evo-wrap','fm-adj-evc-wrap'].forEach(w=>{$(w).style.display=on?'':'none';});
+  ['fm-adj-ct-wrap','fm-adj-rv-wrap','fm-adj-evo-wrap','fm-adj-evc-wrap'].forEach(w=>{$(w).style.display=on?'':'none';});
   if(!on){box.style.display='none';box.innerHTML='';return;}
   {
     const bad=adjEvalOrderBad(), eh=$('fm-adj-ev-hint');
@@ -2419,6 +2447,15 @@ function syncAdjModal(){
     ctHint.textContent=ctSel.value
       ?`Overrides the calculation (${calcTxt}). Use for rights retained from a previous CBA or other exceptions.`
       :`Auto — ${calcTxt}.`;
+  }
+  {
+    const cur=eid?FAC.find(x=>String(x.id)===String(eid)):null;
+    const rc=cur?adjReviewCalc(cur):null;
+    const rcTxt=!cur?'calculated once the record is saved'
+      :'calculated: '+(REVIEW_CALC_TXT[rc.state]||rc.state);
+    $('fm-adj-rv-hint').textContent=val('fm-adj-rv')
+      ?`Overrides the calculation (${rcTxt}). Use when the evaluation history predates Converge or the calculation is wrong.`
+      :`Auto — ${rcTxt}.`;
   }
   const f=eid?FAC.find(x=>String(x.id)===String(eid)):null;
   // A brand-new record has no id yet, so there's no teaching to derive from.
@@ -2540,18 +2577,19 @@ async function saveFac(){
 }
 
 /* PSU adjunct tracking fields → faculty_psu_adjunct (admin-only table), never
-   the faculty row: the contract type override plus the evaluation offered /
-   completed dates. Only written when the PSUAdjunct box is ticked and
-   something actually changed. Unticking PSUAdjunct leaves any stored values
-   alone, so re-ticking it later doesn't lose them.
-   ⚠ Needs faculty_psu_adjunct_v2_eval_dates.sql — without those columns
-   every PSU adjunct save that changes something here fails. */
+   the faculty row: the contract type and review eligible overrides plus the
+   evaluation offered / completed dates. Only written when the PSUAdjunct box
+   is ticked and something actually changed. Unticking PSUAdjunct leaves any
+   stored values alone, so re-ticking it later doesn't lose them.
+   ⚠ Needs faculty_psu_adjunct_v2_eval_dates.sql and
+   faculty_psu_adjunct_v3_review_override.sql — without those columns every
+   PSU adjunct save that changes something here fails. */
 async function saveAdjTracking(fid,cats){
   if(!cats.includes(ADJ_CAT))return true;
   const cur=ADJ[fid]||{};
-  const want={contract_type:val('fm-adj-ct')||null,
+  const want={contract_type:val('fm-adj-ct')||null,review_override:val('fm-adj-rv')||null,
     eval_offered_date:N(val('fm-adj-evo')),eval_completed_date:N(val('fm-adj-evc'))};
-  const have={contract_type:cur.contract_type||null,
+  const have={contract_type:cur.contract_type||null,review_override:cur.review_override||null,
     eval_offered_date:adjEvalDate(fid,'eval_offered_date'),
     eval_completed_date:adjEvalDate(fid,'eval_completed_date')};
   if(JSON.stringify(want)===JSON.stringify(have))return true;
@@ -2753,6 +2791,7 @@ function snap(f){
   o.is_administrator=!!f.is_administrator;
   o.categories=(f.categories||[]).slice();
   o.psu_adj_contract=(ADJ[f.id]&&ADJ[f.id].contract_type)||null;
+  o.psu_adj_review=(ADJ[f.id]&&ADJ[f.id].review_override)?ConvergeAdj.reviewOverrideLabel(ADJ[f.id].review_override):null;
   o.psu_adj_eval_offered=adjEvalDate(f.id,'eval_offered_date');
   o.psu_adj_eval_completed=adjEvalDate(f.id,'eval_completed_date');
   o.documents=(DOCS[f.id]||[]).map(d=>({category:d.category,subcategory:d.subcategory,description:d.description,doc_date:d.doc_date,sp_url:d.sp_url}));
@@ -2788,6 +2827,7 @@ const RP_FAC_LABELS={
   photo_url:'Photo URL',is_published:'Published',biography_md:'Biography',
   education:'Education',research:'Research',awards:'Awards',documents:'Documents',
   psu_adj_contract:'PSU Adjunct Contract Override',assignment_rights:'Assignment Rights',
+  psu_adj_review:'PSU Adjunct Review Eligible Override',
   psu_adj_eval_offered:'PSU Adjunct Evaluation Offered',psu_adj_eval_completed:'PSU Adjunct Evaluation Completed'
 };
 function _facLabel(k){return RP_FAC_LABELS[k]||(k.charAt(0).toUpperCase()+k.slice(1)).replace(/_/g,' ');}
@@ -3175,6 +3215,7 @@ function wire(){
   $('fm-start').addEventListener('input',syncAdjModal);
   $('fm-start').addEventListener('change',syncAdjModal);
   $('fm-adj-ct').addEventListener('change',syncAdjModal);
+  $('fm-adj-rv').addEventListener('change',syncAdjModal);
   ['fm-adj-evo','fm-adj-evc'].forEach(id=>{
     $(id).addEventListener('input',syncAdjModal);
     $(id).addEventListener('change',syncAdjModal);
@@ -3272,7 +3313,7 @@ function wire(){
 
 /* ─── BOOT ─────────────────────────────────────────────────── */
 (async function boot(){
-  console.log('%c[SPH faculty] build 2026-10-14b — manual assignment rights for anyone; rights kept through breaks (lapse after 3 yrs)','color:#0a7');
+  console.log('%c[SPH faculty] build 2026-10-14c — manual Review Eligible override','color:#0a7');
   wire();
   // A magic-link return lands here with tokens in the hash; the subscription
   // registered inside initSupabase() gives Supabase a beat to consume them

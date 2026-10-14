@@ -7,11 +7,11 @@
    page renders the results its own way.
 
    Load it with a version query so GitHub Pages / browser caches pick up
-   changes:  <script src="adjunct.js?v=2026-10-14a"></script>
+   changes:  <script src="adjunct.js?v=2026-10-14b"></script>
    …and bump the query whenever this file changes — in BOTH pages.
 
    USAGE
-     ConvergeAdj.setData({terms, offerings, courses, faculty, overrides, rights})
+     ConvergeAdj.setData({terms, offerings, courses, faculty, overrides, reviewOverrides, rights})
        terms      raw `terms` rows: code,label,academic_year,sort_order,
                   start_date,end_date
        offerings  raw `offerings` rows: id,term,course_id,instructor1_id,
@@ -19,6 +19,8 @@
        courses    raw `courses` rows: id,full_name,credits
        faculty    [{id,first_name,last_name,start_date,categories:[…]}]
        overrides  {facultyId: contract_type}  (faculty_psu_adjunct)
+       reviewOverrides {facultyId: review_override}  (faculty_psu_adjunct;
+                  optional — omitted means every review status is calculated)
        rights     [faculty_psu_adjunct_rights rows]  (all, incl. superseded)
      Call again after every reload — it clears every cache.
 
@@ -41,6 +43,7 @@ let TEACHING={};      // faculty id → [offering, …] (either slot)
 let COURSES={};       // course id → course row
 let FAC=[];
 let OVR={};           // faculty id → contract_type override
+let RVOVR={};         // faculty id → review_override (due|done|not|exempt)
 let RIGHTS={};        // faculty id → [rights rows], newest first
 const CL={}, CT={}, RT={};   // per-faculty caches
 let RANK=null;
@@ -75,6 +78,7 @@ function setData(d){
   });
   FAC=d.faculty||[];
   OVR=d.overrides||{};
+  RVOVR=d.reviewOverrides||{};
   RIGHTS={};
   (d.rights||[]).forEach(r=>{(RIGHTS[r.faculty_id]=RIGHTS[r.faculty_id]||[]).push(r);});
   Object.values(RIGHTS).forEach(a=>a.sort((x,y)=>String(y.established_at).localeCompare(String(x.established_at))));
@@ -352,8 +356,21 @@ const adjContract=f=>adjContractInfo(f).type;
    Same threshold as the 2-year appointment (ADJ_2YR), computed from the same
    calculation, so the two can never disagree. States:
      due  done  manual  exempt  not  notcurrent  unknown
-   Only `due` counts as "review eligible" — it's the actionable one. */
-function adjReviewInfo(f){
+   Only `due` counts as "review eligible" — it's the actionable one.
+
+   MANUAL OVERRIDE (Tim, 10/14/26): faculty_psu_adjunct.review_override,
+   passed in as setData({reviewOverrides}). NULL = use the calculation; a
+   value (due | done | not | exempt) replaces it outright — including for an
+   adjunct who isn't Current. adjReviewInfo() applies the override;
+   adjReviewCalc() is always the calculation, for "calculated would be". */
+const REVIEW_OVERRIDES=[
+  {v:'due',   label:'Eligible — evaluation due'},
+  {v:'done',  label:'Eligible — evaluation complete'},
+  {v:'not',   label:'Not eligible'},
+  {v:'exempt',label:'Not required'}
+];
+const reviewOverrideLabel=v=>(REVIEW_OVERRIDES.find(o=>o.v===v)||{}).label||'';
+function adjReviewCalc(f){
   // Not current → never eligible, whatever else is true. (Tim, 10/1/26)
   if(adjCurrent(f).state!=='on')
     return {state:'notcurrent',text:`Not eligible — not current (no teaching in the last ${ADJ_WINDOW} terms).`};
@@ -367,6 +384,14 @@ function adjReviewInfo(f){
   const when=t2.elig===-1?'before Converge history':termLabel(TERM_SEQ[t2.elig].code);
   if(inEffect(t2.eff))return {state:'done',text:`Eligible since ${when} (${t2.why}). 2-year from ${fallLabel(t2.eff)}; evaluation assumed complete.`};
   return {state:'due',text:`Eligible since ${when} (${t2.why}) — offer the professional evaluation. 2-year would start ${fallLabel(t2.eff)}.`};
+}
+// Effective review status. ovr: undefined → stored override; '' → force
+// auto; a value → that value (the edit modal's unsaved selection).
+function adjReviewInfo(f,ovr){
+  const calc=adjReviewCalc(f);
+  const v=ovr===undefined?RVOVR[f.id]:ovr;
+  if(!reviewOverrideLabel(v))return Object.assign({manual:false,calc},calc);
+  return {state:v,manual:true,calc,text:`Set manually: ${reviewOverrideLabel(v)}.`};
 }
 function adjReviewEligible(f){
   const s=adjReviewInfo(f).state;
@@ -638,6 +663,7 @@ const API={
   termIdx,termLabel,isPSUAdj,isInactive,adjNoStart,isSummerTerm,isFallTerm,parseCredits,
   adjCurrent,adjCurrentTitle,adjCreditLoadDetail,adjCreditLoad,
   contractTier,contractLabel,adjContractCalc,adjContractInfo,adjContract,
+  REVIEW_OVERRIDES,reviewOverrideLabel,adjReviewCalc,
   adjReviewInfo,adjReviewEligible,adjRanking,adjApptOrder,
   adjRightsActive,adjRightsHistory,adjRightsCalc,adjRightsBreak,adjRightsInfo,adjRightsForAY,adjAssigned,
   // read-only views of state, for pickers and labels
@@ -648,7 +674,7 @@ window.ConvergeAdj=API;
 // Historical global names (see header). Skips the namespace-only helpers.
 ['ADJ_CAT','ADJ_WINDOW','termLabel','isPSUAdj','adjNoStart','adjCurrent','adjCurrentTitle',
  'adjCreditLoadDetail','adjCreditLoad','contractTier','contractLabel','adjContractCalc',
- 'adjContractInfo','adjContract','adjReviewInfo','adjReviewEligible','adjRanking','adjApptOrder',
+ 'adjContractInfo','adjContract','adjReviewCalc','adjReviewInfo','adjReviewEligible','adjRanking','adjApptOrder',
  'adjRightsActive','adjRightsHistory','adjRightsCalc','adjRightsInfo','adjRightsForAY','adjAssigned'
 ].forEach(k=>{window[k]=API[k];});
 })();
