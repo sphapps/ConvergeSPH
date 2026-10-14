@@ -14,7 +14,7 @@
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Shared PSU adjunct calculations (also loaded by scheduling.html). Bump ?v= on every change. -->
-<script src="adjunct.js?v=2026-10-01h"></script>
+<script src="adjunct.js?v=2026-10-14a"></script>
 <style>
 /* ═══ TOKENS (shared with the scheduling app) ════════════════
    Kept in sync with scheduling.html — if you change a value here, change it there.
@@ -748,9 +748,9 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
   <div class="mc lg">
     <div class="mh"><h3>PSU Adjunct Assignment Rights</h3><button class="x" data-close="mo-adjr">×</button></div>
     <div class="mb">
-      <div class="hint" style="margin:0 0 10px">PSUFA CBA 8 §3.6: 9-month — greater of 1 course or the average annual load in the eligibility window; 2-year — greater of 2 courses or that average; rounded up to whole courses. Once saved, rights are locked. Hover any value for its basis.</div>
+      <div class="hint" style="margin:0 0 10px">PSUFA CBA 8 §3.6: 9-month — greater of 1 course or the average annual load in the eligibility window; 2-year — greater of 2 courses or that average; rounded up to whole courses. Once saved, rights are locked. A break in service resets accumulated credit load, not rights: they keep their value and lapse only after more than 3 years without teaching. Hover any value for its basis.</div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dgray);margin-bottom:10px;cursor:pointer">
-        <input type="checkbox" id="adjr-all" style="width:auto;flex:none"> Show everyone, including adjuncts whose rights are already in place
+        <input type="checkbox" id="adjr-all" style="width:auto;flex:none"> Show every PSU adjunct — to set rights by hand for anyone, eligible or not (e.g. earned before Converge's scheduling data)
       </label>
       <div id="adjr-list"></div>
     </div>
@@ -1345,9 +1345,23 @@ const rightsSummary=a=>a?`${RIGHTS_TIER[a.tier]||a.tier} · ${fmtCr(a.min_credit
 const RIGHTS_ACTION={
   establish:{chip:'Rights: establish',btn:'Establish'},
   upgrade:  {chip:'Rights: upgrade to 2-year',btn:'Upgrade to 2-year'},
-  retire:   {chip:'Rights: retire (break)',btn:'Retire'},
+  retire:   {chip:'Rights: lapsed (3+ yr break)',btn:'Retire'},
   manual:   {chip:'Rights: enter manually',btn:'Enter manually'}
 };
+/* One-line description of a break in service as it bears on stored rights
+   (adjRightsBreak in adjunct.js). Rights keep their value through a break
+   and lapse only after more than 3 years without teaching. */
+function brkText(b){
+  if(!b)return '';
+  const yrs=ADJ_RIGHTS_RETAIN_TERMS/4;
+  if(b.lapsed)return b.ongoing
+    ?`No teaching since ${termLabel(b.last)} (${b.terms} terms) — more than ${yrs} years, so these rights have lapsed.`
+    :`A break of ${b.terms} terms after ${termLabel(b.last)} — more than ${yrs} years, so rights set before it have lapsed.`;
+  if(b.ongoing)return `Retained during a break: no teaching since ${termLabel(b.last)} (${b.terms} term${b.terms===1?'':'s'}). `+
+    `Value is unchanged; they lapse ${b.lapseTerm?'in '+termLabel(b.lapseTerm):'after '+yrs+' years'} if there's still no teaching.`;
+  return `Retained through a ${b.terms}-term break after ${termLabel(b.last)}; value unchanged.`;
+}
+const ADJ_RIGHTS_RETAIN_TERMS=ConvergeAdj.ADJ_RIGHTS_RETAIN_TERMS;
 function adjRightsHTML(f){
   const R=adjRightsInfo(f), a=R.active, p=R.calc;
   const btn=(act,label,primary)=>`<button type="button" class="btn btn-s ${primary?'btn-p ':''}admin-only" data-adjr="${act}" data-fid="${esc(f.id)}" style="margin:6px 6px 0 0">${esc(label)}</button>`;
@@ -1356,6 +1370,7 @@ function adjRightsHTML(f){
     h+=`<span style="font-weight:600;cursor:help" title="${esc(rightsBasis(a))}">${fmtCr(a.min_credits)} cr / AY</span> `+
        `<span class="muted">· ${esc(RIGHTS_TIER[a.tier]||a.tier)} · ${a.is_override?'set manually':'calculated'}</span>`+
        `<div class="hint">From ${a.effective_term?esc(termLabel(a.effective_term)):'before Converge history'} · locked since ${esc(String(a.established_at||'').slice(0,10))}</div>`;
+    if(R.brk&&!R.brk.lapsed)h+=`<div class="hint">${esc(brkText(R.brk))}</div>`;
   }
   // Assigned this AY vs. the rights that GOVERN this AY — not necessarily the
   // newest row: a 2-year upgrade starting next Fall leaves this year 9-month.
@@ -1379,7 +1394,7 @@ function adjRightsHTML(f){
          btn('upgrade','Upgrade to '+fmtCr(p.row.min_credits)+' cr',true);
       break;
     case 'retire':
-      h+=`<div class="hint"><span class="chip review">Break in service</span> ${esc(p.lines[0])}</div>`+btn('retire','Retire these rights');
+      h+=`<div class="hint"><span class="chip review">Lapsed</span> ${esc(brkText(R.brk))}</div>`+btn('retire','Retire these rights');
       break;
     case 'drift':
       h+=`<div class="hint" title="${calcTip}" style="cursor:help">The calculation now gives ${esc(calcTxt)}. Stored rights stay as established — hover for why they differ.</div>`;
@@ -1387,11 +1402,13 @@ function adjRightsHTML(f){
     case 'manual':
       h+=`<span class="chip warn">Needs manual entry</span><div class="hint">${esc(p.lines[0])}</div>`+btn('manual','Enter manually',true);
       break;
+    // No calculated rights — but rights earned before Converge's scheduling
+    // data, or before a break, can still be entered by hand for anyone.
     case 'none':
-      h+=`<span class="muted">None</span><div class="hint">${esc(p.lines[0])}</div>`;
+      h+=`<span class="muted">None</span><div class="hint">${esc(p.lines[0])}</div>`+btn('manual','Set manually');
       break;
     case 'unknown':
-      h+=`<span class="muted">Can't determine</span><div class="hint">${esc(p.lines[0])}</div>`;
+      h+=`<span class="muted">Can't determine</span><div class="hint">${esc(p.lines[0])}</div>`+btn('manual','Set manually');
       break;
   }
   if(a&&R.action!=='manual')h+=btn('manual','Correct manually');
@@ -1403,7 +1420,9 @@ function adjRightsHTML(f){
 function adjRightsFlag(f){
   const R=adjRightsInfo(f);
   if(RIGHTS_ACTION[R.action])return {kind:'action',text:RIGHTS_ACTION[R.action].chip};
-  const g=CURRENT_AY?adjRightsForAY(f,CURRENT_AY):null;
+  // Short of rights: only flagged while Current — dormant rights during a
+  // break aren't a scheduling problem (the profile still shows the numbers).
+  const g=(CURRENT_AY&&adjCurrent(f).state==='on')?adjRightsForAY(f,CURRENT_AY):null;
   if(g){
     const asg=adjAssigned(f,CURRENT_AY), min=+g.min_credits;
     if(asg.total<min)return {kind:'short',text:`Rights short ${fmtCr(min-asg.total)} cr`,
@@ -1473,7 +1492,7 @@ async function adjRightsAct(act,fid){
   if(act==='retire'){
     showCfm('Retire assignment rights?',`Retire ${full(f)}'s assignment rights?`,async()=>{
       if(await establishRights(fid,null,'● Rights retired'))await afterRightsChange(fid);
-    },`${p.lines[0]}\n\nThe record is kept as history; rights are re-established with the next qualifying appointment.`);
+    },`${brkText(R.brk)||p.lines[0]}\n\nThe record is kept as history. New rights come from the next qualifying appointment, or a manual entry.`);
     return;
   }
   if(p.status!=='calc')return;
@@ -1535,8 +1554,8 @@ function rightsRows(showAll){
     .filter(x=>showAll||['establish','upgrade','retire','manual','drift'].includes(x.R.action))
     .sort((a,b)=>String(a.f.last_name||'').localeCompare(String(b.f.last_name||'')));
 }
-const RIGHTS_ACTION_LABEL={establish:'Establish',upgrade:'Upgrade to 2-year',retire:'Retire (break in service)',
-  manual:'Enter manually',drift:'Differs from calculation',ok:'In place',none:'None (term-by-term)',unknown:'Can\'t determine'};
+const RIGHTS_ACTION_LABEL={establish:'Establish',upgrade:'Upgrade to 2-year',retire:'Retire (lapsed — 3+ yr break)',
+  manual:'Enter manually',drift:'Differs from calculation',ok:'In place',none:'None calculated',unknown:'Can\'t determine'};
 function renderRightsReview(){
   const rows=rightsRows($('adjr-all').checked);
   const bulk=r=>['establish','upgrade','retire'].includes(r.R.action);
@@ -1547,7 +1566,7 @@ function renderRightsReview(){
       const p=R.calc;
       return `<tr><td>${bulk({R})?`<input type="checkbox" class="adjr-pick" data-fid="${esc(f.id)}" checked style="width:auto">`:''}</td>
         <td><a href="?id=${esc(f.id)}" data-adjr-go="${esc(f.id)}" style="color:var(--teal);font-weight:600">${esc(f.last_name||'')}, ${esc(f.first_name||'')}</a></td>
-        <td>${esc(RIGHTS_ACTION_LABEL[R.action]||R.action)}${R.action==='manual'?` <button type="button" class="btn btn-s" data-adjr="manual" data-fid="${esc(f.id)}">Enter…</button>`:''}</td>
+        <td>${esc(RIGHTS_ACTION_LABEL[R.action]||R.action)} <button type="button" class="btn btn-s" data-adjr="manual" data-fid="${esc(f.id)}" title="Enter or correct rights by hand — e.g. earned before Converge's scheduling data or before a break">${R.action==='manual'?'Enter…':R.active?'Correct…':'Set…'}</button>${R.active&&R.brk&&!R.brk.lapsed&&R.brk.ongoing?'<div class="hint">Dormant — on a break</div>':''}</td>
         <td title="${esc(rightsBasis(R.active))}">${R.active?esc(rightsSummary(R.active)):'<span class="muted">—</span>'}</td>
         <td title="${esc((p.lines||[]).join('\n'))}" style="cursor:help">${p.status==='calc'?esc(fmtCr(p.row.min_credits)+' cr · '+RIGHTS_TIER[p.tier]):'<span class="muted">'+esc((p.lines||[''])[0])+'</span>'}</td></tr>`;
     }).join('')+'</tbody></table>'
@@ -3253,7 +3272,7 @@ function wire(){
 
 /* ─── BOOT ─────────────────────────────────────────────────── */
 (async function boot(){
-  console.log('%c[SPH faculty] build 2026-10-14a — PSU adjunct evaluation offered/completed dates','color:#0a7');
+  console.log('%c[SPH faculty] build 2026-10-14b — manual assignment rights for anyone; rights kept through breaks (lapse after 3 yrs)','color:#0a7');
   wire();
   // A magic-link return lands here with tokens in the hash; the subscription
   // registered inside initSupabase() gives Supabase a beat to consume them

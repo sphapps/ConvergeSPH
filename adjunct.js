@@ -7,8 +7,8 @@
    page renders the results its own way.
 
    Load it with a version query so GitHub Pages / browser caches pick up
-   changes:  <script src="adjunct.js?v=2026-10-01h"></script>
-   …and bump the query whenever this file changes.
+   changes:  <script src="adjunct.js?v=2026-10-14a"></script>
+   …and bump the query whenever this file changes — in BOTH pages.
 
    USAGE
      ConvergeAdj.setData({terms, offerings, courses, faculty, overrides, rights})
@@ -173,6 +173,7 @@ const courseName=c=>c?String(c.full_name).split(':')[0].trim():'(course removed)
 function adjCreditLoadDetail(f){
   if(CL[f.id])return CL[f.id];
   const out={total:null,since:null,resetAfter:null,reset:false,hadBreak:false,runStartIdx:null,
+             lastBreakLen:0,lastBreakAfter:null,
              byTerm:[],items:[],rows:[],flagged:[],notes:[]};
   if(CUR_TERM_IDX<0){out.notes.push('Term dates not set — can\'t tell which terms have happened.');return (CL[f.id]=out);}
   const hire=N(f.start_date)?String(f.start_date).slice(0,10):null;
@@ -186,11 +187,16 @@ function adjCreditLoadDetail(f){
   const taught=new Set(offs.map(x=>x.i));
   // Walk the term sequence: a run of ADJ_BREAK_TERMS untaught terms after
   // some teaching is a break; counting restarts at the next term taught.
+  // The most recent COMPLETED break's length is kept (lastBreakLen) because
+  // assignment rights lapse after a long enough one — see adjRightsBreak().
   let runStart=null, gap=0, lastBreakEnd=null;
   for(let i=0;i<=CUR_TERM_IDX;i++){
     if(taught.has(i)){
       if(runStart===null)runStart=i;
-      else if(gap>=ADJ_BREAK_TERMS){lastBreakEnd=i-1;runStart=i;}
+      else if(gap>=ADJ_BREAK_TERMS){
+        lastBreakEnd=i-1;runStart=i;
+        out.lastBreakLen=gap;out.lastBreakAfter=TERM_SEQ[i-gap-1].code;
+      }
       gap=0;
     }else if(runStart!==null)gap++;
   }
@@ -250,9 +256,10 @@ const adjCreditLoad=f=>adjCreditLoadDetail(f).total;
      A break that is the current stretch → term-by-term.
    · "Following AY" = the first FALL term after the term eligibility was
      reached. (Fall 2020 + 8 cr in Fall 2020 → 9-month from Fall 2021.)
-   · Evaluation: assumed complete for now (ADJ_EVAL_ASSUMED). When it's
-     tracked, a 2-year upgrade takes effect the first Fall after BOTH
-     eligibility and the evaluation — which is what makes the CBA's
+   · Evaluation: assumed complete for now (ADJ_EVAL_ASSUMED). Offered /
+     completed dates are recorded in faculty_psu_adjunct but don't feed this
+     yet. When they do, a 2-year upgrade takes effect the first Fall after
+     BOTH eligibility and the evaluation — which is what makes the CBA's
      "eligible Winter 2020 → Fall 2021" example come out right.
    · Pre-9/16/2014 exception uses the Start Date (SPH's), as a stand-in for
      "employed by PSU", and only when there's been no break since.
@@ -270,7 +277,7 @@ const contractLabel=v=>(CONTRACT_TYPES.find(c=>c.v===v)||{}).label||'';
 const ADJ_9MO={years:2,credits:8};
 const ADJ_2YR={years:3,credits:20};
 const ADJ_PRE2014='2014-09-16';
-const ADJ_EVAL_ASSUMED=true;   // Art. 8 §4 evaluation not tracked yet
+const ADJ_EVAL_ASSUMED=true;   // Art. 8 §4 evaluation dates recorded, not yet used here
 const addYears=(iso,n)=>(+iso.slice(0,4)+n)+iso.slice(4,10);
 // Term in which a date falls: the latest term started on or before it.
 // -1 = before Converge's history; null = the date hasn't arrived yet.
@@ -406,7 +413,7 @@ function adjApptOrder(f){const r=adjRanking().rank[f.id];return r==null?null:r;}
    course units available, their appointment must be rounded up."
    "Once established, assignment rights remain constant."
 
-   As implemented (decisions, Tim 10/1/26):
+   As implemented (decisions, Tim 10/1/26 and 10/14/26):
    · Rights are STORED (faculty_psu_adjunct_rights), established once and
      locked. This calculates what they SHOULD be; the stored row is what
      they ARE. A mismatch is reported, never silently "fixed".
@@ -428,12 +435,20 @@ function adjApptOrder(f){const r=adjRanking().rank[f.id];return r==null?null:r;}
      counted teaching, then to 4 cr (flagged).
    · Minimum = greater of floor (1 or 2 courses × size) and the average,
      rounded UP to a whole number of courses.
-   · A break in service ends the active rights (they're re-established with
-     the next qualifying appointment).
+   · BREAKS IN SERVICE (10/14/26): a break resets the accumulated credit load
+     (so appointment order) and the contract-type clock — NOT the rights.
+     Stored rights keep their credit value, dormant while the adjunct isn't
+     teaching, and apply again when they return. They lapse only after more
+     than ADJ_RIGHTS_RETAIN_TERMS (3 years) without teaching; Converge then
+     proposes retiring them (an admin still confirms). A 9-month → 2-year
+     upgrade is still offered when the restarted clock reaches it.
    · Can't calculate → manual entry, with a required note: pre-2014 hires,
-     eligibility before Converge's history, a contract-type override that
-     disagrees with the calculation. */
+     eligibility before Converge's history, adjuncts whose rights predate
+     Converge's scheduling data, rights earned before a break with nothing
+     stored, a contract-type override that disagrees with the calculation.
+     Manual entry is available for every PSU adjunct, eligible or not. */
 const ADJ_DEFAULT_COURSE=4;
+const ADJ_RIGHTS_RETAIN_TERMS=12;   // 3 years (summer included) without teaching
 function modeSmallest(vals){
   const n={}; vals.forEach(v=>{n[v]=(n[v]||0)+1;});
   let best=null,bc=0;
@@ -469,15 +484,15 @@ function adjRightsCalc(f,wantTier){
   const save=r=>(RT[key]=r);
   const ci=adjContractInfo(f), c=ci.calc;
   if(!ci.type&&!c.type)return save({status:'unknown',lines:[c.lines[0]||'Can\'t determine contract type.']});
-  if(c.reset)return save({status:'none',reason:'break',lines:['No assignment rights — break in service. Re-established with the next qualifying appointment.']});
+  if(c.reset)return save({status:'none',reason:'break',lines:[`Break in service — accumulated credit load reset. Stored rights keep their value for up to 3 years without teaching; rights earned before the break with nothing stored need a manual entry.`]});
   if(ci.manual){
-    if(ci.type==='term')return save({status:'none',reason:'term',lines:['Term-by-term (set manually) — no assignment rights.']});
+    if(ci.type==='term')return save({status:'none',reason:'term',lines:['Term-by-term (set manually) — no calculated rights. Enter by hand if rights were earned earlier.']});
     if(ci.type!==c.type)return save({status:'manual',tier:ci.type,lines:[`Contract type is set manually (${contractLabel(ci.type)}); the calculation can't supply its basis. Enter the rights by hand.`]});
   }
   if(c.pre2014)return save({status:'manual',tier:'pre2014',lines:['Hired before Sept 16, 2014: rights are the greater of 2 courses or the AY14-15/AY15-16 average, which predate Converge. Enter by hand.']});
   const tier=wantTier||pickRightsTier(f,c);
   const t=tier==='2yr'?c.t2:tier==='9mo'?c.t9:null;
-  if(!t||t.elig==null)return save({status:'none',reason:'term',lines:['Term-by-term — no assignment rights yet.']});
+  if(!t||t.elig==null)return save({status:'none',reason:'term',lines:['Term-by-term — no calculated rights yet. Enter by hand if rights were earned before Converge\'s history or before a break.']});
   const floor=tier==='2yr'?2:1;
   if(t.elig===-1)return save({status:'manual',tier,lines:[`Eligible for ${contractLabel(tier)} before Converge's term history began, so the eligibility window can't be measured. Enter by hand.`]});
   const d=adjCreditLoadDetail(f);
@@ -520,12 +535,39 @@ function adjRightsCalc(f,wantTier){
     floor_courses:floor, course_size:size, min_credits:r1(min)
   },effPending:t.eff==null});
 }
+/* Break in service as it bears on STORED rights.
+   null when there's no break to speak of. Otherwise:
+     ongoing   true = the break is the current stretch (no teaching since last)
+     terms     untaught terms in the break (through today's term if ongoing)
+     last      code of the last term taught before the break
+     lapsed    true when the break exceeds ADJ_RIGHTS_RETAIN_TERMS AND the
+               active rights predate it (rights set after the adjunct came
+               back — e.g. a manual entry — are deliberate, so never lapse)
+     lapseTerm code of the first term in which, still untaught, rights lapse
+               (ongoing breaks only; null if that term isn't in terms yet) */
+function adjRightsBreak(f,active){
+  const d=adjCreditLoadDetail(f);
+  if(d.reset&&d.resetAfter){
+    const li=termIdx(d.resetAfter), gap=CUR_TERM_IDX-li, lt=li+ADJ_RIGHTS_RETAIN_TERMS+1;
+    return {ongoing:true,terms:gap,last:d.resetAfter,lapsed:gap>ADJ_RIGHTS_RETAIN_TERMS,
+            lapseTerm:lt<TERM_SEQ.length?TERM_SEQ[lt].code:null};
+  }
+  if(d.lastBreakLen>ADJ_RIGHTS_RETAIN_TERMS&&d.runStartIdx!=null){
+    const back=TERM_SEQ[d.runStartIdx];
+    const backDate=String(back.start_date||'').slice(0,10);
+    const setAfterReturn=active&&backDate&&String(active.established_at||'').slice(0,10)>=backDate;
+    return {ongoing:false,terms:d.lastBreakLen,last:d.lastBreakAfter,
+            lapsed:!!active&&!setAfterReturn,lapseTerm:null};
+  }
+  if(d.lastBreakLen)return {ongoing:false,terms:d.lastBreakLen,last:d.lastBreakAfter,lapsed:false,lapseTerm:null};
+  return null;
+}
 /* Rights that GOVERN a given academic year. A 2-year row established now
    that starts next Fall doesn't change this year: the row in force is the
    one with the latest effective term on or before the AY's Fall (ties → the
-   most recently established, i.e. a correction wins). A row retired for a
-   break in service (superseded with nothing after it) stops applying to AYs
-   that begin after it was retired. */
+   most recently established, i.e. a correction wins). A row retired (lapsed
+   after a long break, superseded with nothing after it) stops applying to
+   AYs that begin after it was retired. */
 const tKey=code=>{const i=code?termIdx(code):-1;return i;};   // -1 = before history
 function adjRightsForAY(f,ay){
   const rows=RIGHTS[f.id]||[];
@@ -547,26 +589,29 @@ function adjRightsForAY(f,ay){
 
 /* What, if anything, needs doing about this adjunct's stored rights.
    action:
-     ok        stored rights in place and consistent with the calculation
+     ok        stored rights in place (dormant during a break of up to 3 years)
      drift     stored rights in place, but the calculation now differs
                (informational — rights are constant once established)
      establish no stored rights; calculated rights ready to save
      upgrade   stored 9-month rights; calculated 2-year rights ready
-     retire    stored rights, but a break in service has ended them
+     retire    stored rights lapsed: more than 3 years without teaching
      manual    rights needed but can't be calculated — enter by hand
-     none      no rights apply (term-by-term)
-     unknown   can't tell (no start date / term dates) */
+     none      no calculated rights (term-by-term, or a break with nothing
+               stored); manual entry still available
+     unknown   can't tell (no start date / term dates)
+   brk is adjRightsBreak()'s result, for display. */
 function adjRightsInfo(f){
-  const active=adjRightsActive(f), p=adjRightsCalc(f);
+  const active=adjRightsActive(f), p=adjRightsCalc(f), brk=adjRightsBreak(f,active);
   let action;
-  if(p.status==='unknown')action=active?'ok':'unknown';
-  else if(p.status==='none')action=active?(p.reason==='break'?'retire':'ok'):'none';
+  if(active&&brk&&brk.lapsed)action='retire';
+  else if(p.status==='unknown')action=active?'ok':'unknown';
+  else if(p.status==='none')action=active?'ok':'none';
   else if(p.status==='manual')action=active?'ok':'manual';
   else if(!active)action='establish';
   else if(active.tier==='9mo'&&p.tier==='2yr')action='upgrade';
   else if(!active.is_override&&active.tier===p.tier&&+active.min_credits!==+p.row.min_credits)action='drift';
   else action='ok';
-  return {active,calc:p,action};
+  return {active,calc:p,action,brk};
 }
 /* Credits assigned in an academic year (Fall–Spring; summer excluded, as it
    is from the rights calculation), co-taught ÷ 2. Includes future terms, so
@@ -589,12 +634,12 @@ function adjAssigned(f,ay){
 /* ─── EXPORTS ──────────────────────────────────────────────────── */
 const API={
   setData,localISODate,
-  ADJ_CAT,ADJ_WINDOW,ADJ_BREAK_TERMS,ADJ_EVAL_ASSUMED,CONTRACT_TYPES,
+  ADJ_CAT,ADJ_WINDOW,ADJ_BREAK_TERMS,ADJ_EVAL_ASSUMED,ADJ_RIGHTS_RETAIN_TERMS,CONTRACT_TYPES,
   termIdx,termLabel,isPSUAdj,isInactive,adjNoStart,isSummerTerm,isFallTerm,parseCredits,
   adjCurrent,adjCurrentTitle,adjCreditLoadDetail,adjCreditLoad,
   contractTier,contractLabel,adjContractCalc,adjContractInfo,adjContract,
   adjReviewInfo,adjReviewEligible,adjRanking,adjApptOrder,
-  adjRightsActive,adjRightsHistory,adjRightsCalc,adjRightsInfo,adjRightsForAY,adjAssigned,
+  adjRightsActive,adjRightsHistory,adjRightsCalc,adjRightsBreak,adjRightsInfo,adjRightsForAY,adjAssigned,
   // read-only views of state, for pickers and labels
   terms:()=>TERM_SEQ.slice(), academicYears:()=>AY_SEQ.slice(),
   currentTerm:()=>CUR_TERM_IDX>=0?TERM_SEQ[CUR_TERM_IDX].code:null
