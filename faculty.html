@@ -14,7 +14,7 @@
 </script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
 <!-- Shared PSU adjunct calculations (also loaded by scheduling.html). Bump ?v= on every change. -->
-<script src="adjunct.js?v=2026-10-14c"></script>
+<script src="adjunct.js?v=2026-10-15a"></script>
 <style>
 /* ═══ TOKENS (shared with the scheduling app) ════════════════
    Kept in sync with scheduling.html — if you change a value here, change it there.
@@ -88,6 +88,8 @@ header a.xlink:hover{background:rgba(255,255,255,.1);color:white}
   border:none;background:none;font-size:13px;color:var(--text);cursor:pointer;
   display:flex;align-items:center;justify-content:space-between;gap:10px;font-family:inherit}
 .nav-dd-menu button:hover{background:var(--lgray);color:var(--teal)}
+/* Group divider inside the dropdown (e.g. the PSU adjunct tools). */
+.nav-dd-sep{height:1px;background:var(--mgray);margin:4px 6px}
 
 /* Pending faculty_edit_requests signal. Two spots show the same count: the
    dropdown row (so it's visible once opened) and a standalone header badge
@@ -308,6 +310,18 @@ tbody tr.rowflash td{animation:rowflash 1.4s ease-out}
 .adjbox .note{grid-column:1/-1;font-size:11px;color:var(--dgray)}
 .trow a:hover{text-decoration:underline}
 .trow .meta{color:var(--dgray);font-size:12px;margin-left:auto;text-align:right;white-space:nowrap}
+/* PSU adjunct reports (Outreach / Current Adjuncts). The table sits inside a
+   modal, so its header sticks to the scroll box, not the page. */
+.rep-tb{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:8px}
+.rep-tb select{font-size:13px;padding:6px 10px;border:1px solid var(--mgray);border-radius:5px;font-family:inherit;background:var(--surface);color:var(--text)}
+.rep-tb .cnt{margin-left:auto}
+.rep-wrap{max-height:58vh;overflow:auto;border:1px solid var(--mgray);border-radius:6px}
+.rep-wrap table{font-size:12px}
+.rep-wrap thead th{padding:7px 10px}
+.rep-wrap tbody td{padding:7px 10px;font-size:12px}
+.rep-wrap td.num{text-align:right;white-space:nowrap}
+.rep-wrap a{color:var(--teal);font-weight:600;text-decoration:none}
+.rep-wrap a:hover{text-decoration:underline}
 
 /* ═══ MODAL ═════════════════════════════════════════════════ */
 .mo{display:none;position:fixed;inset:0;background:var(--scrim);z-index:1000;align-items:flex-start;justify-content:center;padding:40px 16px;overflow:auto}
@@ -315,7 +329,7 @@ tbody tr.rowflash td{animation:rowflash 1.4s ease-out}
 .mc{background:var(--surface);border-radius:8px;width:100%;max-width:760px;box-shadow:0 20px 50px rgba(0,0,0,.25)}
 .mc.sm{max-width:420px}
 /* Stacking: these can open on top of the Assignment Rights review. */
-#mo-rights-man{z-index:1050}
+#mo-rights-man,#mo-rights-void{z-index:1050}
 #mo-cfm{z-index:1100}
 .mh{padding:14px 20px;border-bottom:1px solid var(--mgray);display:flex;align-items:center}
 .mh h3{font-size:15px;color:var(--navytx);font-weight:600}
@@ -389,7 +403,10 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
       <div class="nav-dd-menu" id="admin-tools-menu">
         <button id="btn-req-queue" title="Reviewing does not apply the change — you still make the edit yourself">📝 Edit Requests <span class="req-badge" id="req-badge-dd"></span></button>
         <button id="btn-manage-lists">🗂 Manage Lists</button>
-        <button id="btn-adj-rights" title="Establish, upgrade, or retire PSU adjunct assignment rights (CBA 8 §3.6)">⚖ Assignment Rights</button>
+        <div class="nav-dd-sep"></div>
+        <button id="btn-adj-rights" title="Establish, upgrade, retire or remove PSU adjunct assignment rights (CBA 8 §3.6)">⚖ Assignment Rights</button>
+        <button id="btn-adj-outreach" title="Current, review-eligible PSU adjuncts who haven't been offered the professional evaluation">📣 Adjunct Outreach Report</button>
+        <button id="btn-adj-current" title="Every current PSU adjunct: rank, start date, appointment, assignment rights, accumulated credits, appointment order">📋 Current Adjunct Report</button>
       </div>
     </div>
     <span id="save-status">Ready</span>
@@ -755,7 +772,7 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
   <div class="mc lg">
     <div class="mh"><h3>PSU Adjunct Assignment Rights</h3><button class="x" data-close="mo-adjr">×</button></div>
     <div class="mb">
-      <div class="hint" style="margin:0 0 10px">PSUFA CBA 8 §3.6: 9-month — greater of 1 course or the average annual load in the eligibility window; 2-year — greater of 2 courses or that average; rounded up to whole courses. Once saved, rights are locked. A break in service resets accumulated credit load, not rights: they keep their value and lapse only after more than 3 years without teaching. Hover any value for its basis.</div>
+      <div class="hint" style="margin:0 0 10px">PSUFA CBA 8 §3.6: 9-month — greater of 1 course or the average annual load in the eligibility window; 2-year — greater of 2 courses or that average; rounded up to whole courses. Once saved, rights are locked. A break in service resets accumulated credit load, not rights: they keep their value and lapse only after more than 3 years without teaching. Any stored rights can be removed (with a reason) — removed rights are treated as never having applied. Hover any value for its basis.</div>
       <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--dgray);margin-bottom:10px;cursor:pointer">
         <input type="checkbox" id="adjr-all" style="width:auto;flex:none"> Show every PSU adjunct — to set rights by hand for anyone, eligible or not (e.g. earned before Converge's scheduling data)
       </label>
@@ -785,8 +802,51 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
       <div class="full"><div class="fhint" id="rm-err" style="color:var(--red);font-weight:600"></div></div>
     </div></div>
     <div class="mf">
+      <button class="btn btn-d lft" id="btn-rm-void" style="display:none" title="Remove the rights currently on record — they'll be treated as never having applied">Remove rights…</button>
       <button class="btn" data-close="mo-rights-man">Cancel</button>
       <button class="btn btn-p" id="btn-rm-save">Save &amp; lock</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── ASSIGNMENT RIGHTS: REMOVE (VOID) (admin) ─────────────────── -->
+<div class="mo" id="mo-rights-void">
+  <div class="mc sm">
+    <div class="mh"><h3 id="rv-title">Remove Assignment Rights</h3><button class="x" data-close="mo-rights-void">×</button></div>
+    <div class="mb f"><div class="fg">
+      <div class="full"><div class="fhint" id="rv-ctx" style="white-space:pre-wrap;font-size:12px"></div></div>
+      <div class="full"><label>Reason (required)</label><textarea id="rv-note" placeholder="Why these rights are being removed — e.g. entered for the wrong person, superseded by HR records, rights waived"></textarea></div>
+      <div class="full"><div class="fhint" id="rv-err" style="color:var(--red);font-weight:600"></div></div>
+    </div></div>
+    <div class="mf">
+      <button class="btn" data-close="mo-rights-void">Cancel</button>
+      <button class="btn btn-d" id="btn-rv-save">Remove rights</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── PSU ADJUNCT REPORTS (admin) ───────────────────────────────── -->
+<div class="mo" id="mo-adjrep">
+  <div class="mc lg">
+    <div class="mh"><h3 id="adjrep-title">PSU Adjunct Reports</h3><button class="x" data-close="mo-adjrep">×</button></div>
+    <div class="mb">
+      <div class="rep-tb">
+        <select id="adjrep-kind">
+          <option value="outreach">Outreach — current, eligible, no evaluation offered</option>
+          <option value="current">Current adjuncts</option>
+        </select>
+        <span class="cnt" id="adjrep-cnt"></span>
+      </div>
+      <div class="hint" id="adjrep-hint" style="margin:0 0 10px"></div>
+      <div class="rep-wrap"><table>
+        <thead><tr id="adjrep-th"></tr></thead>
+        <tbody id="adjrep-tb"></tbody>
+      </table></div>
+    </div>
+    <div class="mf">
+      <button class="btn lft" id="btn-adjrep-copy" title="Copy the listed adjuncts' emails, semicolon-separated for Outlook To/BCC">📋 Copy emails</button>
+      <button class="btn" data-close="mo-adjrep">Close</button>
+      <button class="btn btn-p" id="btn-adjrep-csv">⬇ CSV</button>
     </div>
   </div>
 </div>
@@ -1351,8 +1411,8 @@ function adjEvalOrderBad(){
 /* ── ASSIGNMENT RIGHTS (CBA 8 §3.6) ─────────────────────────────
    Shows the STORED rights (what they are), how they compare to the
    calculation (what they should be), and credits assigned this AY against
-   them. Changes happen only through establishRights() — the buttons here
-   and the Admin Tools ▾ Assignment Rights review both call it. */
+   them. Changes happen only through establishRights() / voidRights() — the
+   buttons here and the Admin Tools ▾ Assignment Rights review call them. */
 const RIGHTS_TIER={'9mo':'9-month','2yr':'2-year','pre2014':'2-year (pre-2014)'};
 const fmtCr=x=>{const n=+x;return isNaN(n)?'—':String(Math.round(n*100)/100);};
 // Plain-text explanation of a stored row, for tooltips and the change log.
@@ -1367,6 +1427,10 @@ function rightsBasis(a){
   return L.join('\n');
 }
 const rightsSummary=a=>a?`${RIGHTS_TIER[a.tier]||a.tier} · ${fmtCr(a.min_credits)} cr from ${a.effective_term?termLabel(a.effective_term):'before Converge history'}${a.is_override?' (manual)':' (calculated)'}`:null;
+// One history line: superseded (replaced or retired) vs. removed (voided).
+const rightsHistLine=r=>ConvergeAdj.isVoided(r)
+  ?`${rightsSummary(r)} — REMOVED ${String(r.voided_at).slice(0,10)}${r.voided_by?' by '+r.voided_by:''}${r.void_reason?': '+r.void_reason:''}`
+  :`${rightsSummary(r)} — superseded ${String(r.superseded_at).slice(0,10)}${r.superseded_by?' by '+r.superseded_by:''}`;
 const RIGHTS_ACTION={
   establish:{chip:'Rights: establish',btn:'Establish'},
   upgrade:  {chip:'Rights: upgrade to 2-year',btn:'Upgrade to 2-year'},
@@ -1437,8 +1501,13 @@ function adjRightsHTML(f){
       break;
   }
   if(a&&R.action!=='manual')h+=btn('manual','Correct manually');
+  // Remove: any stored rights, calculated or manual (Tim, 10/15/26).
+  if(a)h+=btn('void','Remove…');
   const old=adjRightsHistory(f).filter(r=>r.superseded_at);
-  if(old.length)h+=`<div class="hint" style="cursor:help" title="${esc(old.map(r=>`${rightsSummary(r)} — superseded ${String(r.superseded_at).slice(0,10)}${r.superseded_by?' by '+r.superseded_by:''}`).join('\n'))}">History: ${old.length} earlier record${old.length>1?'s':''}</div>`;
+  if(old.length){
+    const nv=old.filter(r=>ConvergeAdj.isVoided(r)).length;
+    h+=`<div class="hint" style="cursor:help" title="${esc(old.map(rightsHistLine).join('\n'))}">History: ${old.length} earlier record${old.length>1?'s':''}${nv?` (${nv} removed)`:''}</div>`;
+  }
   return h;
 }
 // Directory: does this adjunct's rights need someone's attention?
@@ -1513,6 +1582,7 @@ async function establishRights(fid,row,okMsg){
 async function adjRightsAct(act,fid){
   const f=FAC.find(x=>String(x.id)===String(fid)); if(!f)return;
   if(act==='manual'){openRightsManual(fid);return;}
+  if(act==='void'){openRightsVoid(fid);return;}
   const R=adjRightsInfo(f), p=R.calc;
   if(act==='retire'){
     showCfm('Retire assignment rights?',`Retire ${full(f)}'s assignment rights?`,async()=>{
@@ -1533,10 +1603,12 @@ async function afterRightsChange(fid){
   if(fid&&stillViewing(fid))route(fid);
   else if(!new URL(window.location).searchParams.get('id'))renderDir();
   if($('mo-adjr').classList.contains('open'))renderRightsReview();
+  if($('mo-adjrep').classList.contains('open'))renderAdjReport();
 }
 
 /* Manual entry: pre-2014 hires, eligibility before Converge's history,
-   overrides, and corrections. Always a note. Supersedes any active row. */
+   overrides, and corrections. Always a note. Supersedes any active row.
+   When rights are already on record, the modal also offers Remove rights… */
 let rmId=null;
 function openRightsManual(fid){
   const f=FAC.find(x=>String(x.id)===String(fid)); if(!f)return;
@@ -1552,10 +1624,11 @@ function openRightsManual(fid){
   setv('rm-eff',(seed&&seed.effective_term)||'');
   setv('rm-note','');
   $('rm-ctx').textContent=[
-    a?'Currently: '+rightsSummary(a)+'. Saving replaces it (kept as history).':'No rights on record yet.',
+    a?'Currently: '+rightsSummary(a)+'. Saving replaces it (kept as history). To take it away instead, use Remove rights….':'No rights on record yet.',
     p.lines&&p.lines.length?'Calculation: '+p.lines.join(' '):''
   ].filter(Boolean).join('\n\n');
   $('rm-err').textContent='';
+  $('btn-rm-void').style.display=a?'':'none';
   openM('mo-rights-man');
 }
 async function saveRightsManual(){
@@ -1568,6 +1641,46 @@ async function saveRightsManual(){
   if(!await establishRights(rmId,row,'● Rights saved'))return;
   closeM('mo-rights-man');
   await afterRightsChange(rmId);
+}
+
+/* ── REMOVING RIGHTS (void) ─────────────────────────────────────
+   Any active row — calculated or manual — can be removed, with a reason.
+   void_adjunct_rights (faculty_psu_adjunct_rights_v2_void.sql) supersedes it
+   and stamps voided_at/by/reason in one UPDATE. A voided row is treated as
+   if it never applied (adjRightsForAY skips it), and nothing earlier is
+   restored: the adjunct is left with no stored rights, and the calculation
+   offers Establish again if they qualify. Logged as 'psu_adjunct_rights'. */
+let rvId=null;
+function openRightsVoid(fid){
+  const f=FAC.find(x=>String(x.id)===String(fid)); if(!f)return;
+  const a=adjRightsActive(f);
+  if(!a){setSS('Nothing to remove — no assignment rights on record');return;}
+  rvId=fid;
+  $('rv-title').textContent='Remove Assignment Rights — '+full(f);
+  $('rv-ctx').textContent=[
+    'On record: '+rightsSummary(a)+'.',
+    'Removing treats these rights as never having applied — to this academic year as well as future ones. Earlier records are not restored; if '+full(f)+' qualifies, the calculation will offer to establish rights again.',
+    'The record is kept as history, marked removed, with your reason.'
+  ].join('\n\n');
+  setv('rv-note','');
+  $('rv-err').textContent='';
+  closeM('mo-rights-man');
+  openM('mo-rights-void');
+  setTimeout(()=>{try{$('rv-note').focus();}catch(e){}},0);
+}
+async function saveRightsVoid(){
+  const reason=N(val('rv-note'));
+  if(!reason){$('rv-err').textContent='A reason is required.';return;}
+  const fid=rvId, f=FAC.find(x=>String(x.id)===String(fid));
+  const before=f?rightsSummary(adjRightsActive(f)):null;
+  $('rv-err').textContent='';
+  setSS('Removing…');
+  const {error}=await sb.rpc('void_adjunct_rights',{p_faculty_id:fid,p_by:currentUserEmail,p_reason:reason});
+  if(error){$('rv-err').textContent=error.message;setSS('⚠ '+error.message);return;}
+  await logChange('update',fid,f&&full(f),{assignment_rights:before},{assignment_rights:'Removed: '+reason},'psu_adjunct_rights');
+  setSS('● Rights removed');
+  closeM('mo-rights-void');
+  await afterRightsChange(fid);
 }
 
 /* Admin Tools ▾ Assignment Rights — the backfill and the yearly check.
@@ -1591,7 +1704,7 @@ function renderRightsReview(){
       const p=R.calc;
       return `<tr><td>${bulk({R})?`<input type="checkbox" class="adjr-pick" data-fid="${esc(f.id)}" checked style="width:auto">`:''}</td>
         <td><a href="?id=${esc(f.id)}" data-adjr-go="${esc(f.id)}" style="color:var(--teal);font-weight:600">${esc(f.last_name||'')}, ${esc(f.first_name||'')}</a></td>
-        <td>${esc(RIGHTS_ACTION_LABEL[R.action]||R.action)} <button type="button" class="btn btn-s" data-adjr="manual" data-fid="${esc(f.id)}" title="Enter or correct rights by hand — e.g. earned before Converge's scheduling data or before a break">${R.action==='manual'?'Enter…':R.active?'Correct…':'Set…'}</button>${R.active&&R.brk&&!R.brk.lapsed&&R.brk.ongoing?'<div class="hint">Dormant — on a break</div>':''}</td>
+        <td>${esc(RIGHTS_ACTION_LABEL[R.action]||R.action)} <button type="button" class="btn btn-s" data-adjr="manual" data-fid="${esc(f.id)}" title="Enter or correct rights by hand — e.g. earned before Converge's scheduling data or before a break">${R.action==='manual'?'Enter…':R.active?'Correct…':'Set…'}</button>${R.active?` <button type="button" class="btn btn-s" data-adjr="void" data-fid="${esc(f.id)}" title="Remove the stored rights — treated as never having applied">Remove…</button>`:''}${R.active&&R.brk&&!R.brk.lapsed&&R.brk.ongoing?'<div class="hint">Dormant — on a break</div>':''}</td>
         <td title="${esc(rightsBasis(R.active))}">${R.active?esc(rightsSummary(R.active)):'<span class="muted">—</span>'}</td>
         <td title="${esc((p.lines||[]).join('\n'))}" style="cursor:help">${p.status==='calc'?esc(fmtCr(p.row.min_credits)+' cr · '+RIGHTS_TIER[p.tier]):'<span class="muted">'+esc((p.lines||[''])[0])+'</span>'}</td></tr>`;
     }).join('')+'</tbody></table>'
@@ -1624,6 +1737,142 @@ function openRightsReview(){
   $('adjr-all').checked=false;
   renderRightsReview();
   openM('mo-adjr');
+}
+
+/* ── PSU ADJUNCT REPORTS (Admin Tools ▾) ────────────────────────
+   Two read-only lists, on screen with a CSV download. Both draw on the same
+   adjunct.js calculations as the profile and directory, so a number here
+   always matches the number there.
+
+   OUTREACH (Tim, 10/15/26) — who to offer the professional evaluation to:
+     · PSU Adjunct, not also Inactive
+     · Current (taught in the last ADJ_WINDOW terms)
+     · Review eligible — calculated "evaluation due" or "eligible (evaluation
+       assumed done)", or set manually to "Eligible — evaluation due". A manual
+       "Eligible — evaluation complete" is left out: the evaluation happened.
+       ("Assumed done" is included because that assumption is exactly what
+       an unrecorded offer date calls into question.)
+     · No Evaluation Offered date — and no Evaluation Completed date either
+       (a completed evaluation without an offer date is a data gap, not outreach).
+
+   CURRENT ADJUNCTS — every PSU adjunct who is Current: rank (title), start
+     (job begin) date, appointment (contract type), assignment rights on
+     record, accumulated credit load and appointment order. Sorted by
+     appointment order, then unranked people by name. Inactive-category
+     adjuncts who are still teaching are included and marked. */
+const ADJREP={kind:'outreach',rows:[]};
+const ADJREP_KINDS={
+  outreach:{title:'PSU Adjunct Outreach Report',
+    hint:`Current PSU adjuncts (taught in the last ${ConvergeAdj.ADJ_WINDOW} terms) who are review eligible and have no Evaluation Offered date. Eligible = calculated as due, or eligible with the evaluation only assumed done, or set manually to "evaluation due". Record the offer date on each profile (✎ Edit record) once it goes out.`,
+    cols:['Name','Email','Rank','Start Date','Appointment','Accum. CR','Eligible since / basis']},
+  current:{title:'Current PSU Adjunct Report',
+    hint:`Every PSU adjunct who taught in the last ${ConvergeAdj.ADJ_WINDOW} terms, in appointment order. Assignment rights are the rights on record (locked); "—" means none stored. Hover a value for its basis.`,
+    cols:['Appt Order','Name','Rank','Start Date','Appointment','Assignment Rights','Accum. CR']}
+};
+const isoDate=v=>N(v)?String(v).slice(0,10):'';
+function adjOutreachRows(){
+  return FAC.filter(f=>isPSUAdj(f)&&!isInactive(f)&&adjCurrent(f).state==='on').map(f=>{
+    const r=adjReviewInfo(f);
+    const elig=r.manual?r.state==='due':(r.state==='due'||r.state==='done');
+    if(!elig)return null;
+    if(adjEvalDate(f.id,'eval_offered_date')||adjEvalDate(f.id,'eval_completed_date'))return null;
+    const ci=adjContractInfo(f);
+    return {f,email:effEmail(f),rank:N(f.rank)||'',start:isoDate(f.start_date),
+      appt:ci.type?contractLabel(ci.type)+(ci.manual?' (manual)':''):'',
+      cr:adjCreditLoad(f),
+      basis:r.manual?'Set manually: evaluation due':(r.state==='due'?'Due — ':'Assumed done — ')+r.text};
+  }).filter(Boolean).sort((a,b)=>String(a.f.last_name||'').localeCompare(String(b.f.last_name||''))
+    ||String(a.f.first_name||'').localeCompare(String(b.f.first_name||'')));
+}
+function adjCurrentRows(){
+  const RK=adjRanking();
+  return FAC.filter(f=>isPSUAdj(f)&&adjCurrent(f).state==='on').map(f=>{
+    const ci=adjContractInfo(f), a=adjRightsActive(f), ord=RK.rank[f.id];
+    return {f,ord:ord==null?null:ord,tied:ord!=null&&RK.tied(f.id),inactive:isInactive(f),
+      rank:N(f.rank)||'',start:isoDate(f.start_date),
+      appt:ci.type?contractLabel(ci.type)+(ci.manual?' (manual)':''):'',
+      apptTip:(ci.calc.lines||[]).join('\n'),
+      rights:a,cr:adjCreditLoad(f),crTip:(adjCreditLoadDetail(f).notes||[]).join('\n')};
+  }).sort((a,b)=>((a.ord??1e9)-(b.ord??1e9))
+    ||String(a.f.last_name||'').localeCompare(String(b.f.last_name||''))
+    ||String(a.f.first_name||'').localeCompare(String(b.f.first_name||'')));
+}
+const repName=f=>`${f.last_name||''}${f.first_name?', '+f.first_name:''}`;
+const repLink=f=>`<a href="?id=${esc(f.id)}" data-rep-go="${esc(f.id)}">${esc(repName(f))}</a>`;
+const repDash='<span class="muted">—</span>';
+function renderAdjReport(){
+  const kind=ADJREP.kind=val('adjrep-kind')||'outreach', K=ADJREP_KINDS[kind];
+  $('adjrep-title').textContent=K.title;
+  $('adjrep-hint').textContent=K.hint;
+  $('btn-adjrep-copy').style.display=kind==='outreach'?'':'none';
+  $('adjrep-th').innerHTML=K.cols.map(c=>`<th>${esc(c)}</th>`).join('');
+  const rows=ADJREP.rows=kind==='outreach'?adjOutreachRows():adjCurrentRows();
+  $('adjrep-cnt').textContent=`${rows.length} adjunct${rows.length===1?'':'s'}`;
+  if(!rows.length){
+    $('adjrep-tb').innerHTML=`<tr><td colspan="${K.cols.length}" class="muted" style="padding:20px;text-align:center">${kind==='outreach'
+      ?'No current, review-eligible PSU adjuncts are waiting on an evaluation offer.'
+      :'No current PSU adjuncts.'}</td></tr>`;
+    return;
+  }
+  const d=v=>v?esc(fmtDate(v)):repDash;
+  if(kind==='outreach'){
+    $('adjrep-tb').innerHTML=rows.map(x=>`<tr>
+      <td>${repLink(x.f)}${adjNoStart(x.f)?' <span class="chip review">No start date</span>':''}</td>
+      <td>${x.email?`<a href="mailto:${esc(x.email)}">${esc(x.email)}</a>`:repDash}</td>
+      <td>${esc(x.rank)||repDash}</td><td>${d(x.start)}</td><td>${esc(x.appt)||repDash}</td>
+      <td class="num">${x.cr==null?repDash:esc(fmtCr(x.cr))}</td>
+      <td style="max-width:320px">${esc(x.basis)}</td></tr>`).join('');
+  }else{
+    $('adjrep-tb').innerHTML=rows.map(x=>`<tr>
+      <td class="num">${x.ord!=null?`#${x.ord}${x.tied?' <span class="muted">tied</span>':''}`
+        :`<span class="muted">${x.inactive?'— Inactive':'—'}</span>`}</td>
+      <td>${repLink(x.f)}${adjNoStart(x.f)?' <span class="chip review">No start date</span>':''}</td>
+      <td>${esc(x.rank)||repDash}</td><td>${d(x.start)}</td>
+      <td title="${esc(x.apptTip)}" style="cursor:help">${esc(x.appt)||'<span class="muted">Can\'t determine</span>'}</td>
+      <td title="${esc(rightsBasis(x.rights))}" style="cursor:help">${x.rights
+        ?`${esc(fmtCr(x.rights.min_credits))} cr / AY <span class="muted">· ${esc(RIGHTS_TIER[x.rights.tier]||x.rights.tier)}${x.rights.is_override?' · manual':''}</span>`
+        :repDash}</td>
+      <td class="num" title="${esc(x.crTip)}">${x.cr==null?repDash:esc(fmtCr(x.cr))}</td></tr>`).join('');
+  }
+}
+function openAdjReport(kind){
+  setv('adjrep-kind',kind);
+  renderAdjReport();
+  openM('mo-adjrep');
+}
+function expAdjReport(){
+  const kind=ADJREP.kind, rows=ADJREP.rows, today=new Date().toISOString().slice(0,10);
+  if(kind==='outreach'){
+    const out=[['Last Name','First Name','Email','Rank','Start Date','Appointment','Accumulated CR','Eligibility']];
+    rows.forEach(x=>out.push([x.f.last_name||'',x.f.first_name||'',x.email,x.rank,x.start,x.appt,
+      x.cr==null?'':fmtCr(x.cr),x.basis]));
+    dlCSV(out,`SPH_PSU_Adjunct_Outreach_${today}.csv`);
+  }else{
+    const out=[['Appointment Order','Last Name','First Name','Rank','Start Date','Appointment',
+      'Assignment Rights (cr/AY)','Rights Basis','Rights From','Rights Entry','Accumulated CR','Notes']];
+    rows.forEach(x=>{const a=x.rights;
+      out.push([x.ord==null?'':x.ord+(x.tied?' (tied)':''),x.f.last_name||'',x.f.first_name||'',x.rank,x.start,x.appt,
+        a?fmtCr(a.min_credits):'',a?(RIGHTS_TIER[a.tier]||a.tier):'',
+        a?(a.effective_term?termLabel(a.effective_term):'before Converge history'):'',
+        a?(a.is_override?'manual':'calculated'):'',
+        x.cr==null?'':fmtCr(x.cr),
+        [x.inactive?'Also Inactive — not ranked':'',adjNoStart(x.f)?'No start date':''].filter(Boolean).join('; ')]);});
+    dlCSV(out,`SPH_PSU_Current_Adjuncts_${today}.csv`);
+  }
+}
+async function copyAdjReportEmails(){
+  const list=[...new Set(ADJREP.rows.map(x=>x.email).filter(Boolean).map(e=>e.toLowerCase()))];
+  const missing=ADJREP.rows.filter(x=>!x.email).length;
+  const btn=$('btn-adjrep-copy'),orig='📋 Copy emails';
+  if(!list.length){btn.textContent='No emails to copy';setTimeout(()=>btn.textContent=orig,2500);return;}
+  const text=list.join('; ');
+  try{await navigator.clipboard.writeText(text);}
+  catch(e){ // clipboard API blocked (e.g. non-secure context) — textarea fallback
+    const t=document.createElement('textarea');t.value=text;t.style.position='fixed';t.style.opacity='0';
+    document.body.appendChild(t);t.select();document.execCommand('copy');t.remove();
+  }
+  btn.textContent=`✓ Copied ${list.length}`+(missing?` (${missing} no email)`:'');
+  setTimeout(()=>btn.textContent=orig,3000);
 }
 
 // Employer bucket: OHSU/PSU are exact (case/whitespace-insensitive) matches;
@@ -3245,11 +3494,13 @@ function wire(){
   $('dm-collapse-all').onclick=()=>document.querySelectorAll('#dm-docs details.doc-cat-edit').forEach(d=>d.open=false);
   $('btn-save-docs').onclick=saveDocs;
   $('btn-manage-lists').onclick=openLists;
-  // Assignment rights — review list, bulk apply, manual entry.
+  // Assignment rights — review list, bulk apply, manual entry, remove.
   $('btn-adj-rights').onclick=openRightsReview;
   $('adjr-all').addEventListener('change',renderRightsReview);
   $('btn-adjr-apply').onclick=applyRightsReview;
   $('btn-rm-save').onclick=saveRightsManual;
+  $('btn-rm-void').onclick=()=>{if(rmId)openRightsVoid(rmId);};
+  $('btn-rv-save').onclick=saveRightsVoid;
   $('adjr-list').addEventListener('change',e=>{
     if(e.target.id==='adjr-check-all')document.querySelectorAll('#adjr-list .adjr-pick').forEach(c=>{c.checked=e.target.checked;});
     updateRightsApplyBtn();
@@ -3259,6 +3510,16 @@ function wire(){
     if(go_){e.preventDefault();closeM('mo-adjr');go(go_.dataset.adjrGo);return;}
     const b=e.target.closest('[data-adjr]');
     if(b)adjRightsAct(b.dataset.adjr,b.dataset.fid);
+  });
+  // PSU adjunct reports — Outreach and Current Adjuncts share one modal.
+  $('btn-adj-outreach').onclick=()=>openAdjReport('outreach');
+  $('btn-adj-current').onclick=()=>openAdjReport('current');
+  $('adjrep-kind').addEventListener('change',renderAdjReport);
+  $('btn-adjrep-csv').onclick=expAdjReport;
+  $('btn-adjrep-copy').onclick=copyAdjReportEmails;
+  $('adjrep-tb').addEventListener('click',e=>{
+    const a=e.target.closest('[data-rep-go]');
+    if(a){e.preventDefault();closeM('mo-adjrep');go(a.dataset.repGo);}
   });
   $('ld-key').addEventListener('change',e=>loadListIntoEditor(e.target.value));
   $('btn-save-list').onclick=saveListEdits;
@@ -3313,7 +3574,7 @@ function wire(){
 
 /* ─── BOOT ─────────────────────────────────────────────────── */
 (async function boot(){
-  console.log('%c[SPH faculty] build 2026-10-14d — Current = last 12 terms','color:#0a7');
+  console.log('%c[SPH faculty] build 2026-10-15a — remove rights, adjunct reports','color:#0a7');
   wire();
   // A magic-link return lands here with tokens in the hash; the subscription
   // registered inside initSupabase() gives Supabase a beat to consume them

@@ -7,7 +7,7 @@
    page renders the results its own way.
 
    Load it with a version query so GitHub Pages / browser caches pick up
-   changes:  <script src="adjunct.js?v=2026-10-14c"></script>
+   changes:  <script src="adjunct.js?v=2026-10-15a"></script>
    …and bump the query whenever this file changes — in BOTH pages.
 
    USAGE
@@ -21,7 +21,8 @@
        overrides  {facultyId: contract_type}  (faculty_psu_adjunct)
        reviewOverrides {facultyId: review_override}  (faculty_psu_adjunct;
                   optional — omitted means every review status is calculated)
-       rights     [faculty_psu_adjunct_rights rows]  (all, incl. superseded)
+       rights     [faculty_psu_adjunct_rights rows]  (all, incl. superseded
+                  and voided — select('*') so voided_at comes along)
      Call again after every reload — it clears every cache.
 
    Every function is also exported as a global under its historical name
@@ -471,7 +472,13 @@ function adjApptOrder(f){const r=adjRanking().rank[f.id];return r==null?null:r;}
      eligibility before Converge's history, adjuncts whose rights predate
      Converge's scheduling data, rights earned before a break with nothing
      stored, a contract-type override that disagrees with the calculation.
-     Manual entry is available for every PSU adjunct, eligible or not. */
+     Manual entry is available for every PSU adjunct, eligible or not.
+   · REMOVING rights (Tim, 10/15/26): any active row — calculated or manual —
+     can be VOIDED (faculty_psu_adjunct_rights_v2_void.sql). Void ≠ retire:
+     a retired row still governs the AY it was retired in; a voided row is
+     treated as if it never applied, to any AY. It stays in the table as
+     history (voided_at / voided_by / void_reason). Nothing is restored —
+     once removed, the calculation offers Establish again if they qualify. */
 const ADJ_DEFAULT_COURSE=4;
 const ADJ_RIGHTS_RETAIN_TERMS=12;   // 3 years (summer included) without teaching
 function modeSmallest(vals){
@@ -480,6 +487,7 @@ function modeSmallest(vals){
   Object.keys(n).map(Number).sort((a,b)=>a-b).forEach(v=>{if(n[v]>bc){best=v;bc=n[v];}});
   return best;
 }
+const isVoided=r=>!!(r&&r.voided_at);
 const adjRightsActive=f=>(RIGHTS[f.id]||[]).find(r=>!r.superseded_at)||null;
 const adjRightsHistory=f=>RIGHTS[f.id]||[];
 /* Which tier to propose:
@@ -592,10 +600,11 @@ function adjRightsBreak(f,active){
    one with the latest effective term on or before the AY's Fall (ties → the
    most recently established, i.e. a correction wins). A row retired (lapsed
    after a long break, superseded with nothing after it) stops applying to
-   AYs that begin after it was retired. */
+   AYs that begin after it was retired. A VOIDED row never governs any AY —
+   it's left out entirely, as if it had never been entered. */
 const tKey=code=>{const i=code?termIdx(code):-1;return i;};   // -1 = before history
 function adjRightsForAY(f,ay){
-  const rows=RIGHTS[f.id]||[];
+  const rows=(RIGHTS[f.id]||[]).filter(r=>!isVoided(r));
   if(!rows.length||!ay)return null;
   const ayTerms=TERM_SEQ.filter(t=>t.academic_year===ay);
   if(!ayTerms.length)return null;
@@ -665,7 +674,7 @@ const API={
   contractTier,contractLabel,adjContractCalc,adjContractInfo,adjContract,
   REVIEW_OVERRIDES,reviewOverrideLabel,adjReviewCalc,
   adjReviewInfo,adjReviewEligible,adjRanking,adjApptOrder,
-  adjRightsActive,adjRightsHistory,adjRightsCalc,adjRightsBreak,adjRightsInfo,adjRightsForAY,adjAssigned,
+  isVoided,adjRightsActive,adjRightsHistory,adjRightsCalc,adjRightsBreak,adjRightsInfo,adjRightsForAY,adjAssigned,
   // read-only views of state, for pickers and labels
   terms:()=>TERM_SEQ.slice(), academicYears:()=>AY_SEQ.slice(),
   currentTerm:()=>CUR_TERM_IDX>=0?TERM_SEQ[CUR_TERM_IDX].code:null
