@@ -4939,7 +4939,14 @@ function buildReportText(rows,from,to,actor,exSelfEmail,scopeNote){
       if(a.days||a.time)lines.push('           '+[a.days,a.time].filter(Boolean).join('  ')+(a.modality?'  ['+a.modality+']':''));
       addEntry(term,lines); shown++;
     }else if(r.action==='delete'){
-      addEntry(term,[when+' · '+who+tag,'  REMOVED  '+label]); shown++;
+      // The `before` snapshot carries the instructors the offering had at the
+      // moment it was removed — the line that matters most to whoever reads
+      // this (who just lost a course). Always printed, so an unstaffed removal
+      // reads as such rather than as a missing line.
+      const lines=[when+' · '+who+tag,'  REMOVED  '+label];
+      const inst=[b.instructor1,b.instructor2].filter(x=>String(x||'').trim()).join(' & ');
+      lines.push('           instructor: '+(inst||'(none assigned)'));
+      addEntry(term,lines); shown++;
     }else{ // update
       const sup=suppress[r.offering_sid]||new Set();
       const diffs=[];
