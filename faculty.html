@@ -407,6 +407,7 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
         <button id="btn-adj-rights" title="Establish, upgrade, retire or remove PSU adjunct assignment rights (CBA 8 §3.6)">⚖ Assignment Rights</button>
         <button id="btn-adj-outreach" title="Current, review-eligible PSU adjuncts who haven't been offered the professional evaluation">📣 Adjunct Outreach Report</button>
         <button id="btn-adj-current" title="Every current PSU adjunct: rank, start date, appointment, assignment rights, accumulated credits, appointment order">📋 Current Adjunct Report</button>
+        <button id="btn-adj-psufa" title="Excel workbook in the format PSUFA asked for: roster with credit history, course detail, assignment orders">📑 PSUFA Adjunct Report (Excel)</button>
       </div>
     </div>
     <span id="save-status">Ready</span>
@@ -551,6 +552,17 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
           <label>Evaluation Completed</label>
           <input id="fm-adj-evc" type="date">
           <div class="fhint" id="fm-adj-ev-hint" style="display:none"></div>
+        </div>
+        <!-- PSUFA reporting fields (faculty_psu_adjunct_v4_expertise.sql).
+             Record only — neither feeds any adjunct.js calculation. -->
+        <div id="fm-adj-pre14-wrap" style="display:none">
+          <label>Credits Taught Before Fall 2014</label>
+          <input id="fm-adj-pre14" type="number" min="0" step="0.5">
+          <div class="fhint">For the PSUFA report. Recorded only — not added to accumulated credit load.</div>
+        </div>
+        <div class="full" id="fm-adj-exp-wrap" style="display:none">
+          <label>Areas of Expertise</label>
+          <textarea id="fm-adj-exp" placeholder="e.g. Program evaluation; Health policy; Biostatistics"></textarea>
         </div>
 
         <div class="sect">Roles</div>
@@ -821,6 +833,25 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
     <div class="mf">
       <button class="btn" data-close="mo-rights-void">Cancel</button>
       <button class="btn btn-d" id="btn-rv-save">Remove rights</button>
+    </div>
+  </div>
+</div>
+
+<!-- ── PSUFA ADJUNCT REPORT (admin) ──────────────────────────────── -->
+<div class="mo" id="mo-psufa">
+  <div class="mc sm">
+    <div class="mh"><h3>PSUFA Adjunct Report</h3><button class="x" data-close="mo-psufa">×</button></div>
+    <div class="mb f"><div class="fg">
+      <div class="full"><label>Who to include</label><select id="psufa-scope">
+        <option value="current">Current PSU adjuncts (taught in the last 12 terms)</option>
+        <option value="all">All PSU adjuncts</option>
+      </select></div>
+      <div class="full"><div class="fhint" id="psufa-info" style="white-space:pre-wrap"></div></div>
+      <div class="full"><div class="fhint" id="psufa-err" style="color:var(--red);font-weight:600"></div></div>
+    </div></div>
+    <div class="mf">
+      <button class="btn" data-close="mo-psufa">Close</button>
+      <button class="btn btn-p" id="btn-psufa-dl">⬇ Download Excel</button>
     </div>
   </div>
 </div>
@@ -1402,6 +1433,14 @@ function adjEvalDateHTML(f,col){
   const v=adjEvalDate(f.id,col);
   return v?fmtDate(v):'<span class="muted">—</span>';
 }
+/* PSUFA reporting fields — also on the admin-only faculty_psu_adjunct row
+   (faculty_psu_adjunct_v4_expertise.sql). Record only: shown on the profile
+   and in the PSUFA report, never fed into adjunct.js. */
+const ADJ_PSUFA_COLS={credits_before_fall2014:'Credits Before Fall 2014',areas_of_expertise:'Areas of Expertise'};
+const adjExpertise=fid=>{const r=ADJ[fid];return r&&N(r.areas_of_expertise)?String(r.areas_of_expertise).trim():null;};
+const adjPre2014=fid=>{const r=ADJ[fid];return r&&r.credits_before_fall2014!=null&&r.credits_before_fall2014!==''?+r.credits_before_fall2014:null;};
+const adjExpertiseHTML=f=>{const v=adjExpertise(f.id);return v?`<span style="white-space:pre-wrap">${esc(v)}</span>`:'<span class="muted">—</span>';};
+const adjPre2014HTML=f=>{const v=adjPre2014(f.id);return v==null?'<span class="muted">—</span>':esc(String(Math.round(v*100)/100))+' cr';};
 // Edit modal: completed before offered? (The DB constraint
 // faculty_psu_adjunct_eval_order refuses it too; this catches it first.)
 function adjEvalOrderBad(){
@@ -1534,11 +1573,13 @@ function adjFields(f,override){
     [ADJ_EVAL_COLS.eval_completed_date,adjEvalDateHTML(f,'eval_completed_date')],
     ['Contract Type',adjContractHTML(f,ovr)],
     ['Accumulated Credit Load',adjCreditLoadHTML(f)],
-    ['Appointment Order',adjApptOrderHTML(f,override)]
+    ['Appointment Order',adjApptOrderHTML(f,override)],
+    [ADJ_PSUFA_COLS.credits_before_fall2014,adjPre2014HTML(f)],
+    [ADJ_PSUFA_COLS.areas_of_expertise,adjExpertiseHTML(f)]
   ];
 }
 // Fields the edit modal has inputs for — left out of its read-only preview.
-const ADJ_MODAL_SKIP=new Set(['Contract Type','Review Eligible',...Object.values(ADJ_EVAL_COLS)]);
+const ADJ_MODAL_SKIP=new Set(['Contract Type','Review Eligible',...Object.values(ADJ_EVAL_COLS),...Object.values(ADJ_PSUFA_COLS)]);
 // Directory cell: light, rank, review-eligible (evaluation due), assignment
 // rights that need attention, and the one data flag — a blank start date.
 function adjDirCell(f){
@@ -1873,6 +1914,330 @@ async function copyAdjReportEmails(){
   }
   btn.textContent=`✓ Copied ${list.length}`+(missing?` (${missing} no email)`:'');
   setTimeout(()=>btn.textContent=orig,3000);
+}
+
+/* ── PSUFA ADJUNCT REPORT (Admin Tools ▾, Tim 10/20/26) ───────────
+   An Excel workbook laid out like the example PSUFA sent (the School of
+   Business RFI file), minus the columns Converge has no data for:
+     dropped  Current Appointment/Latest Contract, the 2-year contract
+              status + offer formula, review notes, pre-Fall 2011 credits
+              (replaced by Credits Before Fall 2014), general notes.
+   Sheets:
+     Adjunct Faculty    one row per adjunct + per-term credit history
+     Course Detail      one row per adjunct per offering
+     Assignment Orders  current adjuncts by contract group, in appointment order
+     Notes              where every number comes from
+   Every figure comes from adjunct.js, so it matches the profile, the
+   directory and the Current Adjunct Report. Credit figures run through
+   TODAY'S term ("as of"), which adjunct.js always uses; the history columns
+   include every term on record, future scheduled terms too (as PSUFA's do).
+   Read-only: no writes. ExcelJS is loaded on first use, not with the page. */
+const EXCELJS_URL='https://cdnjs.cloudflare.com/ajax/libs/exceljs/4.4.0/exceljs.min.js';
+let excelJsLoading=null;
+function loadExcelJS(){
+  if(window.ExcelJS)return Promise.resolve();
+  if(!excelJsLoading)excelJsLoading=new Promise((ok,bad)=>{
+    const s=document.createElement('script');s.src=EXCELJS_URL;
+    s.onload=()=>ok();s.onerror=()=>{excelJsLoading=null;bad(new Error('Couldn\'t load the Excel library'));};
+    document.head.appendChild(s);
+  });
+  return excelJsLoading;
+}
+// PSU Banner term code: YYYY + 01 Winter · 02 Spring · 03 Summer · 04 Fall.
+const PSU_SEASON={winter:'01',spring:'02',summer:'03',fall:'04'};
+function psuTermCode(t){
+  if(!t)return null;
+  const txt=String(t.code||'')+' '+String(t.label||'');
+  const m=/(winter|spring|summer|fall)/i.exec(txt); if(!m)return null;
+  let y=null;
+  const y4=/(\d{4})/.exec(String(t.label||''))||/(\d{4})/.exec(String(t.code||''));
+  if(y4)y=y4[1];
+  else{const y2=/(\d{2})\s*$/.exec(String(t.code||''));if(y2)y='20'+y2[1];}
+  if(!y&&t.start_date)y=String(t.start_date).slice(0,4);
+  return y?y+PSU_SEASON[m[1].toLowerCase()]:null;
+}
+const psuShort=t=>{const c=psuTermCode(t);return c?({'01':'W','02':'S','03':'U','04':'F'}[c.slice(4)])+c.slice(2,4):'';};
+/* Date → term, from Converge's term dates where they exist; otherwise an
+   approximate PSU calendar (only matters for dates before Converge history).
+     startTermOf: first term not yet ended on that date — the same rule
+                  adjunct.js uses to place a hire date (between terms → next).
+     termOfDate:  latest term started on or before that date. */
+function approxTerm(iso,mode){
+  const y=+iso.slice(0,4), md=iso.slice(5,10);
+  if(mode==='start'){
+    if(md<='03-22')return y+'01'; if(md<='06-15')return y+'02';
+    if(md<='08-31')return y+'03'; if(md<='12-12')return y+'04'; return (y+1)+'01';
+  }
+  if(md<'01-05')return (y-1)+'04'; if(md<'03-30')return y+'01';
+  if(md<'06-22')return y+'02'; if(md<'09-24')return y+'03'; return y+'04';
+}
+function startTermOf(iso,seq){
+  if(!iso)return null;
+  const first=seq[0];
+  if(!first||!first.start_date||iso>=String(first.start_date).slice(0,10)){
+    const t=seq.find(t=>String(t.end_date||t.start_date||'').slice(0,10)>=iso);
+    if(t)return psuTermCode(t);
+  }
+  return approxTerm(iso,'start');
+}
+function termOfDate(iso,seq){
+  if(!iso)return null;
+  let best=null;
+  seq.forEach(t=>{if(t.start_date&&String(t.start_date).slice(0,10)<=iso)best=t;});
+  if(best&&!(seq[0]&&iso<String(seq[0].start_date||'').slice(0,10)))return psuTermCode(best);
+  return approxTerm(iso,'of');
+}
+const psuNum=c=>c==null?null:+c;
+const addYrs=(iso,n)=>(+iso.slice(0,4)+n)+iso.slice(4,10);
+const PSUFA_CT={'2yr':'2-Yr','9mo':'9-Mon','term':'TBT'};
+// Prefer a pdx.edu address — the column asks for the PSU email first.
+function psuEmail(f){
+  const a=[N(f.email),N(f.secondary_email)].filter(Boolean).map(s=>s.trim());
+  return a.find(e=>/@pdx\.edu$/i.test(e))||a[0]||'';
+}
+async function pagedSelect(table,cols){
+  const PAGE=1000; let from=0; const all=[];
+  for(;;){
+    const {data,error}=await sb.from(table).select(cols).range(from,from+PAGE-1);
+    if(error)throw error;
+    all.push(...(data||[]));
+    if(!data||data.length<PAGE)break;
+    from+=PAGE;
+  }
+  return all;
+}
+function psufaPeople(scope){
+  return FAC.filter(f=>isPSUAdj(f)&&(scope==='all'||adjCurrent(f).state==='on'))
+    .sort((a,b)=>String(a.last_name||'').localeCompare(String(b.last_name||''))
+      ||String(a.first_name||'').localeCompare(String(b.first_name||'')));
+}
+function psufaInfo(){
+  const seq=ConvergeAdj.terms(), cur=ConvergeAdj.currentTerm(), ct=seq.find(t=>t.code===cur);
+  const n=psufaPeople(val('psufa-scope')).length;
+  $('psufa-info').textContent=[
+    `${n} PSU adjunct${n===1?'':'s'}.`,
+    ct?`Credits, thresholds and assignment rights are as of today's term: ${ct.label||ct.code} (${psuTermCode(ct)}).`
+      :'⚠ No current term — set term dates in Scheduling → Terms & Academic Years.',
+    seq.length?`Credit history covers ${seq[0].label||seq[0].code} – ${seq[seq.length-1].label||seq[seq.length-1].code} (Converge's records).`:'',
+    'Sheets: Adjunct Faculty, Course Detail, Assignment Orders, Notes. Columns Converge has no data for are left out; Areas of Expertise and Credits Before Fall 2014 are blank until entered on each profile.'
+  ].filter(Boolean).join('\n\n');
+  $('psufa-err').textContent='';
+}
+function openPsufa(){
+  setv('psufa-scope','current');
+  psufaInfo();
+  openM('mo-psufa');
+}
+async function dlPsufa(){
+  const btn=$('btn-psufa-dl'), orig=btn.textContent;
+  $('psufa-err').textContent='';
+  btn.disabled=true; btn.textContent='Building…';
+  try{
+    await loadExcelJS();
+    // CRN, section, number and title aren't in the page's main load.
+    const [offs,crs]=await Promise.all([
+      pagedSelect('offerings','id,crn_psu'),
+      pagedSelect('courses','id,prefix,number,title,section,full_name,credits')
+    ]);
+    const CRN={}; offs.forEach(o=>{CRN[o.id]=o.crn_psu;});
+    const CRS={}; crs.forEach(c=>{CRS[c.id]=c;});
+    const wb=buildPsufaWorkbook(val('psufa-scope'),CRN,CRS);
+    const buf=await wb.xlsx.writeBuffer();
+    const a=document.createElement('a');
+    a.href=URL.createObjectURL(new Blob([buf],{type:'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet'}));
+    a.download=`SPH_PSU_Adjunct_Faculty_PSUFA_${ConvergeAdj.localISODate()}.xlsx`;a.click();
+    setSS('● PSUFA report downloaded');
+  }catch(e){
+    console.error(e);
+    $('psufa-err').textContent='⚠ '+(e.message||e);
+  }finally{btn.disabled=false;btn.textContent=orig;}
+}
+/* One adjunct's roster numbers. idx = index into ConvergeAdj.terms(). */
+function psufaRow(f,seq,curIdx,CRS){
+  const idxOf={}; seq.forEach((t,i)=>{idxOf[t.code]=i;});
+  const d=adjCreditLoadDetail(f), ci=adjContractInfo(f), a=adjRightsActive(f);
+  const today=ConvergeAdj.localISODate();
+  const hire=N(f.start_date)?String(f.start_date).slice(0,10):null;
+  const svc=d.reset?null:(d.hadBreak&&d.runStartIdx!=null&&seq[d.runStartIdx].start_date
+    ?String(seq[d.runStartIdx].start_date).slice(0,10):hire);
+  const yrs=n=>svc?addYrs(svc,n)<=today:null;
+  const cr=d.total;
+  const offs=[...new Map((TEACHING[f.id]||[]).map(o=>[o.id,o])).values()];
+  // Per-term credits (all terms on record, summer included), co-taught ÷ 2.
+  const byTerm={}, codes=new Set();
+  let ranged=0;
+  offs.forEach(o=>{
+    const i=idxOf[o.term]; if(i==null)return;
+    const c=CRS[o.course_id]||COURSES[o.course_id];
+    if(c)codes.add(String(c.full_name||'').split(':')[0].trim());
+    const n=ConvergeAdj.parseCredits(c&&c.credits);
+    if(n===null){ranged++;return;}
+    const eff=(o.instructor1_id&&o.instructor2_id)?n/2:n;
+    byTerm[i]=(byTerm[i]||0)+eff;
+  });
+  // Teaching before the most recent break in service (the part PSUFA
+  // subtracts). Same rules as accumulated credit load: after hire, through
+  // today's term, no summer, co-taught ÷ 2.
+  const cut=d.reset?curIdx+1:(d.hadBreak?d.runStartIdx:null);
+  let preCr=null,preAYs=null;
+  if(cut!=null&&cr!==null){
+    const ays=new Set(); preCr=0;
+    Object.keys(byTerm).map(Number).forEach(i=>{
+      const t=seq[i];
+      if(i>=cut||i>curIdx||ConvergeAdj.isSummerTerm(t))return;
+      if(hire&&String(t.end_date||t.start_date||'').slice(0,10)<hire)return;
+      preCr+=byTerm[i]; ays.add(t.academic_year);
+    });
+    preCr=Math.round(preCr*100)/100; preAYs=ays.size;
+  }
+  return {
+    name:`${f.last_name||''}${f.first_name?', '+f.first_name:''}`,
+    id:N(f.psu_id)||'', email:psuEmail(f), hire,
+    rank:N(f.rank)||'', ct:PSUFA_CT[ci.type]||'',
+    offered:termOfDate(adjEvalDate(f.id,'eval_offered_date'),seq),
+    t3:d.reset?false:yrs(3), t20:cr==null?null:cr>=20,
+    t8:d.reset?false:(cr!=null&&cr>=8)?true:yrs(2),
+    courses:[...codes].filter(Boolean).sort().join(', '),
+    expertise:adjExpertise(f.id)||'', acl:cr,
+    rights:a?+a.min_credits:null,
+    ays:cr==null?null:new Set(d.items.map(x=>seq[x.i].academic_year)).size,
+    byTerm, ranged, start:startTermOf(hire,seq), preAYs, preCr,
+    pre2014:adjPre2014(f.id), current:adjCurrent(f).state==='on'
+  };
+}
+function buildPsufaWorkbook(scope,CRN,CRS){
+  const seq=ConvergeAdj.terms(), cur=ConvergeAdj.currentTerm();
+  const curIdx=seq.findIndex(t=>t.code===cur), ct=seq[curIdx];
+  if(curIdx<0)throw new Error('No current term — set term dates in Scheduling → Terms & Academic Years first.');
+  const asOf=psuShort(ct), people=psufaPeople(scope);
+  const rows=people.map(f=>({f,r:psufaRow(f,seq,curIdx,CRS)}));
+  const hist=seq.map((t,i)=>({t,i,code:psuTermCode(t)||t.code})).reverse();   // newest first, like PSUFA's
+  const wb=new ExcelJS.Workbook(); wb.creator='ConvergeSPH'; wb.created=new Date();
+  const HFILL={type:'pattern',pattern:'solid',fgColor:{argb:'FFD6E4F0'}};
+  const GFILL={type:'pattern',pattern:'solid',fgColor:{argb:'FF1F3864'}};
+  const thin={style:'thin',color:{argb:'FFCBD5E1'}};
+  const box={top:thin,left:thin,bottom:thin,right:thin};
+  const hdr=c=>{c.font={bold:true,size:10};c.fill=HFILL;c.alignment={wrapText:true,vertical:'bottom'};c.border=box;};
+
+  /* ── Adjunct Faculty ───────────────────────────────────────── */
+  const ws=wb.addWorksheet('Adjunct Faculty',{views:[{state:'frozen',xSplit:1,ySplit:4}]});
+  const fixed=[
+    ['Name',26],['ID #',12],['PSU Email \n(Other personal email if PSU Email is not available)',28],
+    ['Adjunct Date of Hire',12],[`Title/rank\nfor ${asOf}`,18],['Appointment/ Contract Length',12],
+    ['Last Offered Pro-Review',12],
+    [`Taught 3 Years\nas of ${asOf}`,10],[`Taught 20 Credits\nas of ${asOf}`,10],[`Taught 8 Credits or 2 Years\nas of ${asOf}`,12],
+    ['Previous Course Deliveries\n(all courses taught in SPH)',30],['Areas of Expertise',30],
+    [`Accumulated Credit Load \nthrough ${asOf}`,12],['Minimum Teaching Assignment/ Assignment Rights Credit Calculation',14],['# of AYs',8]
+  ];
+  const tail=[['Start Quarter',10],['Pre-Break AYs',9],['Pre-Break Credits',9],['# of Credits Taught Before Fall 2014',12]];
+  const H0=fixed.length+1, T0=H0+hist.length;   // first history column, first tail column
+  ws.getCell(1,1).value='OHSU-PSU School of Public Health'; ws.getCell(1,1).font={bold:true,size:13};
+  ws.getCell(2,1).value=`From ConvergeSPH, ${fmtDate(ConvergeAdj.localISODate())} · credits as of ${ct.label||ct.code} · see Notes`;
+  ws.getCell(2,1).font={italic:true,size:9,color:{argb:'FF475569'}};
+  ws.getCell(2,H0).value='Credit History'; ws.getCell(2,H0).font={bold:true};
+  [[1,3,'Adjunct Faculty'],[4,6,'SPH Appointment Information'],[7,7,'Professional Review/Evaluation'],[8,15,'Assignment Rights']]
+    .forEach(([a,b,txt])=>{
+      if(b>a)ws.mergeCells(3,a,3,b);
+      const c=ws.getCell(3,a); c.value=txt; c.font={bold:true,color:{argb:'FFFFFFFF'}}; c.fill=GFILL;
+      c.alignment={horizontal:'center',vertical:'middle',wrapText:true};
+    });
+  fixed.forEach(([h,w],k)=>{const c=ws.getCell(4,k+1);c.value=h;hdr(c);ws.getColumn(k+1).width=w;});
+  hist.forEach((h,k)=>{
+    const col=H0+k;
+    const s=ws.getCell(3,col); s.value=h.code.slice(4); s.alignment={horizontal:'center'}; s.font={size:9,color:{argb:'FF475569'}};
+    const c=ws.getCell(4,col); c.value=h.code; hdr(c); c.alignment={horizontal:'center',vertical:'bottom'};
+    if(h.i===curIdx)c.font={bold:true,size:10,color:{argb:'FF2E75B6'}};
+    ws.getColumn(col).width=8;
+  });
+  tail.forEach(([h,w],k)=>{const c=ws.getCell(4,T0+k);c.value=h;hdr(c);ws.getColumn(T0+k).width=w;});
+  ws.getRow(4).height=78;
+  rows.forEach(({r},n)=>{
+    const R=5+n, row=ws.getRow(R);
+    const v=[r.name,r.id,r.email,r.hire?new Date(r.hire+'T00:00:00'):null,r.rank,r.ct,psuNum(r.offered),
+      r.t3,r.t20,r.t8,r.courses,r.expertise,r.acl,r.rights,r.ays];
+    v.forEach((x,k)=>{if(x!==null&&x!=='')row.getCell(k+1).value=x;});
+    hist.forEach((h,k)=>{const x=r.byTerm[h.i];if(x)row.getCell(H0+k).value=Math.round(x*100)/100;});
+    [psuNum(r.start),r.preAYs,r.preCr,r.pre2014].forEach((x,k)=>{if(x!==null&&x!==undefined)row.getCell(T0+k).value=x;});
+    row.getCell(4).numFmt='mm/dd/yyyy';
+    row.getCell(11).alignment=row.getCell(12).alignment={wrapText:true,vertical:'top'};
+  });
+
+  /* ── Course Detail ─────────────────────────────────────────── */
+  const cd=wb.addWorksheet('Course Detail',{views:[{state:'frozen',ySplit:1}]});
+  const cdCols=[['Active/Inactive',10],['ID',12],['Name',26],['Faculty Type',12],['Term',9],['CRN',10],
+    ['Class',14],['Section',8],['Subject',8],['Course Number',9],['Title',40],
+    ['% Responsibility',11],['Responsible Credits',11],['Total Credits',9]];
+  cdCols.forEach(([h,w],k)=>{const c=cd.getCell(1,k+1);c.value=h;hdr(c);cd.getColumn(k+1).width=w;});
+  cd.getRow(1).height=30;
+  const tIdx={}; seq.forEach((t,i)=>{tIdx[t.code]=i;});
+  let R=2;
+  rows.forEach(({f,r})=>{
+    [...new Map((TEACHING[f.id]||[]).map(o=>[o.id,o])).values()]
+      .filter(o=>tIdx[o.term]!=null).sort((a,b)=>tIdx[a.term]-tIdx[b.term])
+      .forEach(o=>{
+        const c=CRS[o.course_id]||{}, n=ConvergeAdj.parseCredits(c.credits);
+        const two=!!(o.instructor1_id&&o.instructor2_id);
+        const v=[r.current?'Active':'Inactive',r.id,r.name,'Adjunct',psuNum(psuTermCode(seq[tIdx[o.term]])),
+          N(CRN[o.id])||'',String(c.full_name||'').split(':')[0].trim(),N(c.section)||'',c.prefix||'',
+          N(c.number)||'',N(c.title)||'',two?50:100,
+          n===null?(N(c.credits)||''):Math.round((two?n/2:n)*100)/100,n===null?(N(c.credits)||''):n];
+        const row=cd.getRow(R++);
+        v.forEach((x,k)=>{if(x!==null&&x!=='')row.getCell(k+1).value=x;});
+      });
+  });
+
+  /* ── Assignment Orders ─────────────────────────────────────── */
+  const ao=wb.addWorksheet('Assignment Orders');
+  const RK=adjRanking();
+  const groups=[['2yr','1st Group (i.e., Two-Year Contract)'],['9mo','2nd Group (i.e., Nine-Month/Annual-AY Contract)'],
+    ['term','Last Group (i.e., Term-by-Term Contract(s))']];
+  const aoCols=[[`Accumulated Credit Load \nthrough ${asOf}`,12],['Adjunct Date of Hire',12],['Name',24],
+    ['Previous Course Deliveries\n(all courses taught in SPH)',30],['Areas of Expertise',28],
+    ['Minimum Teaching Assignment/ Assignment Rights Credit Calculation',14]];
+  const W=aoCols.length+1;   // a spacer column between groups, like PSUFA's
+  const rByF=new Map(); RK.list.forEach(f=>rByF.set(f.id,psufaRow(f,seq,curIdx,CRS)));
+  groups.forEach(([tier,title],g)=>{
+    const c0=1+g*W;
+    ao.mergeCells(2,c0,2,c0+aoCols.length-1);
+    const t=ao.getCell(2,c0); t.value=title; t.font={bold:true,color:{argb:'FFFFFFFF'}}; t.fill=GFILL;
+    t.alignment={horizontal:'center'};
+    aoCols.forEach(([h,w],k)=>{const c=ao.getCell(3,c0+k);c.value=h;hdr(c);ao.getColumn(c0+k).width=w;});
+    if(g<groups.length-1)ao.getColumn(c0+aoCols.length).width=3;
+    RK.list.filter(f=>adjContract(f)===tier).forEach((f,n)=>{
+      const r=rByF.get(f.id), row=ao.getRow(4+n);
+      [r.acl,r.hire?new Date(r.hire+'T00:00:00'):null,r.name,r.courses,r.expertise,r.rights]
+        .forEach((x,k)=>{if(x!==null&&x!=='')row.getCell(c0+k).value=x;});
+      row.getCell(c0+1).numFmt='mm/dd/yyyy';
+      row.getCell(c0+3).alignment=row.getCell(c0+4).alignment={wrapText:true,vertical:'top'};
+    });
+  });
+  ao.getRow(3).height=66;
+  ao.getCell(1,1).value=`Appointment order as of ${ct.label||ct.code}: current PSU adjuncts only (not also Inactive), highest accumulated credit load first within each group, earliest hire date breaking ties.`;
+  ao.getCell(1,1).font={italic:true,size:9,color:{argb:'FF475569'}};
+
+  /* ── Notes ─────────────────────────────────────────────────── */
+  const nt=wb.addWorksheet('Notes');
+  nt.getColumn(1).width=30; nt.getColumn(2).width=110;
+  const ranged=rows.reduce((s,x)=>s+x.r.ranged,0);
+  [['Source',`ConvergeSPH, generated ${fmtDate(ConvergeAdj.localISODate())}${currentUserEmail?' by '+currentUserEmail:''}. ${rows.length} PSU adjunct${rows.length===1?'':'s'} (${scope==='all'?'all PSU adjuncts':'current only — taught in the last '+ADJ_WINDOW+' terms'}).`],
+   ['As of',`${ct.label||ct.code} (${psuTermCode(ct)}). Thresholds, accumulated credit load, # of AYs and pre-break figures run through this term.`],
+   ['Term codes','YYYY + 01 Winter · 02 Spring · 03 Summer · 04 Fall (PSU Banner).'],
+   ['History',`Converge holds SPH teaching from ${seq[0].label||seq[0].code} on. Earlier teaching, and teaching outside SPH, isn't included anywhere in this file.`],
+   ['Credits','Co-taught courses (two instructors) count half, as in CHTool — shown as 50% responsibility. Summer credits appear in the history but never count toward accumulated credit load.'+(ranged?` ${ranged} offering(s) with ranged or blank credits (e.g. "1-4") are left out of the totals.`:'')],
+   ['Accumulated Credit Load','PSUFA CBA: cumulative SPH credits since hire, summer excluded; a break of 4 consecutive terms without teaching resets it. Pre-Break AYs / Credits are the teaching before the most recent break.'],
+   ['Taught 3 Years / 2 Years','Measured from the Start Date, or from the return after a break in service. Blank when there is no start date.'],
+   ['Appointment/ Contract Length','Calculated from CBA 3.2–3.4 unless set manually on the profile. 2-Yr / 9-Mon / TBT.'],
+   ['Last Offered Pro-Review','Term of the Evaluation Offered date recorded on the profile.'],
+   ['Assignment Rights','Minimum credits per AY from the rights on record (locked). Blank = none stored.'],
+   ['Start Quarter','First term not yet ended on the hire date (a date between terms belongs to the next term).'],
+   ['Entered by hand','Areas of Expertise and # of Credits Taught Before Fall 2014 come from each profile and are blank until entered. Credits before Fall 2014 are not added to accumulated credit load.'],
+   ['Not included','Current Appointment/Latest Contract, 2-year contract status, review notes and general notes — Converge doesn\'t track these.']
+  ].forEach(([k,v],n)=>{
+    const a=nt.getCell(n+1,1), b=nt.getCell(n+1,2);
+    a.value=k; a.font={bold:true}; a.alignment={vertical:'top'};
+    b.value=v; b.alignment={wrapText:true,vertical:'top'};
+  });
+  return wb;
 }
 
 // Employer bucket: OHSU/PSU are exact (case/whitespace-insensitive) matches;
@@ -2660,6 +3025,8 @@ function openFM(id){
   setv('fm-adj-rv',(f&&ADJ[f.id]&&ADJ[f.id].review_override)||'');
   setv('fm-adj-evo',f?adjEvalDate(f.id,'eval_offered_date'):'');
   setv('fm-adj-evc',f?adjEvalDate(f.id,'eval_completed_date'):'');
+  setv('fm-adj-exp',f?(adjExpertise(f.id)||''):'');
+  setv('fm-adj-pre14',f&&adjPre2014(f.id)!=null?adjPre2014(f.id):'');
   syncAdjModal();
   openM('mo-fac');
 }
@@ -2678,7 +3045,7 @@ function syncAdjModal(){
   hint.classList.toggle('hi',noStart);
   hint.style.display=noStart?'':'none';
   hint.textContent=noStart?'⚠ Needed for PSU adjunct tracking':'';
-  ['fm-adj-ct-wrap','fm-adj-rv-wrap','fm-adj-evo-wrap','fm-adj-evc-wrap'].forEach(w=>{$(w).style.display=on?'':'none';});
+  ['fm-adj-ct-wrap','fm-adj-rv-wrap','fm-adj-evo-wrap','fm-adj-evc-wrap','fm-adj-pre14-wrap','fm-adj-exp-wrap'].forEach(w=>{$(w).style.display=on?'':'none';});
   if(!on){box.style.display='none';box.innerHTML='';return;}
   {
     const bad=adjEvalOrderBad(), eh=$('fm-adj-ev-hint');
@@ -2782,6 +3149,9 @@ async function saveFac(){
   if(chosenCats().includes(ADJ_CAT)&&adjEvalOrderBad()){
     setSS('⚠ Evaluation completed date is before the offered date');return;
   }
+  if(chosenCats().includes(ADJ_CAT)&&N(val('fm-adj-pre14'))&&!(NUM(val('fm-adj-pre14'))>=0)){
+    setSS('⚠ Credits before Fall 2014 must be a number, 0 or more');return;
+  }
   const row={};
   Object.entries(FM).forEach(([el,col])=>{
     const raw=val(el);
@@ -2830,17 +3200,20 @@ async function saveFac(){
    evaluation offered / completed dates. Only written when the PSUAdjunct box
    is ticked and something actually changed. Unticking PSUAdjunct leaves any
    stored values alone, so re-ticking it later doesn't lose them.
-   ⚠ Needs faculty_psu_adjunct_v2_eval_dates.sql and
-   faculty_psu_adjunct_v3_review_override.sql — without those columns every
+   ⚠ Needs faculty_psu_adjunct_v2_eval_dates.sql,
+   faculty_psu_adjunct_v3_review_override.sql and
+   faculty_psu_adjunct_v4_expertise.sql — without those columns every
    PSU adjunct save that changes something here fails. */
 async function saveAdjTracking(fid,cats){
   if(!cats.includes(ADJ_CAT))return true;
   const cur=ADJ[fid]||{};
   const want={contract_type:val('fm-adj-ct')||null,review_override:val('fm-adj-rv')||null,
-    eval_offered_date:N(val('fm-adj-evo')),eval_completed_date:N(val('fm-adj-evc'))};
+    eval_offered_date:N(val('fm-adj-evo')),eval_completed_date:N(val('fm-adj-evc')),
+    areas_of_expertise:N(val('fm-adj-exp')),credits_before_fall2014:NUM(val('fm-adj-pre14'))};
   const have={contract_type:cur.contract_type||null,review_override:cur.review_override||null,
     eval_offered_date:adjEvalDate(fid,'eval_offered_date'),
-    eval_completed_date:adjEvalDate(fid,'eval_completed_date')};
+    eval_completed_date:adjEvalDate(fid,'eval_completed_date'),
+    areas_of_expertise:adjExpertise(fid),credits_before_fall2014:adjPre2014(fid)};
   if(JSON.stringify(want)===JSON.stringify(have))return true;
   return await sbSave(sb.from('faculty_psu_adjunct').upsert(
     Object.assign({faculty_id:fid,updated_by:currentUserEmail},want),{onConflict:'faculty_id'}),null);
@@ -3043,6 +3416,8 @@ function snap(f){
   o.psu_adj_review=(ADJ[f.id]&&ADJ[f.id].review_override)?ConvergeAdj.reviewOverrideLabel(ADJ[f.id].review_override):null;
   o.psu_adj_eval_offered=adjEvalDate(f.id,'eval_offered_date');
   o.psu_adj_eval_completed=adjEvalDate(f.id,'eval_completed_date');
+  o.psu_adj_expertise=adjExpertise(f.id);
+  o.psu_adj_pre2014_cr=adjPre2014(f.id);
   o.documents=(DOCS[f.id]||[]).map(d=>({category:d.category,subcategory:d.subcategory,description:d.description,doc_date:d.doc_date,sp_url:d.sp_url}));
   return o;
 }
@@ -3077,7 +3452,8 @@ const RP_FAC_LABELS={
   education:'Education',research:'Research',awards:'Awards',documents:'Documents',
   psu_adj_contract:'PSU Adjunct Contract Override',assignment_rights:'Assignment Rights',
   psu_adj_review:'PSU Adjunct Review Eligible Override',
-  psu_adj_eval_offered:'PSU Adjunct Evaluation Offered',psu_adj_eval_completed:'PSU Adjunct Evaluation Completed'
+  psu_adj_eval_offered:'PSU Adjunct Evaluation Offered',psu_adj_eval_completed:'PSU Adjunct Evaluation Completed',
+  psu_adj_expertise:'PSU Adjunct Areas of Expertise',psu_adj_pre2014_cr:'PSU Adjunct Credits Before Fall 2014'
 };
 function _facLabel(k){return RP_FAC_LABELS[k]||(k.charAt(0).toUpperCase()+k.slice(1)).replace(/_/g,' ');}
 // Render any snapshot value (string, boolean, array of strings, array of
@@ -3517,6 +3893,9 @@ function wire(){
   $('adjrep-kind').addEventListener('change',renderAdjReport);
   $('btn-adjrep-csv').onclick=expAdjReport;
   $('btn-adjrep-copy').onclick=copyAdjReportEmails;
+  $('btn-adj-psufa').onclick=openPsufa;
+  $('psufa-scope').addEventListener('change',psufaInfo);
+  $('btn-psufa-dl').onclick=dlPsufa;
   $('adjrep-tb').addEventListener('click',e=>{
     const a=e.target.closest('[data-rep-go]');
     if(a){e.preventDefault();closeM('mo-adjrep');go(a.dataset.repGo);}
@@ -3574,7 +3953,7 @@ function wire(){
 
 /* ─── BOOT ─────────────────────────────────────────────────── */
 (async function boot(){
-  console.log('%c[SPH faculty] build 2026-10-15a — remove rights, adjunct reports','color:#0a7');
+  console.log('%c[SPH faculty] build 2026-10-20a — expertise, pre-Fall 2014 credits, PSUFA report','color:#0a7');
   wire();
   // A magic-link return lands here with tokens in the hash; the subscription
   // registered inside initSupabase() gives Supabase a beat to consume them
