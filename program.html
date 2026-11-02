@@ -103,6 +103,13 @@ tbody td{padding:9px 12px;border-bottom:1px solid var(--rowline);font-size:13px;
 tbody tr:hover td{background:var(--rowhover)}
 tbody tr.clickable{cursor:pointer}
 .nm{color:var(--navytx);font-weight:600}
+/* Row-name links (a11y plan 1.1): the name is the keyboard/screen-reader way
+   into a record; the rest of the row stays a mouse convenience. */
+a.nm{text-decoration:none}
+a.nm:hover{text-decoration:underline}
+a.nm:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:2px}
+tbody tr.clickable:focus-within td{background:var(--rowhover)}
+.view h2[tabindex="-1"]:focus{outline:none}
 .muted{color:var(--muted)}
 .chip{display:inline-block;background:var(--ltblue);color:var(--navytx);font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px;margin:1px 3px 1px 0;white-space:nowrap}
 .pill{font-size:10px;font-weight:700;letter-spacing:.4px;padding:2px 8px;border-radius:9px;text-transform:uppercase}
@@ -499,7 +506,7 @@ function renderProgTable(){
   const rows=progList();
   $('p-tb').innerHTML=rows.map(p=>`
     <tr class="clickable" data-id="${esc(p.id)}">
-      <td class="nm">${esc(p.name)}</td>
+      <td><a class="nm" href="?program=${esc(p.id)}">${esc(p.name)}</a></td>
       <td>${esc(p.credential||'—')}</td>
       <td>${p.total_credits??'—'}</td>
       <td>${p.core_credits??'—'}</td>
@@ -1007,6 +1014,22 @@ function renderProgramDetail(id){
 }
 
 /* ── PROGRAM DETAIL ROUTER (mirrors scheduling.html's course-page router) ── */
+/* An unmodified left click — anything else on a link (Ctrl/⌘/Shift/Alt) is
+   left to the browser so it can open a new tab or window. */
+const plainClick=e=>e.button===0&&!(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey);
+/* Focus helpers for in-page view changes (a11y plan 1.1): land on the opened
+   program's heading, and on the way back return to that program's row link. */
+function focusHeading(sel){
+  const h=document.querySelector(sel);if(!h)return;
+  if(!h.hasAttribute('tabindex'))h.setAttribute('tabindex','-1');
+  h.focus({preventScroll:true});
+}
+function focusProgRow(id){
+  if(!id)return;
+  const tr=$('p-tb').querySelector(`tr[data-id="${CSS.escape(String(id))}"]`);
+  const a=tr&&tr.querySelector('a.nm');
+  if(a&&a.offsetParent){tr.scrollIntoView({block:'nearest'});a.focus({preventScroll:true});}
+}
 function openProgramView(id,push=true){
   if(!id||!PROGRAMS[id])return;
   const cur=document.querySelector('.view.active');
@@ -1026,13 +1049,15 @@ function closeProgramView(){
   if(history.state&&history.state.program){history.back();return;}
   const u=new URL(window.location);u.searchParams.delete('program');
   history.replaceState({},'',u);
+  const back=progViewId;
   progViewId=null;
   switchTab(progReturnView||'v-prog');
+  focusProgRow(back);
 }
 window.addEventListener('popstate',()=>{
   const id=new URL(window.location).searchParams.get('program');
   if(id)openProgramView(id,false);
-  else if(progViewId!==null){progViewId=null;switchTab(progReturnView||'v-prog');}
+  else if(progViewId!==null){const back=progViewId;progViewId=null;switchTab(progReturnView||'v-prog');focusProgRow(back);}
 });
 function handleProgramDeepLink(){
   const id=new URL(window.location).searchParams.get('program');
@@ -1050,8 +1075,15 @@ function wire(){
   $('p-tb').addEventListener('click',e=>{
     const editBtn=e.target.closest('[data-edit-prog]');
     if(editBtn){openProg(editBtn.dataset.editProg);return;}
+    // Each program name is a real <a href="?program=…"> (a11y plan 1.1).
+    // Plain clicks are handled in-page; Ctrl/⌘/Shift-click opens a new tab.
+    const a=e.target.closest('a.nm');
+    if(a&&!plainClick(e))return;
     const tr=e.target.closest('tr[data-id]');
-    if(tr)openProgramView(tr.dataset.id);
+    if(!tr)return;
+    if(a)e.preventDefault();
+    openProgramView(tr.dataset.id);
+    focusHeading('#pv-body h2');
   });
   $('pm-comp-add').onclick=()=>{$('pm-comp').insertAdjacentHTML('beforeend',compRowHTML(''));};
   $('pm-comp').addEventListener('click',e=>{const rm=e.target.closest('.rrm');if(rm)rm.closest('.repeat-row').remove();});

@@ -139,6 +139,12 @@ tbody tr.clickable{cursor:pointer}
 #t-table th.stg .ib{display:block;width:max-content;margin:3px auto 0}
 .seq{font-variant-numeric:tabular-nums;color:var(--dgray);font-weight:600}
 .it-title{color:var(--navytx);font-weight:600;line-height:1.35}
+/* Change-title links (a11y plan 1.1): the title is the keyboard/screen-reader
+   way to open a change; the rest of the row stays a mouse convenience. */
+a.it-link{color:inherit;text-decoration:none}
+a.it-link:hover{text-decoration:underline}
+a.it-link:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:2px}
+#t-table tbody tr.clickable:focus-within td{background:var(--rowhover)}
 .it-meta{margin-top:3px}
 td.cell{text-align:center;font-size:12px;white-space:nowrap;padding:9px 4px;font-variant-numeric:tabular-nums;border-left:1px solid var(--rowline)}
 td.cell.done{background:var(--ltgrn);color:var(--txgrn);font-weight:600}
@@ -1256,7 +1262,7 @@ function renderTracker(){
     if(xl.length)meta.push(`<span class="chip link">cross-list ${xl.map(p=>'#'+seqLabel(p.seq)).join(', ')}</span>`);
     return `<tr class="clickable" data-id="${esc(r.id)}">
       <td class="sk seq">${seqLabel(r.seq)}</td>
-      <td class="sk2"><div class="it-title" title="${esc(r.status_note||r.description||'')}">${esc(r.title)}</div><div class="it-meta">${meta.join('')}</div></td>
+      <td class="sk2"><div class="it-title" title="${esc(r.status_note||r.description||'')}"><a class="it-link" href="?item=${esc(r.id)}">${esc(r.title)}</a></div><div class="it-meta">${meta.join('')}</div></td>
       <td>${esc(itemProgramLabel(r))}</td>
       <td>${esc(r.student_level)}</td>
       <td>${r.ohsu_category?esc(r.ohsu_category):'<span class="muted">NA</span>'}</td>
@@ -3735,8 +3741,15 @@ function wire(){
   $('t-body').addEventListener('click',e=>{
     const cell=e.target.closest('[data-cell]');
     if(cell){const [iid,sid]=cell.dataset.cell.split('|');openCell(iid,sid);return;}
+    // Each change title is a real <a href="?item=…"> (a11y plan 1.1). Plain
+    // clicks open the change in-page; Ctrl/⌘/Shift-click falls through so the
+    // deep link opens in a new tab.
+    const a=e.target.closest('a.it-link');
+    if(a&&!(e.button===0&&!(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)))return;
     const tr=e.target.closest('tr[data-id]');
-    if(tr)openItem(tr.dataset.id);
+    if(!tr)return;
+    if(a)e.preventDefault();
+    openItem(tr.dataset.id);
   });
 
   // Report

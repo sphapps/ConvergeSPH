@@ -149,6 +149,13 @@ tbody td{padding:9px 12px;border-bottom:1px solid var(--rowline);font-size:13px;
 tbody tr:hover td{background:var(--rowhover)}
 tbody tr.clickable{cursor:pointer}
 .nm{color:var(--navytx);font-weight:600}
+/* Row-name links (a11y plan 1.1): the name is the keyboard/screen-reader way
+   into a record; the rest of the row stays a mouse convenience. */
+a.nm{text-decoration:none}
+a.nm:hover{text-decoration:underline}
+a.nm:focus-visible{outline:2px solid var(--teal);outline-offset:2px;border-radius:2px}
+tbody tr.clickable:focus-within td{background:var(--rowhover)}
+.view h2[tabindex="-1"]:focus{outline:none}
 .muted{color:var(--muted)}
 .chip{display:inline-block;background:var(--ltblue);color:var(--navytx);font-size:10px;font-weight:600;padding:2px 7px;border-radius:9px;margin:1px 3px 1px 0;white-space:nowrap}
 .chip.warn{background:var(--ltgold);color:var(--txgold)}
@@ -2335,7 +2342,7 @@ function renderDir(){
   $('dir-tb').innerHTML=rows.map(f=>{
     const n=(TEACHING[f.id]||[]).length;
     return `<tr class="clickable" data-id="${esc(f.id)}">
-      <td><span class="nm">${esc(f.last_name||'')}${f.first_name?', '+esc(f.first_name):''}</span>${cephSup(f)}${(WEBPROF[f.id]&&WEBPROF[f.id].is_published)?` <span class="pubdot" title="Published profile">●</span>`:''}${f.is_program_director?` <span class="chip role" title="Program Director${f.program_director_detail?': '+esc(f.program_director_detail):''}">PD</span>`:''}${f.is_administrator?` <span class="chip role" title="Administrator${f.administrator_detail?': '+esc(f.administrator_detail):''}">Admin</span>`:''}${(TIER!=='public'&&needsReview(f))?` <span class="chip review" title="Teaching this AY but categorized only as Inactive and/or Emeriti">Needs Review</span>`:''}</td>
+      <td><a class="nm" href="?id=${esc(f.id)}">${esc(f.last_name||'')}${f.first_name?', '+esc(f.first_name):''}</a>${cephSup(f)}${(WEBPROF[f.id]&&WEBPROF[f.id].is_published)?` <span class="pubdot" title="Published profile">●</span>`:''}${f.is_program_director?` <span class="chip role" title="Program Director${f.program_director_detail?': '+esc(f.program_director_detail):''}">PD</span>`:''}${f.is_administrator?` <span class="chip role" title="Administrator${f.administrator_detail?': '+esc(f.administrator_detail):''}">Admin</span>`:''}${(TIER!=='public'&&needsReview(f))?` <span class="chip review" title="Teaching this AY but categorized only as Inactive and/or Emeriti">Needs Review</span>`:''}</td>
       <td>${esc(f.sph_unit||'')||'<span class="muted">—</span>'}</td>
       ${TIER!=='public'?`<td>${esc(f.rank||'')||'<span class="muted">—</span>'}</td>
       <td>${(f.categories||[]).map(c=>`<span class="chip">${esc(c)}</span>`).join('')||'<span class="muted">—</span>'}</td>
@@ -2878,6 +2885,17 @@ function teachHTML(fid){
 }
 
 /* ─── ROUTER ───────────────────────────────────────────────── */
+/* An unmodified left click — anything else on a link (Ctrl/⌘/Shift/Alt) is
+   left to the browser so it can open a new tab or window. */
+const plainClick=e=>e.button===0&&!(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey);
+/* After an in-page view change, move focus to the new view's heading so
+   keyboard and screen-reader users land on what just opened instead of on
+   a link that is no longer visible. */
+function focusHeading(sel){
+  const h=document.querySelector(sel);if(!h)return;
+  if(!h.hasAttribute('tabindex'))h.setAttribute('tabindex','-1');
+  h.focus({preventScroll:true});
+}
 function go(id,push=true){
   const u=new URL(window.location);
   if(id)u.searchParams.set('id',id); else u.searchParams.delete('id');
@@ -2943,6 +2961,8 @@ function restoreRow(){
   const tr=$('dir-tb').querySelector(`tr[data-id="${CSS.escape(String(id))}"]`);
   if(!tr)return toTop();
   tr.scrollIntoView({block:'center'});
+  // Put focus back on the name link so a keyboard user resumes where they left.
+  const a=tr.querySelector('a.nm');if(a)a.focus({preventScroll:true});
   tr.classList.add('rowflash');
   setTimeout(()=>tr.classList.remove('rowflash'),1400);
 }
@@ -3805,9 +3825,17 @@ function wire(){
     const e=$(id);if(!e)return;
     e.addEventListener(id==='f-q'?'input':'change',renderDir);
   });
+  // Each name is a real <a href="?id=…"> (a11y plan 1.1). A plain click is
+  // handled in-page; Ctrl/⌘/Shift-click falls through to the browser so
+  // "open in new tab" works. Clicking elsewhere on the row still opens it.
   $('dir-tb').addEventListener('click',e=>{
+    const a=e.target.closest('a.nm');
+    if(a&&!plainClick(e))return;
     const tr=e.target.closest('tr[data-id]');
-    if(tr)go(tr.dataset.id);
+    if(!tr)return;
+    if(a)e.preventDefault();
+    go(tr.dataset.id);
+    focusHeading('#prof-body h2');
   });
   // Restore the remembered "Show PSU adjunct details" choice before the first
   // render. Storage may be unavailable (private window) — then it's just off.
