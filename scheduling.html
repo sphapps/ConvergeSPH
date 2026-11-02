@@ -1779,7 +1779,11 @@ async function loadData(){
       term:o.term, prefix:c.prefix||'', courseNumber:c.number||'',
       courseId:c.id||'', fullName:c.fullName||'', section:c.section||'',
       instructor1:i1?i1.displayName:'', instructor2:i2?i2.displayName:'',
-      i1Email:'', i2Email:'',
+      // Not stored on offerings — looked up from the assigned instructors'
+      // primary (faculty) emails, so every AY stays in step with the Faculty
+      // Directory. Blank when the instructor has no email or the reader
+      // can't see emails (anon / scheduling viewer).
+      i1Email:i1?(i1.email||''):'', i2Email:i2?(i2.email||''):'',
       days:S(o.days), time:S(o.time), modality:S(o.modality), lms:S(o.lms),
       roomed:S(o.roomed), roomNumber:S(o.room_number),
       grugb:c.grugb||'GR',      // derived from the course — offerings.level is no longer read
@@ -3464,7 +3468,7 @@ function togglePotRow(){
   const isSummer = /^Summer/i.test(val('om-term'));
   document.getElementById('pot-row').style.display = isSummer ? 'block' : 'none';
 }
-function autoEmail(n){const i=DB.instructors.find(x=>x.displayName===val('om-i'+n));if(i)setv('om-e'+n,i.email??'');}
+function autoEmail(n){setv('om-e'+n,_instEmail(val('om-i'+n)));}
 /* ─── SUPABASE WRITE HELPERS ───────────────────────────────────
    Optimistic pattern: callers mutate the in-memory DB and re-render
    immediately, then fire the write. sbSave reverts to server truth
@@ -3490,6 +3494,7 @@ async function sbSave(promise,okMsg){
     setSS(okMsg||'● Saved');return true;
   }catch(e){setSS('⚠ Not saved: '+e.message+' — reverting');await reloadAll();return false;}
 }
+const _instEmail=dn=>{if(!dn)return '';const i=DB.instructors.find(x=>x.displayName===dn);return i?(i.email||''):'';};
 const _facIdByDisp=dn=>{if(!dn)return null;const i=DB.instructors.find(x=>x.displayName===dn);return i?i.facultyId:null;};
 const _courseUuid=cid=>{const c=DB.courses.find(x=>x.id===cid);return c?c._uuid:null;};
 
@@ -3655,7 +3660,7 @@ function saveOff(){
   const data={id:eidO??genid(),term:val('om-term'),prefix:c.prefix,courseNumber:c.number,courseId:cid,
     fullName:crsFullName(c.prefix,c.number,c.number2,c.title,c.section),section:c.section||'',
     instructor1:val('om-i1'),instructor2:val('om-i2'),
-    i1Email:'',i2Email:'',days:val('om-days'),time:val('om-time'),modality:val('om-mod'),lms:val('om-lms'),
+    i1Email:_instEmail(val('om-i1')),i2Email:_instEmail(val('om-i2')),days:val('om-days'),time:val('om-time'),modality:val('om-mod'),lms:val('om-lms'),
     roomed:val('om-room'),roomNumber:val('om-roomn'),grugb:c.grugb||'GR',totalCap:val('om-cap'),
     enrollment:val('om-enroll'),ohsuCap1:val('om-o1'),ohsuCap2:val('om-o2'),psuCap1:val('om-p1'),
     psuCap2:val('om-p2'),restrictOhsu:val('om-ro'),restrictPsu:val('om-rp'),psuText:val('om-pt'),adminNotes:val('om-notes'),
