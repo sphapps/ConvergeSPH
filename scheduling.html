@@ -1076,7 +1076,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       <div><label>First Name</label><input id="im-first"></div>
       <div class="s2"><label>Display Name</label><input id="im-dn"><div class="fhint">Auto: Last F. — extended if duplicate: Last Fi., Last Fir.</div></div>
       <div><label>Category</label><select id="im-cat"><option value="">— Select —</option><option>OHSU Primary</option><option>OHSU Adjunct</option><option>NPS</option><option>OHSU Staff</option><option>PSU TTF</option><option>PSU NTTF</option><option>PSU Adjunct</option><option>PSU Staff</option><option>Other</option><option>TBD</option></select></div>
-      <div class="s2"><label>Email</label><input id="im-email" type="email"></div>
+      <div class="s2"><label>Email</label><input id="im-email" type="email"><div class="fhint" id="im-email-hint"></div></div>
       <div class="s2"><label>Email 2 / OHSU Email</label><input id="im-email2" type="email"></div>
       <div><label>EID</label><input id="im-eid"></div>
     </div></div>
@@ -1684,6 +1684,40 @@ async function loadData(){
     const suffix=(initialCount[k]>1 && d.first)?d.first.slice(0,2):fi;
     return (d.last+' '+suffix+'.').trim();
   }
+  // Emails, best-effort and signed-in only. faculty_directory (anon) carries no
+  // email, so:
+  //   · email  = the faculty record's PRIMARY email, read-only here — the
+  //     faculty app owns it. Comes from the instructor_primary_emails() RPC
+  //     (instructor_primary_email_v1.sql), which returns it to scheduling
+  //     admins and PDs WITHOUT needing faculty-app access. Blank when the
+  //     faculty record has none. Fallback if the RPC isn't there yet:
+  //     faculty_profile / faculty, which only faculty-app users can read.
+  //   · email2 = scheduling-only second email, from instructor_contact
+  //     (instructor_contact_v1.sql). Kept out of instructor_meta because that
+  //     table is anon-readable and emails are not public.
+  // Anon gets errors/empty from all of these, which just leaves both blank.
+  const facEmail={}, email2={};
+  try{
+    const PAGE=1000; let from=0, rows=[], rpcErr=null;
+    for(;;){
+      const {data,error}=await sb.rpc('instructor_primary_emails').range(from,from+PAGE-1);
+      if(error){rpcErr=error;break;}
+      rows.push(...(data||[]));
+      if(!data||data.length<PAGE)break;
+      from+=PAGE;
+    }
+    if(!rpcErr)rows.forEach(r=>{if(r.email)facEmail[r.faculty_id]=String(r.email).trim();});
+    else{
+      let eR=await fetchAll('faculty_profile','id,email');
+      if(eR.error||!(eR.data||[]).length)eR=await fetchAll('faculty','id,email');
+      if(!eR.error)(eR.data||[]).forEach(f=>{if(f.email)facEmail[f.id]=String(f.email).trim();});
+    }
+  }catch(e){/* no emails is a display gap, not a load failure */}
+  try{
+    const xR=await fetchAll('instructor_contact','faculty_id,email2');
+    if(!xR.error)(xR.data||[]).forEach(x=>{if(x.email2)email2[x.faculty_id]=x.email2;});
+  }catch(e){}
+
   const instById={}; // faculty_id → reshaped instructor (for offering lookup)
   const instructors=mR.data.map(m=>{
     const d=dir[m.faculty_id]||{first:'',last:'',ph:false};
@@ -1692,7 +1726,8 @@ async function loadData(){
       firstName:d.first, lastName:d.last,
       displayName:dispName(d),
       category:m.fte_category||'', role:m.role||'',
-      email:'', eid:'', isPlaceholder:d.ph
+      email:facEmail[m.faculty_id]||'', email2:email2[m.faculty_id]||'',
+      eid:'', isPlaceholder:d.ph
     };
     instById[m.faculty_id]=rec;
     return rec;
@@ -4261,15 +4296,20 @@ function openIM(id){
     setv('im-email2',i.email2??'');setv('im-eid',i.eid??'');
   }else{['im-last','im-first','im-dn','im-email','im-email2','im-eid','im-cat'].forEach(f=>setv(f,''));}
   // Name/email/EID live in the shared faculty record (faculty app owns them).
-  // Editing existing → those are read-only here; only category + role persist.
-  // Adding new → name + email feed the create_instructor RPC; email2/EID are
-  // faculty-app fields, so they stay read-only. Display name is always derived.
+  // Editing existing → those are read-only here. Email is the faculty record's
+  // PRIMARY email (blank if the faculty record has none) and always mirrors it.
+  // Adding new → name + email feed the create_instructor RPC and seed the new
+  // faculty record. Email 2 is scheduling-only (instructor_contact) and is
+  // editable in both cases. Display name is always derived; EID stays read-only.
   const lockIdentity=!!id;
   [['im-last',lockIdentity],['im-first',lockIdentity],['im-email',lockIdentity],
-   ['im-dn',true],['im-email2',true],['im-eid',true]].forEach(([f,lock])=>{
+   ['im-dn',true],['im-email2',false],['im-eid',true]].forEach(([f,lock])=>{
     const el=$(f);if(!el)return;el.readOnly=lock;el.style.opacity=lock?'0.55':'1';
     el.title=lock?'Managed in the faculty app':'';
   });
+  $('im-email-hint').textContent=id
+    ?'Primary email from the Faculty Directory — change it there.'
+    :'Becomes the new faculty record\'s primary email.';
   openM('mo-inst');
 }
 function autoDN(){
@@ -4283,13 +4323,21 @@ function autoDN(){
 function saveInst(){
   const last=val('im-last').trim();if(!last){alert('Last name required.');return;}
   const cat=val('im-cat');
+  const e2=val('im-email2').trim();
+  if(e2&&!$('im-email2').checkValidity()){setSS('⚠ Email 2 isn\'t a valid email address');return;}
   if(eidI){
-    // Existing → scheduling app writes only instructor_meta category. Role is no
-    // longer edited here; we leave the stored role untouched (category only).
+    // Existing → scheduling app writes instructor_meta category and, if it
+    // changed, Email 2 (instructor_contact). Primary email is read-only here.
+    // Role is no longer edited here; we leave the stored role untouched.
     const idx=DB.instructors.findIndex(x=>x.id===eidI);
-    if(idx>=0){DB.instructors[idx].category=cat;}
+    const prevE2=idx>=0?(DB.instructors[idx].email2||''):'';
+    if(idx>=0){DB.instructors[idx].category=cat;DB.instructors[idx].email2=e2;}
     closeM('mo-inst');renderInst();
-    sbSave(sb.from('instructor_meta').update({fte_category:cat||null}).eq('faculty_id',eidI),'● Instructor saved');
+    const fid=eidI;
+    (async()=>{
+      if(!await sbSave(sb.from('instructor_meta').update({fte_category:cat||null}).eq('faculty_id',fid),'● Instructor saved'))return;
+      if(e2!==prevE2)await saveEmail2(fid,e2,'● Instructor saved');
+    })();
   }else{
     // New → create faculty + instructor_meta atomically via the RPC.
     const first=val('im-first').trim(),email=val('im-email').trim();
@@ -4302,8 +4350,9 @@ function saveInst(){
       if(error){setSS('⚠ Not added: '+error.message);return;}
       const dn=val('im-dn').trim()||(first?`${last} ${first[0]}.`:last);
       DB.instructors.push({id:newId,facultyId:newId,lastName:last,firstName:first,displayName:dn,
-        category:cat,role:role,email:'',eid:'',isPlaceholder:false});
+        category:cat,role:role,email:email,email2:e2,eid:'',isPlaceholder:false});
       closeM('mo-inst');renderInst();setSS('● Instructor added');
+      if(e2)await saveEmail2(newId,e2,'● Instructor added');
     };
     if(dupe)showCfm('Possible duplicate',`An instructor named "${dupe.displayName}" already exists. Add another anyway?`,doCreate);
     else doCreate();
@@ -4317,9 +4366,23 @@ function delInst(){
     return;
   }
   showCfm('Remove from roster?',`Remove "${i?i.displayName:'this instructor'}" from the scheduling roster? Their faculty record is kept — only their scheduling instructor status is removed.`,()=>{
-    DB.instructors=DB.instructors.filter(x=>x.id!==eidI);closeM('mo-inst');renderInst();
-    sbSave(sb.from('instructor_meta').delete().eq('faculty_id',eidI),'● Removed from roster');
+    const fid=eidI;
+    DB.instructors=DB.instructors.filter(x=>x.id!==fid);closeM('mo-inst');renderInst();
+    (async()=>{
+      if(!await sbSave(sb.from('instructor_meta').delete().eq('faculty_id',fid),'● Removed from roster'))return;
+      // Email 2 belongs to the roster entry, so it goes with it. Best-effort:
+      // a leftover row is harmless and reappears if they're re-added.
+      try{await sb.from('instructor_contact').delete().eq('faculty_id',fid);}catch(e){}
+    })();
   });
+}
+/* Email 2 → instructor_contact (scheduling-only, authenticated-read).
+   Blank deletes the row rather than storing ''. */
+function saveEmail2(fid,e2,okMsg){
+  return sbSave(e2
+    ?sb.from('instructor_contact').upsert({faculty_id:fid,email2:e2,
+        updated_at:new Date().toISOString(),updated_by:currentUserEmail},{onConflict:'faculty_id'})
+    :sb.from('instructor_contact').delete().eq('faculty_id',fid),okMsg);
 }
 
 /* ─── CONFIRM MODAL ─────────────────────────────────────────── */
@@ -7489,7 +7552,7 @@ function wireTaEvents(){
 
 /* ─── BOOTSTRAP ─────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded',async()=>{
-  console.log('%c[SPH scheduling] build 2026-10-02b — enrollment reminder banner admins only','color:#0a7');
+  console.log('%c[SPH scheduling] build 2026-11-02a — instructor Email locked to faculty primary; Email 2 editable','color:#0a7');
   wireEvents();
   wireTdbEvents();
   wireReportingEvents();
