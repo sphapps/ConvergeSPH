@@ -867,6 +867,8 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       <div class="fsec">Course &amp; Term</div>
       <div><label>Term</label><select id="om-term"></select></div>
       <div><label>Course</label><select id="om-course"></select></div>
+      <div><label>Grading</label><select id="om-grading"><option value="">–</option><option>A-F</option><option>P/NP</option><option>A-F/P/NP</option></select><div class="fhint" id="om-grading-hint">Defaults to the catalog value for the course</div></div>
+      <div></div>
       <div class="fsec">Instructors</div>
       <div><label>Instructor 1</label><select id="om-i1"></select></div>
       <div><label>Instructor 2</label><select id="om-i2"></select></div>
@@ -1076,7 +1078,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
       <div><label>First Name</label><input id="im-first"></div>
       <div class="s2"><label>Display Name</label><input id="im-dn"><div class="fhint">Auto: Last F. — extended if duplicate: Last Fi., Last Fir.</div></div>
       <div><label>Category</label><select id="im-cat"><option value="">— Select —</option><option>OHSU Primary</option><option>OHSU Adjunct</option><option>NPS</option><option>OHSU Staff</option><option>PSU TTF</option><option>PSU NTTF</option><option>PSU Adjunct</option><option>PSU Staff</option><option>Other</option><option>TBD</option></select></div>
-      <div class="s2"><label>Email</label><input id="im-email" type="email"><div class="fhint" id="im-email-hint"></div></div>
+      <div class="s2"><label>Email</label><input id="im-email" type="email"></div>
       <div class="s2"><label>Email 2 / OHSU Email</label><input id="im-email2" type="email"></div>
       <div><label>EID</label><input id="im-eid"></div>
     </div></div>
@@ -1684,40 +1686,6 @@ async function loadData(){
     const suffix=(initialCount[k]>1 && d.first)?d.first.slice(0,2):fi;
     return (d.last+' '+suffix+'.').trim();
   }
-  // Emails, best-effort and signed-in only. faculty_directory (anon) carries no
-  // email, so:
-  //   · email  = the faculty record's PRIMARY email, read-only here — the
-  //     faculty app owns it. Comes from the instructor_primary_emails() RPC
-  //     (instructor_primary_email_v1.sql), which returns it to scheduling
-  //     admins and PDs WITHOUT needing faculty-app access. Blank when the
-  //     faculty record has none. Fallback if the RPC isn't there yet:
-  //     faculty_profile / faculty, which only faculty-app users can read.
-  //   · email2 = scheduling-only second email, from instructor_contact
-  //     (instructor_contact_v1.sql). Kept out of instructor_meta because that
-  //     table is anon-readable and emails are not public.
-  // Anon gets errors/empty from all of these, which just leaves both blank.
-  const facEmail={}, email2={};
-  try{
-    const PAGE=1000; let from=0, rows=[], rpcErr=null;
-    for(;;){
-      const {data,error}=await sb.rpc('instructor_primary_emails').range(from,from+PAGE-1);
-      if(error){rpcErr=error;break;}
-      rows.push(...(data||[]));
-      if(!data||data.length<PAGE)break;
-      from+=PAGE;
-    }
-    if(!rpcErr)rows.forEach(r=>{if(r.email)facEmail[r.faculty_id]=String(r.email).trim();});
-    else{
-      let eR=await fetchAll('faculty_profile','id,email');
-      if(eR.error||!(eR.data||[]).length)eR=await fetchAll('faculty','id,email');
-      if(!eR.error)(eR.data||[]).forEach(f=>{if(f.email)facEmail[f.id]=String(f.email).trim();});
-    }
-  }catch(e){/* no emails is a display gap, not a load failure */}
-  try{
-    const xR=await fetchAll('instructor_contact','faculty_id,email2');
-    if(!xR.error)(xR.data||[]).forEach(x=>{if(x.email2)email2[x.faculty_id]=x.email2;});
-  }catch(e){}
-
   const instById={}; // faculty_id → reshaped instructor (for offering lookup)
   const instructors=mR.data.map(m=>{
     const d=dir[m.faculty_id]||{first:'',last:'',ph:false};
@@ -1726,8 +1694,7 @@ async function loadData(){
       firstName:d.first, lastName:d.last,
       displayName:dispName(d),
       category:m.fte_category||'', role:m.role||'',
-      email:facEmail[m.faculty_id]||'', email2:email2[m.faculty_id]||'',
-      eid:'', isPlaceholder:d.ph
+      email:'', eid:'', isPlaceholder:d.ph
     };
     instById[m.faculty_id]=rec;
     return rec;
@@ -1779,11 +1746,7 @@ async function loadData(){
       term:o.term, prefix:c.prefix||'', courseNumber:c.number||'',
       courseId:c.id||'', fullName:c.fullName||'', section:c.section||'',
       instructor1:i1?i1.displayName:'', instructor2:i2?i2.displayName:'',
-      // Not stored on offerings — looked up from the assigned instructors'
-      // primary (faculty) emails, so every AY stays in step with the Faculty
-      // Directory. Blank when the instructor has no email or the reader
-      // can't see emails (anon / scheduling viewer).
-      i1Email:i1?(i1.email||''):'', i2Email:i2?(i2.email||''):'',
+      i1Email:'', i2Email:'',
       days:S(o.days), time:S(o.time), modality:S(o.modality), lms:S(o.lms),
       roomed:S(o.roomed), roomNumber:S(o.room_number),
       grugb:c.grugb||'GR',      // derived from the course — offerings.level is no longer read
@@ -1793,7 +1756,8 @@ async function loadData(){
       restrictOhsu:S(o.restrict_ohsu), restrictPsu:S(o.restrict_psu),
       psuText:S(o.psu_text), adminNotes:S(o.admin_notes), pot:S(o.pot),
       fee:S(o.fee), feeType:S(o.fee_type),
-      crnPsu:S(o.crn_psu), crnOhsu:S(o.crn_ohsu), printStatus:(o.print_status||'Print')
+      crnPsu:S(o.crn_psu), crnOhsu:S(o.crn_ohsu), printStatus:(o.print_status||'Print'),
+      grading:S(o.grading)
     };
   });
 
@@ -2447,6 +2411,8 @@ function renderSched(){
     const noteInd=hasNotes?' <span style="color:var(--teal);font-size:11px" title="Has notes">ℹ</span>':'';
     const potBadge=(/^Summer/i.test(o.term)&&o.pot)?` <span style="background:var(--ltgold);color:#92400E;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap">POT ${esc(o.pot)}</span>`:'';
     const noPrint=(o.printStatus==='No Print')?' <span title="No Print — excluded from the public schedule" style="font-size:11px">🚫</span>':'';
+    const _gOff=String(o.grading||'').trim(), _gCat=_catGrading(o.courseId)||'';
+    const gradeBadge=(_gOff&&_gOff!==_gCat)?` <span style="background:var(--ltgold);color:#92400E;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap" title="Grading for this offering differs from the catalog (${esc(_gCat||'none')})">${esc(_gOff)}</span>`:'';
     const discBadge=(_crsT&&_crsT.discontinued)?' <span class="schedDiscPill" title="This course has been marked discontinued">Discontinued</span>':'';
     const _crs=_crsT;
     const permReq=(_crs&&_crs.permission==='Yes')?'<span title="Requires instructor/department permission to register" style="font-size:11px">🔑</span>':'';
@@ -2458,7 +2424,7 @@ function renderSched(){
     const flags=restr+permReq+(isNight(o)?'<span title="Night class (starts ≥ 4pm)">🌙</span>':'')+(isOnline(o)?'<span title="Online">🖥️</span>':'');
     h+=`<tr${incomplete?' class="incomplete"':''} data-uuid="${esc(o._uuid||'')}">
       <td>${termBadge(o.term)}</td><td><strong>${esc(o.prefix)}</strong></td>
-      <td style="max-width:260px">${nameOpen}${esc(schedCourseDisp(o))}${nameClose}${warnMark}${noPrint}${noteInd}${potBadge}${discBadge}</td>
+      <td style="max-width:260px">${nameOpen}${esc(schedCourseDisp(o))}${nameClose}${warnMark}${noPrint}${noteInd}${potBadge}${gradeBadge}${discBadge}</td>
       <td style="text-align:center">${o.section?`<span class="secpill">${esc(o.section)}</span>`:''}</td>
       <td style="text-align:center">${esc(_crsT&&_crsT.credits||'')}</td>
       <td>${facLink(o.instructor1)}${i2}</td>
@@ -3175,7 +3141,8 @@ function toggleOff(cid,pfx,term){
       fullName:crsFullName(c.prefix,c.number,c.number2,c.title,c.section),section:c.section||'',
       instructor1:'',instructor2:'',totalCap:c.maxCap||'',ohsuCap1:'',ohsuCap2:'',psuCap1:'',psuCap2:'',
       days:'',time:'',restrictOhsu:'',restrictPsu:'',roomed:'',roomNumber:'',psuText:'',
-      modality:'',grugb:c.grugb||'GR',enrollment:'',i1Email:'',i2Email:'',adminNotes:'',pot:'',crnPsu:'',crnOhsu:'',printStatus:'Print'};
+      modality:'',grugb:c.grugb||'GR',enrollment:'',i1Email:'',i2Email:'',adminNotes:'',pot:'',crnPsu:'',crnOhsu:'',printStatus:'Print',
+      grading:_catGrading(cid)||''};
     sb.from('offerings').insert(offRow(off)).select().single().then(({data:oi,error})=>{
       if(error){setSS('⚠ Not added: '+error.message);return;}
       off._uuid=oi.id;off.id=oi.source_id||oi.id;DB.offerings.push(off);
@@ -3446,6 +3413,7 @@ function openOM(id){
     setv('om-pt',o.psuText);setv('om-notes',o.adminNotes);
     setv('om-fee',o.fee);setv('om-fee-type',o.feeType);
     setv('om-crn-psu',o.crnPsu??'');setv('om-crn-ohsu',o.crnOhsu??'');setv('om-print',o.printStatus||'Print');
+    setv('om-grading',offGrading(o));
     // POT
     const potVal=o.pot??'';
     if(potVal&&potVal!==''&&!document.querySelector('#om-pot option[value="'+potVal+'"]')){
@@ -3454,8 +3422,11 @@ function openOM(id){
   }else{
     ['om-e1','om-e2','om-time','om-room','om-roomn','om-lms','om-cap','om-enroll','om-o1','om-o2','om-p1','om-p2','om-ro','om-rp','om-pt','om-notes','om-fee','om-fee-type','om-pot','om-pot-other','om-crn-psu','om-crn-ohsu'].forEach(f=>setv(f,''));
     setv('om-print','Print');
+    setv('om-grading','');
     $('om-pot-other').style.display='none';
   }
+  _omCourseWas=val('om-course');
+  gradingHint();
   togglePotRow();
   toggleLmsField();
   openM('mo-off');
@@ -3468,7 +3439,27 @@ function togglePotRow(){
   const isSummer = /^Summer/i.test(val('om-term'));
   document.getElementById('pot-row').style.display = isSummer ? 'block' : 'none';
 }
-function autoEmail(n){setv('om-e'+n,_instEmail(val('om-i'+n)));}
+/* Changing the course in the offering modal re-defaults Grading only when the
+   field still holds the OLD course's catalog value (or is blank) — a value the
+   editor deliberately overrode is left alone. */
+let _omCourseWas='';
+function omCourseChanged(){
+  const cur=val('om-grading');
+  if(!cur||cur===(_catGrading(_omCourseWas)||''))setv('om-grading',_catGrading(val('om-course'))||'');
+  _omCourseWas=val('om-course');
+  gradingHint();
+}
+function gradingHint(){
+  const h=$('om-grading-hint');if(!h)return;
+  const cid=val('om-course');
+  if(!cid){h.textContent='Defaults to the catalog value for the course';h.style.color='';return;}
+  const cat=_catGrading(cid), cur=val('om-grading');
+  if(!cat){h.textContent='No grading set in the catalog for this course';h.style.color='';return;}
+  const differs=cur&&cur!==cat;
+  h.textContent=differs?`⚠ Differs from catalog (${cat})`:`Catalog: ${cat}`;
+  h.style.color=differs?'var(--warn)':'';
+}
+function autoEmail(n){const i=DB.instructors.find(x=>x.displayName===val('om-i'+n));if(i)setv('om-e'+n,i.email??'');}
 /* ─── SUPABASE WRITE HELPERS ───────────────────────────────────
    Optimistic pattern: callers mutate the in-memory DB and re-render
    immediately, then fire the write. sbSave reverts to server truth
@@ -3494,7 +3485,6 @@ async function sbSave(promise,okMsg){
     setSS(okMsg||'● Saved');return true;
   }catch(e){setSS('⚠ Not saved: '+e.message+' — reverting');await reloadAll();return false;}
 }
-const _instEmail=dn=>{if(!dn)return '';const i=DB.instructors.find(x=>x.displayName===dn);return i?(i.email||''):'';};
 const _facIdByDisp=dn=>{if(!dn)return null;const i=DB.instructors.find(x=>x.displayName===dn);return i?i.facultyId:null;};
 const _courseUuid=cid=>{const c=DB.courses.find(x=>x.id===cid);return c?c._uuid:null;};
 
@@ -3508,7 +3498,7 @@ const _courseUuid=cid=>{const c=DB.courses.find(x=>x.id===cid);return c?c._uuid:
 const SNAP_KEYS=['id','term','prefix','courseNumber','courseId','fullName','section','instructor1',
   'instructor2','days','time','modality','lms','roomed','roomNumber','totalCap','enrollment',
   'ohsuCap1','ohsuCap2','psuCap1','psuCap2','restrictOhsu','restrictPsu','psuText','adminNotes',
-  'pot','fee','feeType','crnPsu','crnOhsu','printStatus'];
+  'pot','fee','feeType','crnPsu','crnOhsu','printStatus','grading'];
 function snapOff(o){
   if(!o)return null;
   const s={}; SNAP_KEYS.forEach(k=>{s[k]=o[k]??'';}); return s;
@@ -3627,7 +3617,7 @@ function _conflicts(dbRow,expectedSnap){
   const exp=offRow(expectedSnap);            // snapshot → column shape
   const keys=['term','days','time','modality','lms','roomed','room_number','total_cap',
     'enrollment','ohsu_cap1','ohsu_cap2','psu_cap1','psu_cap2','restrict_ohsu','restrict_psu',
-    'psu_text','admin_notes','pot','crn_psu','crn_ohsu','print_status','instructor1_id','instructor2_id'];
+    'psu_text','admin_notes','pot','crn_psu','crn_ohsu','print_status','instructor1_id','instructor2_id','grading'];
   return keys.some(k=>String(dbRow[k]??'')!==String(exp[k]??''));
 }
 /* legacy offering object → offerings table columns */
@@ -3641,8 +3631,23 @@ function offRow(d){
     ohsu_cap1:I(d.ohsuCap1), ohsu_cap2:I(d.ohsuCap2), psu_cap1:I(d.psuCap1), psu_cap2:I(d.psuCap2),
     restrict_ohsu:T(d.restrictOhsu), restrict_psu:T(d.restrictPsu), psu_text:T(d.psuText),
     admin_notes:T(d.adminNotes), pot:T(d.pot), fee:T(d.fee), fee_type:T(d.feeType),
-    crn_psu:T(d.crnPsu), crn_ohsu:T(d.crnOhsu), print_status:(d.printStatus||'Print')};
+    crn_psu:T(d.crnPsu), crn_ohsu:T(d.crnOhsu), print_status:(d.printStatus||'Print'),
+    grading:T(d.grading)||_catGrading(d.courseId)};
 }
+/* Grading on an offering starts as the catalog value for its course (sections
+   inherit the base course's value — see CRS_INHERIT) and is then editable per
+   offering. A blank offering value always resolves to the catalog default, so
+   every insert path (Catalog dots, course-modal term boxes, undo) gets it
+   without each call site having to remember. offerings_grading_default
+   (offering_grading_v1.sql) does the same server-side for rows the client
+   never sees, e.g. create_academic_year copies. */
+const GRADING_OPTS=['A-F','P/NP','A-F/P/NP'];
+function _catGrading(cid){
+  const c=DB.courses.find(x=>x.id===cid);
+  const g=c?String(c.pnp||'').trim():'';
+  return GRADING_OPTS.includes(g)?g:null;
+}
+const offGrading=o=>String(o.grading||'').trim()||_catGrading(o.courseId)||'';
 
 /* CRN fields are free text that should end up as a clean comma-separated list
    of digits. Shared by the PSU and OHSU inputs so the two cannot drift. */
@@ -3660,12 +3665,13 @@ function saveOff(){
   const data={id:eidO??genid(),term:val('om-term'),prefix:c.prefix,courseNumber:c.number,courseId:cid,
     fullName:crsFullName(c.prefix,c.number,c.number2,c.title,c.section),section:c.section||'',
     instructor1:val('om-i1'),instructor2:val('om-i2'),
-    i1Email:_instEmail(val('om-i1')),i2Email:_instEmail(val('om-i2')),days:val('om-days'),time:val('om-time'),modality:val('om-mod'),lms:val('om-lms'),
+    i1Email:'',i2Email:'',days:val('om-days'),time:val('om-time'),modality:val('om-mod'),lms:val('om-lms'),
     roomed:val('om-room'),roomNumber:val('om-roomn'),grugb:c.grugb||'GR',totalCap:val('om-cap'),
     enrollment:val('om-enroll'),ohsuCap1:val('om-o1'),ohsuCap2:val('om-o2'),psuCap1:val('om-p1'),
     psuCap2:val('om-p2'),restrictOhsu:val('om-ro'),restrictPsu:val('om-rp'),psuText:val('om-pt'),adminNotes:val('om-notes'),
     fee:val('om-fee'),feeType:val('om-fee-type'),
     crnPsu:_crnList(val('om-crn-psu')),crnOhsu:_crnList(val('om-crn-ohsu')),printStatus:val('om-print')||'Print',
+    grading:val('om-grading')||_catGrading(cid)||'',
     pot:val('om-pot')==='other'?val('om-pot-other'):val('om-pot')};
   const row=offRow(data);
   if(eidO){
@@ -4134,7 +4140,8 @@ async function saveCrs(){
       const off={id:genid(),term:t,prefix:pfx,courseNumber:num,courseId:id,fullName:`${pfx} - ${nd}: ${title}`,
         instructor1:'',instructor2:'',totalCap:val('cm-cap')||'',ohsuCap1:'',ohsuCap2:'',psuCap1:'',psuCap2:'',
         days:'',time:'',restrictOhsu:'',restrictPsu:'',roomed:'',roomNumber:'',psuText:'',modality:'',
-        grugb:val('cm-grugb')||'GR',enrollment:'',i1Email:'',i2Email:'',adminNotes:''};
+        grugb:val('cm-grugb')||'GR',enrollment:'',i1Email:'',i2Email:'',adminNotes:'',
+        grading:_catGrading(id)||''};
       const {data:oi,error:oe}=await sb.from('offerings').insert(offRow(off)).select().single();
       if(oe){setSS('⚠ Term add failed: '+oe.message);}else{off._uuid=oi.id;off.id=oi.source_id||oi.id;DB.offerings.push(off);}
     }else if(!on&&ex&&!(ex.instructor1||ex.days||ex.modality)){
@@ -4192,7 +4199,8 @@ async function syncCourseTerms(idPfx,c){
         instructor1:'',instructor2:'',totalCap:c.maxCap||'',ohsuCap1:'',ohsuCap2:'',
         psuCap1:'',psuCap2:'',days:'',time:'',restrictOhsu:'',restrictPsu:'',roomed:'',
         roomNumber:'',psuText:'',modality:'',grugb:c.grugb||'GR',enrollment:'',
-        i1Email:'',i2Email:'',adminNotes:'',pot:'',crnPsu:'',crnOhsu:'',printStatus:'Print'};
+        i1Email:'',i2Email:'',adminNotes:'',pot:'',crnPsu:'',crnOhsu:'',printStatus:'Print',
+        grading:_catGrading(c.id)||''};
       const {data:oi,error:oe}=await sb.from('offerings').insert(offRow(off)).select().single();
       if(oe){setSS('⚠ Term add failed: '+oe.message);}
       else{off._uuid=oi.id;off.id=oi.source_id||oi.id;DB.offerings.push(off);
@@ -4301,20 +4309,15 @@ function openIM(id){
     setv('im-email2',i.email2??'');setv('im-eid',i.eid??'');
   }else{['im-last','im-first','im-dn','im-email','im-email2','im-eid','im-cat'].forEach(f=>setv(f,''));}
   // Name/email/EID live in the shared faculty record (faculty app owns them).
-  // Editing existing → those are read-only here. Email is the faculty record's
-  // PRIMARY email (blank if the faculty record has none) and always mirrors it.
-  // Adding new → name + email feed the create_instructor RPC and seed the new
-  // faculty record. Email 2 is scheduling-only (instructor_contact) and is
-  // editable in both cases. Display name is always derived; EID stays read-only.
+  // Editing existing → those are read-only here; only category + role persist.
+  // Adding new → name + email feed the create_instructor RPC; email2/EID are
+  // faculty-app fields, so they stay read-only. Display name is always derived.
   const lockIdentity=!!id;
   [['im-last',lockIdentity],['im-first',lockIdentity],['im-email',lockIdentity],
-   ['im-dn',true],['im-email2',false],['im-eid',true]].forEach(([f,lock])=>{
+   ['im-dn',true],['im-email2',true],['im-eid',true]].forEach(([f,lock])=>{
     const el=$(f);if(!el)return;el.readOnly=lock;el.style.opacity=lock?'0.55':'1';
     el.title=lock?'Managed in the faculty app':'';
   });
-  $('im-email-hint').textContent=id
-    ?'Primary email from the Faculty Directory — change it there.'
-    :'Becomes the new faculty record\'s primary email.';
   openM('mo-inst');
 }
 function autoDN(){
@@ -4328,21 +4331,13 @@ function autoDN(){
 function saveInst(){
   const last=val('im-last').trim();if(!last){alert('Last name required.');return;}
   const cat=val('im-cat');
-  const e2=val('im-email2').trim();
-  if(e2&&!$('im-email2').checkValidity()){setSS('⚠ Email 2 isn\'t a valid email address');return;}
   if(eidI){
-    // Existing → scheduling app writes instructor_meta category and, if it
-    // changed, Email 2 (instructor_contact). Primary email is read-only here.
-    // Role is no longer edited here; we leave the stored role untouched.
+    // Existing → scheduling app writes only instructor_meta category. Role is no
+    // longer edited here; we leave the stored role untouched (category only).
     const idx=DB.instructors.findIndex(x=>x.id===eidI);
-    const prevE2=idx>=0?(DB.instructors[idx].email2||''):'';
-    if(idx>=0){DB.instructors[idx].category=cat;DB.instructors[idx].email2=e2;}
+    if(idx>=0){DB.instructors[idx].category=cat;}
     closeM('mo-inst');renderInst();
-    const fid=eidI;
-    (async()=>{
-      if(!await sbSave(sb.from('instructor_meta').update({fte_category:cat||null}).eq('faculty_id',fid),'● Instructor saved'))return;
-      if(e2!==prevE2)await saveEmail2(fid,e2,'● Instructor saved');
-    })();
+    sbSave(sb.from('instructor_meta').update({fte_category:cat||null}).eq('faculty_id',eidI),'● Instructor saved');
   }else{
     // New → create faculty + instructor_meta atomically via the RPC.
     const first=val('im-first').trim(),email=val('im-email').trim();
@@ -4355,9 +4350,8 @@ function saveInst(){
       if(error){setSS('⚠ Not added: '+error.message);return;}
       const dn=val('im-dn').trim()||(first?`${last} ${first[0]}.`:last);
       DB.instructors.push({id:newId,facultyId:newId,lastName:last,firstName:first,displayName:dn,
-        category:cat,role:role,email:email,email2:e2,eid:'',isPlaceholder:false});
+        category:cat,role:role,email:'',eid:'',isPlaceholder:false});
       closeM('mo-inst');renderInst();setSS('● Instructor added');
-      if(e2)await saveEmail2(newId,e2,'● Instructor added');
     };
     if(dupe)showCfm('Possible duplicate',`An instructor named "${dupe.displayName}" already exists. Add another anyway?`,doCreate);
     else doCreate();
@@ -4371,23 +4365,9 @@ function delInst(){
     return;
   }
   showCfm('Remove from roster?',`Remove "${i?i.displayName:'this instructor'}" from the scheduling roster? Their faculty record is kept — only their scheduling instructor status is removed.`,()=>{
-    const fid=eidI;
-    DB.instructors=DB.instructors.filter(x=>x.id!==fid);closeM('mo-inst');renderInst();
-    (async()=>{
-      if(!await sbSave(sb.from('instructor_meta').delete().eq('faculty_id',fid),'● Removed from roster'))return;
-      // Email 2 belongs to the roster entry, so it goes with it. Best-effort:
-      // a leftover row is harmless and reappears if they're re-added.
-      try{await sb.from('instructor_contact').delete().eq('faculty_id',fid);}catch(e){}
-    })();
+    DB.instructors=DB.instructors.filter(x=>x.id!==eidI);closeM('mo-inst');renderInst();
+    sbSave(sb.from('instructor_meta').delete().eq('faculty_id',eidI),'● Removed from roster');
   });
-}
-/* Email 2 → instructor_contact (scheduling-only, authenticated-read).
-   Blank deletes the row rather than storing ''. */
-function saveEmail2(fid,e2,okMsg){
-  return sbSave(e2
-    ?sb.from('instructor_contact').upsert({faculty_id:fid,email2:e2,
-        updated_at:new Date().toISOString(),updated_by:currentUserEmail},{onConflict:'faculty_id'})
-    :sb.from('instructor_contact').delete().eq('faculty_id',fid),okMsg);
 }
 
 /* ─── CONFIRM MODAL ─────────────────────────────────────────── */
@@ -4413,10 +4393,10 @@ function triggerSave(){
 /* ─── CSV EXPORTS ───────────────────────────────────────────── */
 function expSched(){
   const term=val('f-term'),pfx=val('f-pfx');
-  const rows=[['Term','Prefix','Course','Section','PSU CRN(s)','OHSU CRN(s)','Print','Instructor 1','Instructor 2','POT','Days','Time','Modality','LMS','Total Cap','Enrollment','OHSU Cap 1','OHSU Cap 2','PSU Cap 1','PSU Cap 2','Where Roomed','Room #','Restrict OHSU','Restrict PSU','PSU Text','GR/UG/B','Admin Notes']];
+  const rows=[['Term','Prefix','Course','Section','Grading','PSU CRN(s)','OHSU CRN(s)','Print','Instructor 1','Instructor 2','POT','Days','Time','Modality','LMS','Total Cap','Enrollment','OHSU Cap 1','OHSU Cap 2','PSU Cap 1','PSU Cap 2','Where Roomed','Room #','Restrict OHSU','Restrict PSU','PSU Text','GR/UG/B','Admin Notes']];
   DB.offerings.filter(o=>(!term||o.term===term)&&(!pfx||o.prefix===pfx))
     .sort((a,b)=>(TO[a.term]-TO[b.term])||a.prefix.localeCompare(b.prefix))
-    .forEach(o=>rows.push([TL[o.term]??o.term,o.prefix,o.fullName,o.section??'',o.crnPsu??'',o.crnOhsu??'',o.printStatus||'Print',o.instructor1,o.instructor2,o.pot??'',o.days,o.time,o.modality,o.lms,o.totalCap,o.enrollment,o.ohsuCap1,o.ohsuCap2,o.psuCap1,o.psuCap2,o.roomed,o.roomNumber,o.restrictOhsu,o.restrictPsu,o.psuText,o.grugb,o.adminNotes]));
+    .forEach(o=>rows.push([TL[o.term]??o.term,o.prefix,o.fullName,o.section??'',offGrading(o),o.crnPsu??'',o.crnOhsu??'',o.printStatus||'Print',o.instructor1,o.instructor2,o.pot??'',o.days,o.time,o.modality,o.lms,o.totalCap,o.enrollment,o.ohsuCap1,o.ohsuCap2,o.psuCap1,o.psuCap2,o.roomed,o.roomNumber,o.restrictOhsu,o.restrictPsu,o.psuText,o.grugb,o.adminNotes]));
   dlCSV(rows,'SPH_Schedule_AY26-27.csv');
 }
 function expCht(){
@@ -4948,7 +4928,7 @@ async function genReport(){
 const RP_FIELDS=[['term','Term'],['section','Section'],['instructor1','Instructor 1'],['instructor2','Instructor 2'],
   ['days','Days'],['time','Time'],['modality','Modality'],['lms','LMS'],['roomed','Where Roomed'],
   ['roomNumber','Room #'],['totalCap','Total Cap'],
-  ['crnPsu','PSU CRN(s)'],['crnOhsu','OHSU CRN(s)'],['printStatus','Print'],['ohsuCap1','OHSU Cap 1'],['ohsuCap2','OHSU Cap 2'],
+  ['grading','Grading'],['crnPsu','PSU CRN(s)'],['crnOhsu','OHSU CRN(s)'],['printStatus','Print'],['ohsuCap1','OHSU Cap 1'],['ohsuCap2','OHSU Cap 2'],
   ['psuCap1','PSU Cap 1'],['psuCap2','PSU Cap 2'],['restrictOhsu','Restrict OHSU'],
   ['restrictPsu','Restrict PSU'],['psuText','PSU Text'],['adminNotes','Admin Notes'],['pot','POT'],
   ['fee','Fee'],['feeType','Fee Type']];
@@ -5007,14 +4987,7 @@ function buildReportText(rows,from,to,actor,exSelfEmail,scopeNote){
       if(a.days||a.time)lines.push('           '+[a.days,a.time].filter(Boolean).join('  ')+(a.modality?'  ['+a.modality+']':''));
       addEntry(term,lines); shown++;
     }else if(r.action==='delete'){
-      // The `before` snapshot carries the instructors the offering had at the
-      // moment it was removed — the line that matters most to whoever reads
-      // this (who just lost a course). Always printed, so an unstaffed removal
-      // reads as such rather than as a missing line.
-      const lines=[when+' · '+who+tag,'  REMOVED  '+label];
-      const inst=[b.instructor1,b.instructor2].filter(x=>String(x||'').trim()).join(' & ');
-      lines.push('           instructor: '+(inst||'(none assigned)'));
-      addEntry(term,lines); shown++;
+      addEntry(term,[when+' · '+who+tag,'  REMOVED  '+label]); shown++;
     }else{ // update
       const sup=suppress[r.offering_sid]||new Set();
       const diffs=[];
@@ -5294,6 +5267,8 @@ function wireEvents(){
     $('om-pot-other').style.display = isOther ? '' : 'none';
     if(!isOther) setv('om-pot-other','');
   });
+  $('om-course').addEventListener('change',omCourseChanged);
+  $('om-grading').addEventListener('change',gradingHint);
   $('om-i1').addEventListener('change',()=>autoEmail(1));
   $('om-i2').addEventListener('change',()=>autoEmail(2));
   $('btn-save-off').addEventListener('click',saveOff);
@@ -7557,7 +7532,7 @@ function wireTaEvents(){
 
 /* ─── BOOTSTRAP ─────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded',async()=>{
-  console.log('%c[SPH scheduling] build 2026-11-02a — instructor Email locked to faculty primary; Email 2 editable','color:#0a7');
+  console.log('%c[SPH scheduling] build 2026-10-02b — enrollment reminder banner admins only','color:#0a7');
   wireEvents();
   wireTdbEvents();
   wireReportingEvents();
