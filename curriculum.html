@@ -176,7 +176,8 @@ td.cell.ed:hover{outline:2px solid var(--teal);outline-offset:-2px}
 .rpt-stat span{font-size:11px;color:var(--dgray)}
 .rpt-dates{background:var(--surface);border:1px solid var(--rowline);border-radius:6px;padding:10px 14px;margin-bottom:20px;font-size:12.5px}
 .rpt-dates h3{font-size:13px;color:var(--navytx);margin-bottom:6px}
-.rpt-dates ul{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(260px,1fr));gap:3px 18px}
+.rpt-dates ul{list-style:none;columns:260px;column-gap:18px}   /* dates fill down each column, then across */
+.rpt-dates li{break-inside:avoid;padding:1.5px 0}
 .rpt-dates li b{display:inline-block;min-width:88px;font-variant-numeric:tabular-nums}
 .rpt-sec{margin-bottom:22px}
 .rpt-sec h3{font-size:14px;color:var(--navytx);display:flex;align-items:center;gap:8px;margin-bottom:6px}
@@ -554,7 +555,7 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
 
   <div class="tabs" id="tabs">
     <button class="tab-btn active" id="tab-track" data-view="v-track">Tracker</button>
-    <button class="tab-btn" id="tab-report" data-view="v-report">Status report (CCSR)</button>
+    <button class="tab-btn" id="tab-report" data-view="v-report">CCSR Status &amp; Deadlines</button>
     <button class="tab-btn" id="tab-prog" data-view="v-prog">Stage progress</button>
     <button class="tab-btn" id="tab-ccr" data-view="v-ccr">CCR packets</button>
     <button class="tab-btn admin-only" id="tab-appr" data-view="v-appr">Approvals <span class="tab-badge" id="appr-badge">0</span></button>
