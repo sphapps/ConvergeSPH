@@ -300,14 +300,16 @@ tbody tr.deeplink td:first-child{box-shadow:inset 3px 0 0 var(--teal)}
 #enr-banner{background:var(--ltgold);border-bottom:1px solid var(--gold-bd);color:var(--txgold);padding:8px 16px;font-size:13px;display:flex;align-items:center;gap:10px;flex-shrink:0}
 #enr-banner button{margin-left:auto;background:none;border:none;color:var(--txgold);font-size:16px;cursor:pointer;line-height:1;padding:0 4px}
 .tooltip {
-  position: absolute; z-index: 500;
+  position: fixed; z-index: 500;
   background: var(--tipbg); color: #F1F5F9;
   font-size: 11px; line-height: 1.5;
   padding: 6px 10px; border-radius: 5px;
   max-width: 300px; white-space: pre-wrap;
-  pointer-events: none;
   box-shadow: 0 4px 12px rgba(0,0,0,.3);
 }
+/* Text for screen readers only (WCAG). Used for the hidden copy of each course
+   note that the course name points at with aria-describedby. */
+.sr-only{position:absolute!important;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
 /* ═══ COURSE PAGE ════════════════════════════════════════════
    A detail view rather than a tab: reachable from any course title, absent
    from the nav. Mirrors the faculty-profile layout so the two apps read as
@@ -1465,6 +1467,8 @@ const fteMark=cat=>{const r=fteRule(cat);return r&&r.status==='provisional'?'*':
 // Hover text for an Eff CR cell: how each course contributes. `offs` items
 // carry {course, cr, two, ex, eff}. Raw CR columns were removed from the
 // on-screen tables (Tim, 9/29/26); this tooltip is where that detail lives.
+// Unique ids for the hidden course-note copies (see renderSchedule).
+let NT_SEQ=0;
 function effTip(offs,label){
   if(!offs||!offs.length)return '';
   const n=v=>+(+v).toFixed(2);
@@ -2402,12 +2406,17 @@ function renderSched(){
                 :(_descT.length>320?_descT.slice(0,320).replace(/\s+\S*$/,'')+'…':_descT);
     // A native title= would race the custom tooltip, so only one of them exists
     // at a time: hover text when there is any, the affordance hint otherwise.
-    const tipAttr=tipTxt?` data-notes="${esc(tipTxt)}"`:' title="View course page"';
+    // Accessibility plan 1.2: the note is also exposed to screen readers via a
+    // hidden copy the name points at, and a name with no course page is made
+    // focusable so keyboard users can open the note too.
+    const tipId=tipTxt?`nt-${++NT_SEQ}`:'';
+    const tipAttr=tipTxt?` data-notes="${esc(tipTxt)}" aria-describedby="${tipId}"`:' title="View course page"';
     const _pageId=o.courseId?baseCodeOf(o.courseId):'';
     const nameOpen=o.courseId
       ? `<a class="clink${tipTxt?' has-notes':''}"${tipAttr} href="?course=${esc(encodeURIComponent(_pageId))}" data-course="${esc(_pageId)}">`
-      : (tipTxt?`<span class="has-notes" data-notes="${esc(tipTxt)}">`:'<span>');
-    const nameClose=o.courseId?'</a>':'</span>';
+      : (tipTxt?`<span class="has-notes" tabindex="0"${tipAttr}>`:'<span>');
+    const nameClose=(o.courseId?'</a>':'</span>')
+      +(tipTxt?`<span id="${tipId}" class="sr-only">${hasNotes?'Note: ':''}${esc(tipTxt)}</span>`:'');
     const noteInd=hasNotes?' <span style="color:var(--teal);font-size:11px" title="Has notes">ℹ</span>':'';
     const potBadge=(/^Summer/i.test(o.term)&&o.pot)?` <span style="background:var(--ltgold);color:#92400E;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap">POT ${esc(o.pot)}</span>`:'';
     const noPrint=(o.printStatus==='No Print')?' <span title="No Print — excluded from the public schedule" style="font-size:11px">🚫</span>':'';
@@ -7575,28 +7584,83 @@ document.addEventListener('DOMContentLoaded',async()=>{
     handleOfferingDeepLink();   // ?offering=<uuid> arriving from a faculty profile
 });
 
-/* ─── TOOLTIP for notes ──── */
+/* ─── TOOLTIP for notes ────────────────────────────────────────
+   Accessibility plan item 1.2 (WCAG 2.1.1, 1.4.13). The note opens on keyboard
+   focus as well as mouse hover, sits under the course name instead of chasing
+   the cursor, stays open while the pointer is over the note itself, and Esc
+   closes it without moving focus. Screen readers get the same text through
+   aria-describedby (hidden copy rendered beside the name), so this floating
+   box is visual only and hidden from them. */
 (()=>{
-  let tip=null;
-  function showTip(e){
-    const t=e.target.closest('.has-notes');
-    if(!t)return;
-    if(!tip){tip=document.createElement('div');tip.className='tooltip';document.body.appendChild(tip);}
+  let tip=null, cur=null, hideT=null, escHeld=false;
+  function ensure(){
+    if(tip)return tip;
+    tip=document.createElement('div');
+    tip.className='tooltip';
+    tip.setAttribute('aria-hidden','true');
+    tip.style.display='none';
+    tip.addEventListener('mouseenter',()=>clearTimeout(hideT));
+    tip.addEventListener('mouseleave',()=>schedHide());
+    document.body.appendChild(tip);
+    return tip;
+  }
+  function place(t){
+    const r=t.getBoundingClientRect(), tw=tip.offsetWidth, th=tip.offsetHeight;
+    let x=r.left, y=r.bottom+4;
+    if(x+tw>innerWidth-8)x=Math.max(8,innerWidth-8-tw);
+    if(y+th>innerHeight-8)y=Math.max(8,r.top-th-4);
+    tip.style.left=x+'px'; tip.style.top=y+'px';
+  }
+  function show(t){
+    clearTimeout(hideT);
+    ensure();
+    if(cur===t&&tip.style.display!=='none')return;
+    cur=t;
     tip.textContent=t.dataset.notes;
     tip.style.display='block';
-    moveTip(e);
+    place(t);
   }
-  function moveTip(e){
-    if(!tip||tip.style.display==='none')return;
-    const x=e.clientX+14,y=e.clientY+14;
-    const tw=tip.offsetWidth,th=tip.offsetHeight;
-    tip.style.left=(x+tw>window.innerWidth?x-tw-20:x)+'px';
-    tip.style.top=(y+th>window.innerHeight?y-th-20:y)+'px';
+  function hide(){clearTimeout(hideT);if(tip)tip.style.display='none';cur=null;}
+  // Short delay so the pointer can cross the gap from the name onto the note.
+  function schedHide(){
+    clearTimeout(hideT);
+    hideT=setTimeout(()=>{
+      if(!cur)return;
+      if(cur.isConnected&&(cur===document.activeElement||cur.matches(':hover')||tip.matches(':hover')))return;
+      hide();
+    },150);
   }
-  function hideTip(e){if(tip&&!e.target.closest('.has-notes')){tip.style.display='none';}}
-  document.addEventListener('mouseover',showTip);
-  document.addEventListener('mousemove',moveTip);
-  document.addEventListener('mouseout',hideTip);
+  // After Esc, whatever ends up under a still pointer must not pop a new note;
+  // wait for the mouse to actually move.
+  document.addEventListener('mousemove',()=>{escHeld=false;});
+  document.addEventListener('mouseover',e=>{
+    if(escHeld)return;
+    const t=e.target.closest('.has-notes');
+    if(t)show(t);
+    else if(cur&&!cur.isConnected)hide();
+  });
+  document.addEventListener('mouseout',e=>{
+    const t=e.target.closest('.has-notes');
+    if(t&&!t.contains(e.relatedTarget))schedHide();
+  });
+  document.addEventListener('focusin',e=>{
+    const t=e.target.closest&&e.target.closest('.has-notes');
+    if(t)show(t); else if(cur)schedHide();
+  });
+  document.addEventListener('focusout',e=>{
+    if(e.target.closest&&e.target.closest('.has-notes'))schedHide();
+  });
+  // Esc dismisses the note first, before anything else that listens for Esc.
+  document.addEventListener('keydown',e=>{
+    if(e.key==='Escape'&&tip&&tip.style.display!=='none'){hide();escHeld=true;e.stopPropagation();}
+  },true);
+  // Tables scroll inside their own panes, so follow the name or let go of it.
+  document.addEventListener('scroll',()=>{
+    if(!cur)return;
+    if(!cur.isConnected)return hide();
+    place(cur);
+  },true);
+  window.addEventListener('resize',()=>{if(cur&&cur.isConnected)place(cur);});
 })();
 
 /* ── THEME TOGGLE ─────────────────────────────────────────────
