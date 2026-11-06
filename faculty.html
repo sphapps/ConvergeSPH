@@ -142,7 +142,7 @@ main{flex:1;overflow:auto;display:flex;flex-direction:column}
 .view.active{display:flex}
 
 /* ═══ TABLE ═════════════════════════════════════════════════ */
-.tw{flex:1;overflow:auto}
+.tw{flex:1;overflow:auto;position:relative}  /* keeps .sr-only text inside the scroll box, so the page itself never grows a second scrollbar */
 table{width:100%;border-collapse:collapse;background:var(--surface)}
 thead th{position:sticky;top:0;background:var(--ltblue);color:var(--navytx);font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;padding:9px 12px;text-align:left;border-bottom:2px solid var(--mgray);white-space:nowrap;z-index:2}
 tbody td{padding:9px 12px;border-bottom:1px solid var(--rowline);font-size:13px;vertical-align:top}
