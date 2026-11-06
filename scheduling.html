@@ -533,7 +533,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
         <select id="f-mod"><option value="">All Modalities</option><option>Online (async)</option><option>Online (sync)</option><option>Hybrid</option><option>In-Person</option><option>By Arrangement</option><option>Dept Arranged</option><option>Attend Anywhere</option></select>
         <select id="f-level"><option value="">All Levels</option><option value="GR">Graduate</option><option value="UG">Undergraduate</option></select>
         <input type="search" id="f-q" placeholder="Search…" style="width:200px">
-        <label class="auth-only" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--dgray);cursor:pointer;white-space:nowrap"><input type="checkbox" id="f-incomplete" style="margin:0;cursor:pointer"> ⚠ Incomplete only</label>
+        <label class="auth-only" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--dgray);cursor:pointer;white-space:nowrap"><input type="checkbox" id="f-incomplete" style="margin:0;cursor:pointer"> <span aria-hidden="true">⚠</span> Incomplete only</label>
         <div class="tb-sep"></div>
         <button class="btn btn-p admin-only" id="btn-add-off" style="display:none">+ Add Offering</button>
         <button class="btn btn-s admin-only" id="btn-undo" style="display:none" disabled title="Nothing to undo">↶ Undo</button>
@@ -2166,7 +2166,7 @@ function renderTermRows(){
         <strong style="color:var(--navytx);font-size:14px">${esc(ay)}</strong>
         <span style="font-size:12px;color:var(--dgray)">${offs} offering${offs===1?'':'s'}</span>
         ${isCur
-          ?`<span style="background:var(--ltblue);color:var(--navytx);font-size:11px;padding:2px 8px;border-radius:10px" title="This is what the faculty app's 'Teaching this year' filter uses">★ Current AY</span>`
+          ?`<span style="background:var(--ltblue);color:var(--navytx);font-size:11px;padding:2px 8px;border-radius:10px" title="This is what the faculty app's 'Teaching this year' filter uses"><span aria-hidden="true">★</span> Current AY<span class="sr-only"> — used by the faculty app's Teaching this year filter</span></span>`
           :`<button class="btn btn-s ay-cur" data-ay="${esc(ay)}" style="font-size:11px" title="Designate this as the current AY (used by the faculty app's 'Teaching this year' filter)">Set as Current</button>`}
         <button class="btn btn-s ay-del" data-ay="${esc(ay)}" style="margin-left:auto;font-size:11px;color:var(--red);border-color:var(--red)">Delete year</button>
       </div>
@@ -2417,20 +2417,20 @@ function renderSched(){
       : (tipTxt?`<span class="has-notes" tabindex="0"${tipAttr}>`:'<span>');
     const nameClose=(o.courseId?'</a>':'</span>')
       +(tipTxt?`<span id="${tipId}" class="sr-only">${hasNotes?'Note: ':''}${esc(tipTxt)}</span>`:'');
-    const noteInd=hasNotes?' <span style="color:var(--teal);font-size:11px" title="Has notes">ℹ</span>':'';
+    const noteInd=hasNotes?' '+symTag('ℹ','Has notes','style="color:var(--teal);font-size:11px"'):'';
     const potBadge=(/^Summer/i.test(o.term)&&o.pot)?` <span style="background:var(--ltgold);color:#92400E;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap">POT ${esc(o.pot)}</span>`:'';
-    const noPrint=(o.printStatus==='No Print')?' <span title="No Print — excluded from the public schedule" style="font-size:11px">🚫</span>':'';
+    const noPrint=(o.printStatus==='No Print')?' '+symTag('🚫','No Print — excluded from the public schedule','style="font-size:11px"'):'';
     const _gOff=String(o.grading||'').trim(), _gCat=_catGrading(o.courseId)||'';
     const gradeBadge=(_gOff&&_gOff!==_gCat)?` <span style="background:var(--ltgold);color:#92400E;padding:1px 6px;border-radius:4px;font-size:10px;font-weight:700;white-space:nowrap" title="Grading for this offering differs from the catalog (${esc(_gCat||'none')})">${esc(_gOff)}</span>`:'';
     const discBadge=(_crsT&&_crsT.discontinued)?' <span class="schedDiscPill" title="This course has been marked discontinued">Discontinued</span>':'';
     const _crs=_crsT;
-    const permReq=(_crs&&_crs.permission==='Yes')?'<span title="Requires instructor/department permission to register" style="font-size:11px">🔑</span>':'';
+    const permReq=(_crs&&_crs.permission==='Yes')?symTag('🔑','Requires instructor/department permission to register','style="font-size:11px"'):'';
     const _rParts=[]; const _ro=String(o.restrictOhsu||'').trim(), _rp=String(o.restrictPsu||'').trim();
     if(_ro)_rParts.push('OHSU: '+_ro); if(_rp)_rParts.push('PSU: '+_rp);
-    const restr=_rParts.length?`<span title="${esc(_rParts.join('\n'))}" style="font-size:11px">⛔</span>`:'';
+    const restr=_rParts.length?symTag('⛔','Restrictions — '+_rParts.join('; '),'style="font-size:11px"'):'';
     const incomplete=isIncomplete(o);
-    const warnMark=incomplete?' <span class="flag-warn" title="Incomplete: missing/TBD instructor or days, or missing modality or cap">⚠</span>':'';
-    const flags=restr+permReq+(isNight(o)?'<span title="Night class (starts ≥ 4pm)">🌙</span>':'')+(isOnline(o)?'<span title="Online">🖥️</span>':'');
+    const warnMark=incomplete?' '+symTag('⚠','Incomplete: missing/TBD instructor or days, or missing modality or cap','class="flag-warn"'):'';
+    const flags=restr+permReq+(isNight(o)?symTag('🌙','Night class (starts 4pm or later)'):'')+(isOnline(o)?symTag('🖥️','Online'):'');
     h+=`<tr${incomplete?' class="incomplete"':''} data-uuid="${esc(o._uuid||'')}">
       <td>${termBadge(o.term)}</td><td><strong>${esc(o.prefix)}</strong></td>
       <td style="max-width:260px">${nameOpen}${esc(schedCourseDisp(o))}${nameClose}${warnMark}${noPrint}${noteInd}${potBadge}${gradeBadge}${discBadge}</td>
@@ -3117,6 +3117,13 @@ function renderCat(){
   });
   $('cat-tb').innerHTML=h;
 }
+/* Accessibility plan 1.3: a symbol whose meaning would otherwise live only in
+   title= (never read reliably, never shown on keyboard focus or touch). The
+   glyph is hidden from screen readers and the label is spoken instead; the
+   title stays for mouse hover. label is plain text and is escaped here. */
+function symTag(glyph,label,attrs){
+  return `<span${attrs?' '+attrs:''} title="${esc(label)}"><span aria-hidden="true">${glyph}</span><span class="sr-only">${esc(label)}</span></span>`;
+}
 function dotCell(cid,pfx,term){
   const on=DB.offerings.some(o=>o.courseId===cid&&o.term===term);
   if(canEditTerm(term))return`<td style="text-align:center"><span class="dot ${on?'on':'off'}" data-cid="${esc(cid)}" data-pfx="${esc(pfx)}" data-term="${esc(term)}">${on?'●':'○'}</span></td>`;
@@ -3394,7 +3401,7 @@ function renderInst(){
     // fact that admin establishes first. Matched by RLS on instructor_meta.
     const eb=(isAdmin&&!LOCKED)?`<td><button class="btn btn-s btn-sm ei" data-id="${esc(i.id)}">Edit</button></td>`:'';
     const notUsed=!i.isPlaceholder&&!isTBD(i.displayName)&&!assigned.has(i.displayName);
-    const flag=notUsed?' <span class="flag-warn" title="Not assigned to any offering on the Schedule">⚠</span>':'';
+    const flag=notUsed?' '+symTag('⚠','Not assigned to any offering on the Schedule','class="flag-warn"'):'';
     h+=`<tr><td><strong>${esc(i.displayName)}</strong>${flag}</td><td>${esc(i.lastName)}</td><td>${esc(i.firstName)}</td>
       <td>${esc(i.category)}</td><td style="font-size:11px">${esc(i.email)}</td>
       <td style="font-size:11px">${esc(i.eid)}</td>${eb}</tr>`;
