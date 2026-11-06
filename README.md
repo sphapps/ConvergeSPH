@@ -56,7 +56,6 @@ The scheduling app and faculty app cross-link to each other (e.g., an instructor
 Embed via SharePoint's **Embed web part**:
 ```html
 
-:)
 <iframe src="https://fignewtonfood.github.io/sph-scheduling-app/index.html" width="100%" height="800px" frameborder="0"></iframe>
 ```
 
