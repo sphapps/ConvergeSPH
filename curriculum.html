@@ -953,7 +953,7 @@ let pollTimer=null;
 let FORM_DEFS=[];           // cc_form_defs rows
 let CCR={};                 // item id -> cc_ccr row
 let CCR_READY=false;        // false until cc_003 has been run
-let PROG_COURSES=[],PREREQ=[],PREREQ_GRP=[],COREQ=[];   // catalog relationships, for prefill
+let PROG_COURSES=[],PROG_GROUPS=[],PREREQ=[],PREREQ_GRP=[],COREQ=[];   // catalog relationships, for prefill
 let crItemId=null,crForms=[],crTab=0,crWork={},crDirty=false,crReadOnly=false;
 let PACKET_KEY='';          // selected packet on the CCR tab
 // Numbered revisions on OHSU Category II / III forms (cc_005)
@@ -1117,10 +1117,10 @@ async function loadData(){
   const fR=await q('faculty_directory');
   // CCR tables (cc_003) and catalog relationships. None of these are fatal:
   // before cc_003 runs, the CCR features show a notice instead of failing.
-  const [fdR,ccR,pcR,prqR,pgrR,crqR,rvR]=await Promise.all([
+  const [fdR,ccR,pcR,prqR,pgrR,crqR,rvR,pcgR]=await Promise.all([
     q('cc_form_defs'),q('cc_ccr'),q('program_courses'),
     q('course_prerequisites'),q('course_prerequisite_groups'),q('course_corequisites'),
-    q('cc_revisions')
+    q('cc_revisions'),q('program_course_groups')
   ]);
   CCR_READY=!fdR.error&&!ccR.error;
   REV_READY=!rvR.error;
@@ -1128,6 +1128,7 @@ async function loadData(){
   FORM_DEFS=CCR_READY?(fdR.data||[]):[];
   CCR={}; if(CCR_READY)(ccR.data||[]).forEach(c=>{CCR[c.item_id]=c;});
   PROG_COURSES=pcR.error?[]:(pcR.data||[]);
+  PROG_GROUPS=pcgR.error?[]:(pcgR.data||[]);
   PREREQ=prqR.error?[]:(prqR.data||[]);
   PREREQ_GRP=pgrR.error?[]:(pgrR.data||[]);
   COREQ=crqR.error?[]:(crqR.data||[]);
@@ -2124,24 +2125,79 @@ function progDegree(p){
   if(/cert/i.test(c))return 'Graduate certificate';
   return '';
 }
+/* A program's requirements are a tree, as edited on the Programs page:
+   courses and custom-text lines (program_courses) can sit inside AND/OR
+   groups (program_course_groups), groups can nest, and "Other" can hold
+   separately named groups (concentrations, certificates…). sort_order counts
+   from the start within each level, so the rows have to be read level by
+   level. Sorting them all by sort_order interleaves the groups. */
+function progGroups(pid){return PROG_GROUPS.filter(g=>g.program_id===pid);}
+// Direct children of one level, in display order. A row whose group isn't
+// loaded is shown at the top level so nothing is dropped.
+function progKids(pid,type,parentId){
+  const gids=new Set(progGroups(pid).map(g=>g.id));
+  const lvl=x=>(x&&gids.has(x))?x:null;
+  const items=PROG_COURSES.filter(r=>r.program_id===pid&&r.relationship_type===type&&lvl(r.group_id)===(parentId||null))
+    .map(r=>({kind:'item',row:r,s:r.sort_order||0}));
+  const groups=progGroups(pid).filter(g=>g.relationship_type===type&&lvl(g.parent_group_id)===(parentId||null))
+    .map(g=>({kind:'group',group:g,s:g.sort_order||0}));
+  return [...items,...groups].sort((a,b)=>a.s-b.s);
+}
+// Every course row in display order, with the OR group it sits in (if any).
 function progRows(pid){
-  return PROG_COURSES.filter(pc=>pc.program_id===pid).sort((a,b)=>
-    REL_ORDER.indexOf(a.relationship_type)-REL_ORDER.indexOf(b.relationship_type)||(a.sort_order||0)-(b.sort_order||0));
+  const out=[];
+  const walk=(type,parentId,inOr)=>progKids(pid,type,parentId).forEach(k=>{
+    if(k.kind==='item')out.push(Object.assign({},k.row,{_inOr:inOr}));
+    else walk(type,k.group.id,inOr||k.group.logic==='or');
+  });
+  REL_ORDER.forEach(t=>walk(t,null,false));
+  return out;
 }
 function pcLabel(pc){const c=COURSES[pc.course_id];return c?courseLabel(c):(pc.custom_text||'');}
+function progReqLine(r){const c=COURSES[r.course_id];return pcLabel(r)+(c&&c.credits?` (${c.credits})`:'');}
+// One level as indented lines. A nested group gets the same lead-in the
+// Programs page shows ("All of the following:" / "One of the following:").
+function progReqLevel(pid,type,parentId,depth){
+  const pad='  '.repeat(depth);
+  return progKids(pid,type,parentId).map(k=>{
+    if(k.kind==='item'){const t=progReqLine(k.row);return t?pad+t:'';}
+    const inner=progReqLevel(pid,type,k.group.id,depth+1);
+    if(!inner)return '';
+    const g=k.group,name=(g.label||'').trim();
+    const head=(name?name+(g.credits!=null?` (${g.credits} credits)`:'')+' — ':'')+
+      (g.logic==='or'?'One of the following:':'All of the following:');
+    return pad+head+'\n'+inner;
+  }).filter(Boolean).join('\n');
+}
 function progReqText(pid){
-  const p=PROGRAMS[pid],rows=progRows(pid);
-  return REL_ORDER.map(k=>{
-    const rs=rows.filter(r=>r.relationship_type===k);
-    if(!rs.length)return '';
+  const p=PROGRAMS[pid],out=[];
+  REL_ORDER.forEach(k=>{
+    if(k==='other'){
+      // Loose "Other" lines first, then each named Other group as its own section.
+      const loose=progKids(pid,'other',null).filter(x=>x.kind==='item').map(x=>progReqLine(x.row)).filter(Boolean);
+      if(loose.length){
+        const cr=p&&p.other_credits!=null?` (${p.other_credits} credits)`:'';
+        out.push(REL_LBL.other+cr+':\n'+loose.map(t=>'  '+t).join('\n'));
+      }
+      progKids(pid,'other',null).filter(x=>x.kind==='group').forEach(x=>{
+        const g=x.group,inner=progReqLevel(pid,'other',g.id,1);
+        if(!inner)return;
+        const name=(g.label||'').trim()||REL_LBL.other;
+        out.push(name+(g.credits!=null?` (${g.credits} credits)`:'')+':\n'+inner);
+      });
+      return;
+    }
+    const inner=progReqLevel(pid,k,null,1);
+    if(!inner)return;
     const cr=p&&p[REL_CR[k]]!=null?` (${p[REL_CR[k]]} credits)`:'';
-    return REL_LBL[k]+cr+':\n'+rs.map(r=>{const c=COURSES[r.course_id];return '  '+pcLabel(r)+(c&&c.credits?` (${c.credits})`:'');}).join('\n');
-  }).filter(Boolean).join('\n\n');
+    out.push(REL_LBL[k]+cr+':\n'+inner);
+  });
+  return out.join('\n\n');
 }
 function progSbs(pid){
   return progRows(pid).map(pc=>{
     const c=COURSES[pc.course_id],lbl=pcLabel(pc),cr=c&&c.credits!=null?String(c.credits):'';
-    const rse=pc.relationship_type==='elective'?'Elective':'Required';
+    const rse=pc.relationship_type==='elective'?'Elective':pc._inOr?'Selective':'Required';
     return {os:'Same',oc:lbl,ocr:cr,ot:'1',orse:rse,ps:'Same',pc:lbl,pcr:cr,pt:'1',prse:rse};
   });
 }
