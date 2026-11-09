@@ -352,6 +352,30 @@ tbody tr.deeplink td:first-child{box-shadow:inset 3px 0 0 var(--teal)}
    font metrics, so hardcoding it drifts. */
 #gantt-wrap .g-hdr{position:sticky;top:0;z-index:6}
 #gantt-wrap .g-times{position:sticky;top:0;z-index:5}
+/* 1.4: Chart/Table switch, keyboard-reachable bars, table alternative */
+.g-viewsw{display:inline-flex;gap:0}
+.g-viewsw .btn{border-radius:0}
+.g-viewsw .btn:first-child{border-radius:6px 0 0 6px}
+.g-viewsw .btn:last-child{border-radius:0 6px 6px 0;margin-left:-1px}
+.g-viewsw .btn[aria-pressed="true"]{background:var(--navy);color:#fff;border-color:var(--navy)}
+#gantt-wrap:focus-visible{outline:2px solid var(--teal);outline-offset:-2px}
+#gantt-wrap button.gbar{border:0;margin:0;font:inherit;text-align:left}
+#gantt-wrap .gbar:focus-visible{outline:3px solid var(--text);outline-offset:1px;z-index:2}
+.g-mod{display:inline-block;margin-left:6px;padding:0 5px;border-radius:3px;border:1px solid var(--dgray);color:var(--text);font-size:9.5px;font-weight:600;line-height:14px}
+.gt-wrap{padding:4px 2px 24px;max-width:1100px}
+.gt-wrap h2{font-size:14px;margin:14px 0 6px;color:var(--text)}
+.gt-wrap h2:first-child{margin-top:0}
+.gt-note{font-size:12px;color:var(--dgray);margin:0 0 8px}
+.gt{border-collapse:collapse;font-size:12.5px;width:100%;background:var(--surface)}
+.gt caption{text-align:left;font-size:12px;color:var(--dgray);padding:0 0 6px}
+.gt th,.gt td{border:1px solid var(--mgray);padding:4px 8px;text-align:left;vertical-align:top}
+.gt thead th{background:var(--navy);color:#fff;font-weight:700;position:sticky;top:-16px;z-index:1}  /* -16px = .gantt-scroll padding, so rows never show above it */
+.gt td.nw{white-space:nowrap}
+.gt tbody th{font-weight:600;white-space:nowrap}
+.gt td.num,.gt th.num{text-align:right;font-variant-numeric:tabular-nums}
+.gt tfoot td,.gt tfoot th{font-weight:700;background:var(--surface-2)}
+#gantt-wrap{position:relative}
+.gt td,.gt tbody th,.gt tfoot th{position:relative}
 
 /* POT field visibility */
 .pot-row { display: none; }
@@ -564,10 +588,14 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
         <select id="g-pfx"><option value="">All Programs</option></select>
         <select id="g-level"><option value="">All Levels</option><option value="GR">Graduate</option><option value="UG">Undergraduate</option></select>
         <div class="tb-sp"></div>
+        <div class="g-viewsw" role="group" aria-label="Show On-Campus as">
+          <button type="button" class="btn btn-s" data-gview="chart" aria-pressed="true">Chart</button>
+          <button type="button" class="btn btn-s" data-gview="table" aria-pressed="false">Table</button>
+        </div>
         <button class="btn btn-s auth-only" id="btn-oc-report">🖨 On-Campus Report</button>
-        <span class="tb-hint">Bars = In-Person / Hybrid · Numbers = enrollment (cap if blank)</span>
+        <span class="tb-hint" id="g-hint">Bars = In-Person / Hybrid · Numbers = enrollment (cap if blank)</span>
       </div>
-      <div class="gantt-scroll" id="gantt-wrap"></div>
+      <div class="gantt-scroll" id="gantt-wrap" tabindex="0" role="region" aria-label="On-Campus chart"></div>
     </div>
 
     <!-- CHTOOL -->
@@ -1506,7 +1534,7 @@ function parseDays(s){
   });
   return cols;
 }
-const GCOLS=['#2E75B6','#375623','#C55A11','#7B2C8C','#C00000','#1F6B75','#7F4F24','#2F5496','#4F6228','#843C0C'];
+const GCOLS=['#2E75B6','#375623','#A84B0E','#7B2C8C','#C00000','#1F6B75','#7F4F24','#2F5496','#4F6228','#843C0C'];
 
 /* ─── STATE ────────────────────────────────────────────────── */
 let DB={courses:[],instructors:[],offerings:[],
@@ -2478,6 +2506,21 @@ function updateEnroll(id,v){
    a "B" (both) offering shows under either UG or GR. */
 function _lvlOk(o,lvl){if(!lvl)return true;const g=o.grugb||'';if(lvl==='GR')return g==='GR'||g==='B';if(lvl==='UG')return g==='UG'||g==='B';return true;}
 /* ─── GANTT ─────────────────────────────────────────────────── */
+// "1300-1550" → "1:00pm–3:50pm" (falls back to the raw text).
+const GDAYS_LONG=['Monday','Tuesday','Wednesday','Thursday','Friday'];
+function fmtMtgTime(t){
+  const m=String(t||'').match(/(\d{3,4})\s*-\s*(\d{3,4})/);
+  if(!m)return String(t||'').trim();
+  const f=x=>{x=x.padStart(4,'0');let h=parseInt(x.slice(0,2)),mi=x.slice(2);const ap=h<12?'am':'pm';h=h%12||12;return h+':'+mi+ap;};
+  return f(m[1])+'–'+f(m[2]);
+}
+// Chart or Table, remembered per browser.
+let GVIEW=(()=>{try{return localStorage.getItem('sph_gantt_view')==='table'?'table':'chart';}catch(e){return 'chart';}})();
+function setGanttView(v){
+  GVIEW=v==='table'?'table':'chart';
+  try{localStorage.setItem('sph_gantt_view',GVIEW);}catch(e){}
+  renderGantt();
+}
 function renderGantt(){
   const term=val('g-term'),pfx=val('g-pfx'),lvl=val('g-level');
   // On-Campus chart: In-Person and Hybrid (both put students on campus for at
@@ -2491,51 +2534,81 @@ function renderGantt(){
   const enrNum=o=>{const s=String(o.enrollment==null?'':o.enrollment).trim();return s===''?null:(/^-?\d+$/.test(s)?parseInt(s,10):null);};
   const courses=DB.offerings.filter(o=>o.term===term&&SHOW.has(o.modality)&&(!pfx||o.prefix===pfx)&&_lvlOk(o,lvl)&&enrNum(o)!==0);
   const wrap=$('gantt-wrap');
+  // Switch state + region name follow the current view.
+  document.querySelectorAll('[data-gview]').forEach(b=>b.setAttribute('aria-pressed',String(b.dataset.gview===GVIEW)));
+  const termLabel=TL[term]||term;
+  wrap.setAttribute('aria-label',(GVIEW==='table'?'On-Campus tables, ':'On-Campus chart, ')+termLabel);
+  const hint=$('g-hint');
+  if(hint)hint.textContent=GVIEW==='table'
+    ?'Students = enrollment; (cap) where enrollment is blank'
+    :'Bars = In-Person / Hybrid · Numbers = enrollment (cap if blank)';
   if(!courses.length){wrap.innerHTML='<div class="nores">No In-Person/Hybrid courses for this filter.</div>';return;}
+  courses.sort((a,b)=>a.prefix.localeCompare(b.prefix)||String(a.courseNumber).localeCompare(String(b.courseNumber),undefined,{numeric:true})||a.fullName.localeCompare(b.fullName));
+  // Headcount per day × 30-min slot — shared by the chart and the table.
+  const totals=Array(5).fill(0).map(()=>new Array(N).fill(0));
+  const info=courses.map(o=>{
+    const slots=t2s(o.time),days=parseDays(o.days);
+    const cap=parseInt(o.totalCap)||0,en=enrNum(o);
+    const eff=en!=null?en:cap;                                 // blank → fall back to cap
+    const ok=!!(slots&&slots.end>slots.start);
+    const si=ok?Math.max(0,Math.floor(slots.start)):0,ei=ok?Math.min(N,Math.ceil(slots.end)):0;
+    if(ok)days.forEach(d=>{for(let s=si;s<ei&&s<N;s++)totals[d][s]+=eff;});
+    const people=en!=null?(en+' student'+(en===1?'':'s')):(cap>0?'cap '+cap+' (enrollment blank)':'no enrollment or cap');
+    return {o,slots,days,ok,si,ei,cap,en,eff,people,time:fmtMtgTime(o.time)};
+  });
+  if(GVIEW==='table'){wrap.innerHTML=ganttTableHTML(info,totals,termLabel);return;}
+
   const pct=s=>((s/N)*100).toFixed(2)+'%';
-  const hrlbl=si=>{const h=7+Math.floor(si/2),m=si%2?'30':'00';return m==='00'?(h<12?h+'am':h===12?'12pm':(h-12)+'pm'):''};
-  let html='<div style="min-width:900px">';
-  html+='<div class="g-hdr" style="display:grid;grid-template-columns:260px 1fr"><div style="background:var(--grp1);color:white;padding:6px 10px;font-size:11px;font-weight:700">Course</div><div style="display:grid;grid-template-columns:repeat(5,1fr)">';
+  // Hour labels every 2 hours (8am, 10am …) at a readable size; hourly 8px
+  // labels overlapped and failed contrast.
+  const hrlbl=si=>{if(si%4!==2)return '';const h=7+si/2;return h<12?h+'am':h===12?'12pm':(h-12)+'pm';};
+  const editable=canEdit();
+  let html='<p class="sr-only">Chart view. The same information, including students on campus for each half hour, is in the Table view (switch above).</p>';
+  html+='<div style="min-width:900px">';
+  // Day header, time ruler and totals row are visual only: the table view carries the same data.
+  html+='<div class="g-hdr" aria-hidden="true" style="display:grid;grid-template-columns:260px 1fr"><div style="background:var(--grp1);color:white;padding:6px 10px;font-size:11px;font-weight:700">Course</div><div style="display:grid;grid-template-columns:repeat(5,1fr)">';
   GDAYS.forEach(d=>html+=`<div style="background:var(--navy);color:white;text-align:center;font-size:11px;font-weight:700;padding:5px;border-right:1px solid var(--navyhv)">${d}</div>`);
   html+='</div></div>';
-  html+='<div class="g-times" style="display:grid;grid-template-columns:260px 1fr;background:var(--surface-2)"><div style="height:16px;background:var(--rowline)"></div><div style="display:grid;grid-template-columns:repeat(5,1fr)">';
+  html+='<div class="g-times" aria-hidden="true" style="display:grid;grid-template-columns:260px 1fr;background:var(--surface-2)"><div style="height:16px;background:var(--rowline)"></div><div style="display:grid;grid-template-columns:repeat(5,1fr)">';
   for(let d=0;d<5;d++){
-    html+=`<div style="position:relative;height:16px;border-right:1px solid var(--rowline)">`;
-    for(let si=0;si<N;si++){const l=hrlbl(si);if(l)html+=`<span style="position:absolute;left:${pct(si)};font-size:8px;color:var(--muted);transform:translateX(-50%);white-space:nowrap">${l}</span>`;}
+    html+=`<div style="position:relative;height:16px;border-right:1px solid var(--rowline);overflow:hidden">`;
+    for(let si=0;si<N;si++){const l=hrlbl(si);if(l)html+=`<span style="position:absolute;top:1px;left:${pct(si)};font-size:10px;line-height:14px;color:var(--dgray);transform:translateX(-50%);white-space:nowrap">${l}</span>`;}
     html+='</div>';
   }
   html+='</div></div>';
-  const totals=Array(5).fill(0).map(()=>new Array(N).fill(0));
-  courses.sort((a,b)=>a.prefix.localeCompare(b.prefix)||String(a.courseNumber).localeCompare(String(b.courseNumber),undefined,{numeric:true})||a.fullName.localeCompare(b.fullName)).forEach((o,ci)=>{
-    const slots=t2s(o.time),days=parseDays(o.days);
+  info.forEach((c,ci)=>{
+    const o=c.o;
     const color=GCOLS[ci%GCOLS.length];
-    const cap=parseInt(o.totalCap)||0,en=enrNum(o);
-    const eff=en!=null?en:cap;                                 // blank → fall back to cap
-    const disp=en!=null?(en>0?en:''):(cap>0?'('+cap+')':'');   // (parens) = cap fallback
-    html+=`<div style="display:grid;grid-template-columns:260px 1fr;border-bottom:1px solid var(--rowline)"><div style="padding:4px 8px;font-size:11px;overflow:hidden"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.fullName)}</div><div style="color:var(--dgray);font-size:10px">${esc(o.instructor1)}</div></div><div style="display:grid;grid-template-columns:repeat(5,1fr)">`;
+    const disp=c.en!=null?(c.en>0?c.en:''):(c.cap>0?'('+c.cap+')':'');   // (parens) = cap fallback
+    const mod=o.modality==='Hybrid'?'<span class="g-mod">Hybrid</span>':'';
+    html+=`<div style="display:grid;grid-template-columns:260px 1fr;border-bottom:1px solid var(--rowline)"><div style="padding:4px 8px;font-size:11px;overflow:hidden"><div style="font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis" title="${esc(o.fullName)}">${esc(o.fullName)}</div><div style="color:var(--dgray);font-size:10px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(o.instructor1)}${mod}</div></div><div style="display:grid;grid-template-columns:repeat(5,1fr)">`;
     for(let d=0;d<5;d++){
       html+=`<div style="position:relative;height:34px;border-right:1px solid var(--rowline)">`;
-      if(slots&&days.includes(d)&&slots.end>slots.start){
-        const si=Math.max(0,Math.floor(slots.start)),ei=Math.min(N,Math.ceil(slots.end));
-        const left=pct(si),width=((ei-si)/N*100).toFixed(2)+'%';
-        html+=`<div style="position:absolute;top:2px;bottom:2px;left:${left};width:${width};background:${color};border-radius:3px;display:flex;align-items:center;padding:0 4px;font-size:10px;color:white;font-weight:600;overflow:hidden;cursor:pointer" class="gbar" data-id="${esc(o.id)}">${disp}</div>`;
-        for(let s=si;s<ei&&s<N;s++)totals[d][s]+=eff;
+      if(c.ok&&c.days.includes(d)){
+        const left=pct(c.si),width=((c.ei-c.si)/N*100).toFixed(2)+'%';
+        const st=`position:absolute;top:2px;bottom:2px;left:${left};width:${width};background:${color};border-radius:3px;display:flex;align-items:center;padding:0 4px;font-size:10px;color:white;font-weight:600;overflow:hidden`;
+        const what=`${GDAYS_LONG[d]} ${c.time}, ${c.people}`;
+        html+=editable
+          ?`<button type="button" class="gbar" data-id="${esc(o.id)}" style="${st};cursor:pointer" aria-label="${esc('Edit '+o.fullName+': '+what)}"><span aria-hidden="true">${disp}</span></button>`
+          :`<div class="gbar" role="img" style="${st}" aria-label="${esc(what)}"><span aria-hidden="true">${disp}</span></div>`;
       }
       html+='</div>';
     }
     html+='</div></div>';
   });
-  html+='<div style="display:grid;grid-template-columns:260px 1fr;background:var(--navy)"><div style="padding:5px 10px;color:white;font-size:11px;font-weight:700">▶ STUDENTS ON CAMPUS</div><div style="display:grid;grid-template-columns:repeat(5,1fr)">';
+  html+='<div aria-hidden="true" style="display:grid;grid-template-columns:260px 1fr;background:var(--navy)"><div style="padding:5px 10px;color:white;font-size:11px;font-weight:700">▶ STUDENTS ON CAMPUS</div><div style="display:grid;grid-template-columns:repeat(5,1fr)">';
   for(let d=0;d<5;d++){
     html+='<div style="display:flex;border-right:1px solid rgba(255,255,255,.1)">';
     for(let si=0;si<N;si++){
       const n=totals[d][si];
-      const bg=n>0?`rgba(255,255,255,${Math.min(.9,n/150+.15)})`:'transparent';
-      html+=`<div style="flex:1;height:24px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:white;background:${bg};border-right:1px solid rgba(255,255,255,.05)">${n>0?n:''}</div>`;
+      const a=Math.min(.9,n/150+.15);
+      const bg=n>0?`rgba(255,255,255,${a})`:'transparent';
+      const fg=a>=.45?'#1F3864':'white';                      // dark text once the cell gets light
+      html+=`<div style="flex:1;height:24px;display:flex;align-items:center;justify-content:center;font-size:8px;font-weight:700;color:${fg};background:${bg};border-right:1px solid rgba(255,255,255,.05)">${n>0?n:''}</div>`;
     }
     html+='</div>';
   }
-  html+='</div></div></div>';
+  html+='</div></div>';
   wrap.innerHTML=html;
   // The time ruler stacks directly under the frozen day header. Its offset is
   // the header's rendered height, which depends on font metrics and zoom — so
@@ -2545,6 +2618,45 @@ function renderGantt(){
     if(gh&&gt&&gh.offsetHeight)gt.style.top=gh.offsetHeight+'px';
   };
   _fit(); requestAnimationFrame(_fit);
+}
+// Table view of the On-Campus chart (accessibility plan item 1.4): every course
+// meeting with days, times, modality and headcount, then students on campus for
+// each half hour — the totals row of the chart, which existed nowhere else.
+function ganttTableHTML(info,totals,termLabel){
+  const filt=[val('g-pfx')||'all programs',({GR:'graduate',UG:'undergraduate'})[val('g-level')]||'all levels'].join(', ');
+  let h='<div class="gt-wrap">';
+  h+='<h2 id="gt-h1">Course meetings</h2>';
+  h+=`<table class="gt" aria-labelledby="gt-h1"><caption>${esc(termLabel)}, In-Person and Hybrid courses (${esc(filt)}). ${info.length} course${info.length===1?'':'s'}.</caption>`;
+  h+='<thead><tr><th scope="col">Course</th><th scope="col">Instructor</th><th scope="col">Modality</th><th scope="col">Days</th><th scope="col">Time</th><th scope="col" class="num">Students</th></tr></thead><tbody>';
+  info.forEach(c=>{
+    const o=c.o;
+    const days=c.days.length?c.days.slice().sort((a,b)=>a-b).map(d=>GDAYS_LONG[d]).join(', '):(String(o.days||'').trim()||'Not set');
+    const stud=c.en!=null?String(c.en):(c.cap>0?'('+c.cap+')<span class="sr-only"> cap, enrollment blank</span>':'—<span class="sr-only">none</span>');
+    h+=`<tr><th scope="row">${esc(o.fullName)}</th><td>${esc(o.instructor1||'')}</td><td class="nw">${esc(o.modality)}</td><td>${esc(days)}</td><td class="nw">${esc(c.time||'Not set')}</td><td class="num">${stud}</td></tr>`;
+  });
+  h+='</tbody></table>';
+  // Students on campus per half hour, trimmed to the span where anyone is on campus.
+  let first=-1,last=-1;
+  for(let si=0;si<N_SLOTS;si++)if(totals.some(d=>d[si]>0)){if(first<0)first=si;last=si;}
+  h+='<h2 id="gt-h2">Students on campus by time</h2>';
+  if(first<0){h+='<p class="gt-note">No course has days and times set, so there are no on-campus counts.</p></div>';return h;}
+  const peaks=totals.map(d=>Math.max(0,...d));
+  h+='<p class="gt-note">Total students in class on campus during each half hour. Uses enrollment, or the cap where enrollment is blank. Each day’s busiest time is in bold.</p>';
+  h+=`<table class="gt" aria-labelledby="gt-h2"><caption>${esc(termLabel)}, ${esc(filt)}</caption><thead><tr><th scope="col">Time</th>`;
+  GDAYS_LONG.forEach(d=>h+=`<th scope="col" class="num">${d}</th>`);
+  h+='</tr></thead><tbody>';
+  for(let si=first;si<=last;si++){
+    h+=`<tr><th scope="row">${slotRange(si)}</th>`;
+    for(let d=0;d<5;d++){
+      const n=totals[d][si],pk=n>0&&n===peaks[d];
+      h+=`<td class="num"${pk?' style="font-weight:700"':''}>${n}${pk?'<span class="sr-only"> (busiest)</span>':''}</td>`;
+    }
+    h+='</tr>';
+  }
+  h+='</tbody><tfoot><tr><th scope="row">Peak</th>';
+  peaks.forEach(p=>h+=`<td class="num">${p}</td>`);
+  h+='</tr></tfoot></table></div>';
+  return h;
 }
 
 /* ─── ON-CAMPUS REPORT ──────────────────────────────────────────
@@ -5302,7 +5414,8 @@ function wireEvents(){
   });
   $('g-pfx').addEventListener('change',renderGantt);
   $('g-level').addEventListener('change',renderGantt);
-  $('gantt-wrap').addEventListener('click',e=>{const b=e.target.closest('.gbar');if(b&&canEdit())openOM(b.dataset.id);});
+  $('gantt-wrap').addEventListener('click',e=>{const b=e.target.closest('button.gbar');if(b&&canEdit())openOM(b.dataset.id);});
+  document.querySelectorAll('[data-gview]').forEach(b=>b.addEventListener('click',()=>setGanttView(b.dataset.gview)));
   $('btn-oc-report').addEventListener('click',generateOnCampusReport);
   $('ps-term').addEventListener('change',()=>{$('ps-generate-btn').disabled=!val('ps-term');});
   $('ps-generate-btn').addEventListener('click',psGenerate);
