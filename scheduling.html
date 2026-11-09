@@ -2391,7 +2391,7 @@ function renderSched(){
     const i2=o.instructor2?` &amp; ${facLink(o.instructor2)}`:'';
     // Per-term, not per-user: a PD may edit Spring while Fall is frozen.
     const canT=canEditTerm(o.term);
-    const eb=canEdit()?`<td>${canT?`<button class="btn btn-s btn-sm eo" data-id="${esc(o.id)}">Edit</button>`:'<span class="muted" title="This term is frozen" style="color:#94A3B8;font-size:11px">🔒</span>'}</td>`:'';
+    const eb=canEdit()?`<td>${canT?`<button class="btn btn-s btn-sm eo" data-id="${esc(o.id)}">Edit</button>`:symTag('🔒','This term is frozen','class="muted" style="color:#94A3B8;font-size:11px"')}</td>`:'';
     const ro=canT?'':'readonly';
     // Internal detail rather than a secret: admin_notes is still in the anon
     // payload (offerings is anon-granted and read with select('*')), so this

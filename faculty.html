@@ -2344,7 +2344,7 @@ function renderDir(){
   $('dir-tb').innerHTML=rows.map(f=>{
     const n=(TEACHING[f.id]||[]).length;
     return `<tr class="clickable" data-id="${esc(f.id)}">
-      <td><a class="nm" href="?id=${esc(f.id)}">${esc(f.last_name||'')}${f.first_name?', '+esc(f.first_name):''}</a>${cephSup(f)}${(WEBPROF[f.id]&&WEBPROF[f.id].is_published)?` <span class="pubdot" title="Published profile"><span aria-hidden="true">●</span><span class="sr-only">Published profile</span></span>`:''}${f.is_program_director?` <span class="chip role" title="Program Director${f.program_director_detail?': '+esc(f.program_director_detail):''}">PD</span>`:''}${f.is_administrator?` <span class="chip role" title="Administrator${f.administrator_detail?': '+esc(f.administrator_detail):''}">Admin</span>`:''}${(TIER!=='public'&&needsReview(f))?` <span class="chip review" title="Teaching this AY but categorized only as Inactive and/or Emeriti">Needs Review</span>`:''}</td>
+      <td><a class="nm" href="?id=${esc(f.id)}">${esc(f.last_name||'')}${f.first_name?', '+esc(f.first_name):''}</a>${cephSup(f)}${(WEBPROF[f.id]&&WEBPROF[f.id].is_published)?` <span class="pubdot" title="Published profile"><span aria-hidden="true">●</span><span class="sr-only">Published profile</span></span>`:''}${f.is_program_director?' '+roleChip('PD','Program Director',f.program_director_detail):''}${f.is_administrator?' '+roleChip('Admin','Administrator',f.administrator_detail):''}${(TIER!=='public'&&needsReview(f))?` <span class="chip review" title="Teaching this AY but categorized only as Inactive and/or Emeriti">Needs Review</span>`:''}</td>
       <td>${esc(f.sph_unit||'')||'<span class="muted">—</span>'}</td>
       ${TIER!=='public'?`<td>${esc(f.rank||'')||'<span class="muted">—</span>'}</td>
       <td>${(f.categories||[]).map(c=>`<span class="chip">${esc(c)}</span>`).join('')||'<span class="muted">—</span>'}</td>
@@ -2497,6 +2497,14 @@ function cephOf(f){
   const wp=WEBPROF[f.id];
   const v=(wp&&wp.ceph_flag)||CEPH[f.id]||'none';
   return v==='none'?'':v;
+}
+/* Accessibility plan 1.3: the directory shows "PD"/"Admin" as shorthand and
+   kept the full role (and which program) only in title=, which keyboard,
+   touch and most screen-reader users never get. The short text is hidden from
+   screen readers and the full label is spoken instead; title stays for hover. */
+function roleChip(short,role,detail){
+  const label=role+(detail?': '+detail:'');
+  return `<span class="chip role" title="${esc(label)}"><span aria-hidden="true">${esc(short)}</span><span class="sr-only">${esc(label)}</span></span>`;
 }
 function cephSup(f){
   const v=cephOf(f);
