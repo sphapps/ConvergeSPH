@@ -388,6 +388,12 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
 #btn-theme{background:rgba(255,255,255,.1);border:1px solid rgba(255,255,255,.25);color:#CBD5E1;
   border-radius:4px;cursor:pointer;font-size:13px;line-height:1;padding:5px 9px;font-family:inherit}
 #btn-theme:hover{background:rgba(255,255,255,.2);color:white}
+/* Skip link (WCAG 2.4.1 Bypass Blocks): off-screen until it gets keyboard
+   focus, then drops into the top-left corner. Activating it moves focus to
+   the main landmark (#main, tabindex -1); main itself needs no focus ring. */
+.skip{position:absolute;left:12px;top:-100px;z-index:10001;background:var(--navy);color:#fff;padding:9px 16px;border-radius:4px;font:600 14px/1.2 'Segoe UI',system-ui,sans-serif;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+.skip:focus{top:8px;outline:3px solid #fff;outline-offset:-6px}
+#main:focus{outline:none}
 </style>
 </head>
 <body>
@@ -395,6 +401,16 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
 <div id="ls"><div class="spin"></div><h2>ConvergeSPH</h2><p id="lm">Loading…</p></div>
 
 <div id="app" style="display:none">
+<a class="skip" href="#main">Skip to main content</a>
+<script>
+/* Skip link: focus <main> without putting #main in the URL. A hash change
+   fires popstate, which the deep-link routers would treat as Back. */
+document.addEventListener('click',function(e){
+  var a=e.target.closest&&e.target.closest('a.skip'),m=document.getElementById('main');
+  if(!a||!m)return;
+  e.preventDefault();m.focus();
+});
+</script>
   <div id="lockdown-banner"></div>
   <header>
     <div><h1>ConvergeSPH</h1><div class="sub">Faculty Directory · OHSU-PSU School of Public Health</div></div>
@@ -422,7 +438,7 @@ html[data-theme="dark"] .mc{box-shadow:0 20px 50px rgba(0,0,0,.6)}
     <span id="save-status">Ready</span>
   </header>
 
-  <main>
+  <main id="main" tabindex="-1">
     <!-- ── DIRECTORY ─────────────────────────────────────────── -->
     <section class="view active" id="v-dir">
       <div class="tb">

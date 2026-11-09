@@ -82,16 +82,32 @@ main .intro{font-size:14.5px;color:var(--text);line-height:1.6;margin-top:18px;m
    an invitation to sign in, just a way back for people who are signed in. */
 #signed-note{display:none;margin-top:36px;font-size:12.5px;color:var(--dgray)}
 #signed-note a{color:var(--teal)}
+/* Skip link (WCAG 2.4.1 Bypass Blocks): off-screen until it gets keyboard
+   focus, then drops into the top-left corner. Activating it moves focus to
+   the main landmark (#main, tabindex -1); main itself needs no focus ring. */
+.skip{position:absolute;left:12px;top:-100px;z-index:10001;background:var(--navy);color:#fff;padding:9px 16px;border-radius:4px;font:600 14px/1.2 'Segoe UI',system-ui,sans-serif;text-decoration:none;box-shadow:0 2px 10px rgba(0,0,0,.35)}
+.skip:focus{top:8px;outline:3px solid #fff;outline-offset:-6px}
+#main:focus{outline:none}
 </style>
 </head>
 <body>
+<a class="skip" href="#main">Skip to main content</a>
+<script>
+/* Skip link: focus <main> without putting #main in the URL. A hash change
+   fires popstate, which the deep-link routers would treat as Back. */
+document.addEventListener('click',function(e){
+  var a=e.target.closest&&e.target.closest('a.skip'),m=document.getElementById('main');
+  if(!a||!m)return;
+  e.preventDefault();m.focus();
+});
+</script>
 
-<div class="topbar">
+<header class="topbar">
   <a class="back" href="https://ohsu-psu-sph.org/">OHSU-PSU School of Public Health website</a>
   <button id="btn-theme" title="Switch to dark mode" aria-label="Switch to dark mode">🌙</button>
-</div>
+</header>
 
-<main>
+<main id="main" tabindex="-1">
   <h1>ConvergeSPH</h1>
   <p class="tag">OHSU-PSU School of Public Health</p>
   <p class="intro">Look up which courses are offered each term, find faculty and their
