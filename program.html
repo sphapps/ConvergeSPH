@@ -242,7 +242,7 @@ tbody tr.clickable:focus-within td{background:var(--rowhover)}
     <span id="save-status">Ready</span>
   </header>
 
-  <div class="tabs">
+  <div class="tabs" role="navigation" aria-label="Sections">
     <button class="tab-btn active" id="tab-prog" data-view="v-prog">Programs</button>
     <a class="tab-link" href="curriculum.html" title="Curricular changes live in the Curriculum app">Curricular Changes ↗</a>
   </div>
@@ -897,6 +897,32 @@ function showCfm(title,msg,onOk){
 }
 
 /* ── TABS ── */
+/* ── Current view / tab state for assistive tech (a11y plan 1.5) ──
+   The visible "you are here" cue is the .active class (colour + underline),
+   which a screen reader can't see. These helpers mirror .active into ARIA
+   instead of touching every place that toggles it: a MutationObserver
+   re-syncs whenever a button's class, inline style or the list's children
+   change (and when body classes change, since role-gated tabs show/hide that
+   way). Only aria-*, role and tabindex are written, none of which the
+   observer watches, so it can't loop.
+   - a11yCurrent: nav bars that mix view buttons with other controls
+     (aria-current="page" on the active one).
+   (scheduling.html and curriculum.html also have a11yTabs for pure tab
+   strips; this strip mixes a button and a link, so it's navigation.) */
+function a11yWatch(root,sync){
+  const mo=new MutationObserver(sync);
+  mo.observe(root,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','hidden','disabled']});
+  mo.observe(document.body,{attributes:true,attributeFilter:['class']});
+  sync();
+}
+function a11yCurrent(root,sel){
+  if(!root)return;
+  a11yWatch(root,()=>root.querySelectorAll(sel).forEach(b=>{
+    if(b.classList.contains('active'))b.setAttribute('aria-current','page');
+    else b.removeAttribute('aria-current');
+  }));
+}
+
 function switchTab(viewId){
   // Leaving the program detail page via a tab click: strip the param so a
   // refresh doesn't drop the person back onto the program they just left.
@@ -1068,6 +1094,7 @@ function handleProgramDeepLink(){
 
 /* ── WIRING ── */
 function wire(){
+  a11yCurrent(document.querySelector('.tabs'),'.tab-btn');
   document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.view)));
   $('p-q').addEventListener('input',renderProgTable);
   $('btn-p-clear').onclick=()=>{setv('p-q','');renderProgTable();};

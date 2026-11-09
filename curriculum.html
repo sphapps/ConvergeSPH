@@ -553,7 +553,7 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
     <span id="save-status">Ready</span>
   </header>
 
-  <div class="tabs" id="tabs">
+  <div class="tabs" id="tabs" aria-label="Curriculum views">
     <button class="tab-btn active" id="tab-track" data-view="v-track">Tracker</button>
     <button class="tab-btn" id="tab-report" data-view="v-report">CCSR Status &amp; Deadlines</button>
     <button class="tab-btn" id="tab-prog" data-view="v-prog">Stage progress</button>
@@ -846,7 +846,7 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
 <div class="mo" id="mo-ccr">
   <div class="mc xl">
     <div class="mh"><h3 id="cr-heading">CCR</h3><span id="cr-pill" class="pill"></span><button class="x" id="cr-x" aria-label="Close">×</button></div>
-    <div class="ccr-tabs" id="cr-tabs"></div>
+    <div class="ccr-tabs" id="cr-tabs" aria-label="CCR forms"></div>
     <div class="mb" id="cr-body"></div>
     <div class="mf">
       <span class="statusline lft" id="cr-hint"></span>
@@ -3719,6 +3719,70 @@ function showCfm(title,msg,onOk){
 }
 
 /* ── TABS ── */
+/* ── Current view / tab state for assistive tech (a11y plan 1.5) ──
+   The visible "you are here" cue is the .active class (colour + underline),
+   which a screen reader can't see. These helpers mirror .active into ARIA
+   instead of touching every place that toggles it: a MutationObserver
+   re-syncs whenever a button's class, inline style or the list's children
+   change (and when body classes change, since role-gated tabs show/hide that
+   way). Only aria-*, role and tabindex are written, none of which the
+   observer watches, so it can't loop.
+   - a11yCurrent: nav bars that mix view buttons with other controls
+     (aria-current="page" on the active one).
+   - a11yTabs: pure tab strips (role=tablist/tab/tabpanel, aria-selected,
+     roving tabindex, ←/→/Home/End to move between tabs). */
+function a11yWatch(root,sync){
+  const mo=new MutationObserver(sync);
+  mo.observe(root,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','hidden','disabled']});
+  mo.observe(document.body,{attributes:true,attributeFilter:['class']});
+  sync();
+}
+function a11yCurrent(root,sel){
+  if(!root)return;
+  a11yWatch(root,()=>root.querySelectorAll(sel).forEach(b=>{
+    if(b.classList.contains('active'))b.setAttribute('aria-current','page');
+    else b.removeAttribute('aria-current');
+  }));
+}
+function a11yTabs(list,panelFor){
+  if(!list)return;
+  list.setAttribute('role','tablist');
+  const tabs=()=>[...list.children].filter(t=>t.tagName==='BUTTON');
+  // Own computed display, not layout: still true while an ancestor view or
+  // modal is closed, so the strip keeps one Tab stop for when it reappears.
+  const usable=t=>!t.disabled&&!t.hidden&&getComputedStyle(t).display!=='none';
+  a11yWatch(list,()=>{
+    const ts=tabs();
+    let stop=ts.find(t=>t.classList.contains('active')&&usable(t))||ts.find(usable);
+    ts.forEach((t,i)=>{
+      const on=t.classList.contains('active');
+      if(!t.id)t.id=list.id+'-tab-'+i;
+      t.setAttribute('role','tab');
+      t.setAttribute('aria-selected',on?'true':'false');
+      t.tabIndex=t===stop?0:-1;
+      const p=panelFor(t);
+      if(p){
+        t.setAttribute('aria-controls',p.id);
+        p.setAttribute('role','tabpanel');
+        if(on)p.setAttribute('aria-labelledby',t.id);
+      }
+    });
+  });
+  list.addEventListener('keydown',e=>{
+    const k=e.key;
+    if(!['ArrowLeft','ArrowRight','Home','End'].includes(k))return;
+    const cur=e.target.closest('[role="tab"]');if(!cur)return;
+    const u=tabs().filter(usable);if(!u.length)return;
+    let i=u.indexOf(cur);
+    i=k==='Home'?0:k==='End'?u.length-1:(i+(k==='ArrowRight'?1:-1)+u.length)%u.length;
+    e.preventDefault();
+    const idx=tabs().indexOf(u[i]);
+    u[i].click();
+    // Some strips re-render their buttons on click, so find it again by position.
+    const t=tabs()[idx];if(t)t.focus();
+  });
+}
+
 function switchTab(viewId){
   document.querySelectorAll('.tab-btn').forEach(b=>b.classList.toggle('active',b.dataset.view===viewId));
   document.querySelectorAll('.view').forEach(v=>v.classList.toggle('active',v.id===viewId));
@@ -3731,6 +3795,8 @@ function setSeason(id){
 
 /* ── WIRING ── */
 function wire(){
+  a11yTabs($('tabs'),t=>$(t.dataset.view));
+  a11yTabs($('cr-tabs'),()=>$('cr-body'));
   document.querySelectorAll('.tab-btn').forEach(b=>b.addEventListener('click',()=>switchTab(b.dataset.view)));
 
   // Tracker

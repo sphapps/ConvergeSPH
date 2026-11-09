@@ -528,7 +528,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
     <span id="save-status">Ready</span>
     <span id="last-saved" style="font-size:11px;color:#64748B;margin-left:4px"></span>
   </header>
-  <nav>
+  <nav aria-label="Views">
     <button class="active" data-view="schedule" id="nav-schedule">📅 Schedule</button>
     <button data-view="gantt"       id="nav-gantt">📊 On-Campus</button>
     <button data-view="chtool"      id="nav-chtool"      class="auth-only">📋 CHTool</button>
@@ -661,7 +661,7 @@ html[data-theme="dark"] #ab-email{background:var(--surface)!important;color:var(
 
     <!-- REPORTING (Term Draft + Term Audit) -->
     <div class="view" id="view-reporting">
-      <div class="rep-subnav">
+      <div class="rep-subnav" id="rep-subnav" aria-label="Reporting tools">
         <button class="rep-sub-btn active admin-strict" data-sub="termdraft" id="repsub-btn-termdraft" style="display:none">🗂 Term Draft</button>
         <button class="rep-sub-btn admin-strict" data-sub="termaudit" id="repsub-btn-termaudit" style="display:none">🔍 Term Audit</button>
         <button class="rep-sub-btn" data-sub="pubsched" id="repsub-btn-pubsched">🖨 Public Schedule</button>
@@ -1962,6 +1962,70 @@ function disableAdmin(){
 }
 
 /* ─── NAVIGATION ────────────────────────────────────────────── */
+/* ── Current view / tab state for assistive tech (a11y plan 1.5) ──
+   The visible "you are here" cue is the .active class (colour + underline),
+   which a screen reader can't see. These helpers mirror .active into ARIA
+   instead of touching every place that toggles it: a MutationObserver
+   re-syncs whenever a button's class, inline style or the list's children
+   change (and when body classes change, since role-gated tabs show/hide that
+   way). Only aria-*, role and tabindex are written, none of which the
+   observer watches, so it can't loop.
+   - a11yCurrent: nav bars that mix view buttons with other controls
+     (aria-current="page" on the active one).
+   - a11yTabs: pure tab strips (role=tablist/tab/tabpanel, aria-selected,
+     roving tabindex, ←/→/Home/End to move between tabs). */
+function a11yWatch(root,sync){
+  const mo=new MutationObserver(sync);
+  mo.observe(root,{subtree:true,childList:true,attributes:true,attributeFilter:['class','style','hidden','disabled']});
+  mo.observe(document.body,{attributes:true,attributeFilter:['class']});
+  sync();
+}
+function a11yCurrent(root,sel){
+  if(!root)return;
+  a11yWatch(root,()=>root.querySelectorAll(sel).forEach(b=>{
+    if(b.classList.contains('active'))b.setAttribute('aria-current','page');
+    else b.removeAttribute('aria-current');
+  }));
+}
+function a11yTabs(list,panelFor){
+  if(!list)return;
+  list.setAttribute('role','tablist');
+  const tabs=()=>[...list.children].filter(t=>t.tagName==='BUTTON');
+  // Own computed display, not layout: still true while an ancestor view or
+  // modal is closed, so the strip keeps one Tab stop for when it reappears.
+  const usable=t=>!t.disabled&&!t.hidden&&getComputedStyle(t).display!=='none';
+  a11yWatch(list,()=>{
+    const ts=tabs();
+    let stop=ts.find(t=>t.classList.contains('active')&&usable(t))||ts.find(usable);
+    ts.forEach((t,i)=>{
+      const on=t.classList.contains('active');
+      if(!t.id)t.id=list.id+'-tab-'+i;
+      t.setAttribute('role','tab');
+      t.setAttribute('aria-selected',on?'true':'false');
+      t.tabIndex=t===stop?0:-1;
+      const p=panelFor(t);
+      if(p){
+        t.setAttribute('aria-controls',p.id);
+        p.setAttribute('role','tabpanel');
+        if(on)p.setAttribute('aria-labelledby',t.id);
+      }
+    });
+  });
+  list.addEventListener('keydown',e=>{
+    const k=e.key;
+    if(!['ArrowLeft','ArrowRight','Home','End'].includes(k))return;
+    const cur=e.target.closest('[role="tab"]');if(!cur)return;
+    const u=tabs().filter(usable);if(!u.length)return;
+    let i=u.indexOf(cur);
+    i=k==='Home'?0:k==='End'?u.length-1:(i+(k==='ArrowRight'?1:-1)+u.length)%u.length;
+    e.preventDefault();
+    const idx=tabs().indexOf(u[i]);
+    u[i].click();
+    // Some strips re-render their buttons on click, so find it again by position.
+    const t=tabs()[idx];if(t)t.focus();
+  });
+}
+
 function switchView(name){
   // Hard guard, not just a hidden nav button: CHTool and Instructors are
   // unreachable while signed out, however the call arrives.
@@ -7183,6 +7247,7 @@ function renderReporting(){
   else renderTdb();
 }
 function wireReportingEvents(){
+  a11yTabs($('rep-subnav'),t=>$('repsub-'+t.dataset.sub));
   document.querySelectorAll('.rep-sub-btn').forEach(b=>
     b.addEventListener('click',()=>switchReportingSub(b.dataset.sub)));
 }
@@ -7662,6 +7727,7 @@ function wireTaEvents(){
 /* ─── BOOTSTRAP ─────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded',async()=>{
   console.log('%c[SPH scheduling] build 2026-10-02b — enrollment reminder banner admins only','color:#0a7');
+  a11yCurrent(document.querySelector('nav'),'button[data-view]');
   wireEvents();
   wireTdbEvents();
   wireReportingEvents();
