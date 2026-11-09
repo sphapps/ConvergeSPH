@@ -346,6 +346,8 @@ tbody tr.rowflash td{animation:rowflash 1.4s ease-out}
 .mb{padding:18px 20px;max-height:65vh;overflow:auto}
 .mf{padding:12px 20px;border-top:1px solid var(--mgray);display:flex;gap:8px;justify-content:flex-end;flex-wrap:wrap}
 .mf .lft{margin-right:auto}
+.dm-status{font-size:12px;color:var(--dgray);align-self:center}
+.dm-status.err{color:var(--red);font-weight:600}
 
 /* ═══ ROADMAP ════════════════════════════════════════════════ */
 .rm-wrap{display:flex;flex-direction:column;gap:14px}
@@ -670,6 +672,7 @@ document.addEventListener('click',function(e){
       <div id="dm-docs"></div>
     </div>
     <div class="mf">
+      <span class="lft dm-status" id="dm-status" role="status" aria-live="polite"></span>
       <button class="btn" data-close="mo-docs">Cancel</button>
       <button class="btn btn-p" id="btn-save-docs">Save Documents</button>
     </div>
@@ -3143,6 +3146,7 @@ function openDM(fid){
   $('dm-title').textContent='Documents — '+(f?full(f):'');
   renderDocEditor(DOCS[fid]||[]);
   $('dm-search').value='';
+  dmMsg('');
   openM('mo-docs');
 }
 // One collapsible group per category, in the same admin-configured order
@@ -3268,38 +3272,73 @@ async function saveAdjTracking(fid,cats){
 }
 
 /* ─── DOCUMENTS MODAL SAVE ─────────────────────────────────── */
+// The header save-status sits behind the modal scrim, so anything reported
+// only through setSS() is invisible while this modal is open. Every outcome
+// is mirrored into the modal's own footer status line.
+function dmMsg(m,isErr){
+  const e=$('dm-status'); if(!e)return;
+  e.textContent=m||''; e.classList.toggle('err',!!isErr);
+}
 async function saveDocs(){
   const fid=dmId; if(!fid)return;
-  const f=FAC.find(x=>String(x.id)===String(fid));
-  const before=snap(f);
-  const docRows=readRepeat('dm-docs',r=>({
-    category:r.querySelector('.dm-doc-cat').value,
-    subcategory:N(r.querySelector('.dm-doc-sub').value),
-    description:N(r.querySelector('.dm-doc-desc').value),
-    doc_date:N(r.querySelector('.dm-doc-date').value),
-    sp_url:N(r.querySelector('.dm-doc-url').value),
-    created_by:currentUserEmail
-  })).filter(d=>d.description&&d.sp_url);
-  const badDate=docRows.find(d=>d.doc_date&&!DOC_DATE_RE.test(d.doc_date));
-  if(badDate){setSS('⚠ Document date must be YYYY, YYYY-MM, or YYYY-MM-DD');return;}
-  setSS('Saving…');
-  if(!await replaceChildRows('faculty_documents',fid,docRows))return;
-  // Reflect the save immediately rather than waiting on reload()'s round
-  // trip — if that fetch is slow or hiccups, the modal (or the profile card
-  // behind it) shouldn't be able to show stale pre-edit data with nothing
-  // on screen indicating anything's off.
-  DOCS[fid]=docRows.map((r,i)=>({...r,faculty_id:fid,sort_order:i}));
-  closeM('mo-docs');
-  const after=snap(FAC.find(x=>String(x.id)===String(fid)));
-  await logChange('update',fid,after&&after.name,before,after);
-  setSS('● Saved');
-  if(stillViewing(fid))route(fid);
-  // Reconcile with the server (real row ids, etc.) in the background. If
-  // this hiccups for any reason, the optimistic DOCS patch above is already
-  // correct and stays in place — a failed reconcile shouldn't revert what's
-  // already showing correctly on screen.
-  try{ await reload(); }
-  catch(e){ console.error('Post-save reload failed, keeping local document state:',e); }
+  const btn=$('btn-save-docs');
+  if(btn.disabled)return;   // already saving
+  try{
+    const f=FAC.find(x=>String(x.id)===String(fid));
+    const before=snap(f);
+    const raw=readRepeat('dm-docs',r=>({
+      category:r.querySelector('.dm-doc-cat').value,
+      subcategory:N(r.querySelector('.dm-doc-sub').value),
+      description:N(r.querySelector('.dm-doc-desc').value),
+      doc_date:N(r.querySelector('.dm-doc-date').value),
+      sp_url:N(r.querySelector('.dm-doc-url').value),
+      created_by:currentUserEmail
+    }));
+    // A row with nothing typed is just an unused "+ Add" — drop it quietly.
+    // A row with SOME data but no description or link used to be dropped
+    // silently too, losing what was typed; stop and say so instead.
+    const used=raw.filter(d=>d.subcategory||d.description||d.doc_date||d.sp_url);
+    const partial=used.filter(d=>!d.description||!d.sp_url);
+    if(partial.length){
+      dmMsg(`⚠ ${partial.length} document row${partial.length>1?'s are':' is'} missing a Description or Link — fill in both, or remove the row`,true);
+      return;
+    }
+    const docRows=used;
+    const badDate=docRows.find(d=>d.doc_date&&!DOC_DATE_RE.test(d.doc_date));
+    if(badDate){
+      dmMsg(`⚠ Date "${badDate.doc_date}" (${badDate.description}) must be YYYY, YYYY-MM, or YYYY-MM-DD`,true);
+      return;
+    }
+    btn.disabled=true;
+    dmMsg('Saving…'); setSS('Saving…');
+    if(!await replaceChildRows('faculty_documents',fid,docRows)){
+      // sbSave already put the database error in the header; bring it forward.
+      dmMsg($('save-status').textContent||'⚠ Save failed',true);
+      return;
+    }
+    // Reflect the save immediately rather than waiting on reload()'s round
+    // trip — if that fetch is slow or hiccups, the modal (or the profile card
+    // behind it) shouldn't be able to show stale pre-edit data with nothing
+    // on screen indicating anything's off.
+    DOCS[fid]=docRows.map((r,i)=>({...r,faculty_id:fid,sort_order:i}));
+    closeM('mo-docs');
+    const after=snap(FAC.find(x=>String(x.id)===String(fid)));
+    await logChange('update',fid,after&&after.name,before,after);
+    setSS('● Saved');
+    if(stillViewing(fid))route(fid);
+    // Reconcile with the server (real row ids, etc.) in the background. If
+    // this hiccups for any reason, the optimistic DOCS patch above is already
+    // correct and stays in place — a failed reconcile shouldn't revert what's
+    // already showing correctly on screen.
+    try{ await reload(); }
+    catch(e){ console.error('Post-save reload failed, keeping local document state:',e); }
+  }catch(e){
+    console.error('saveDocs failed:',e);
+    dmMsg('⚠ '+(e&&e.message||e),true);
+    setSS('⚠ Documents not saved');
+  }finally{
+    btn.disabled=false;
+  }
 }
 
 /* Category membership is a set, not a column: diff it and write only the delta. */
