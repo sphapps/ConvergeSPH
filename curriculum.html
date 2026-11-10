@@ -1275,6 +1275,7 @@ function renderTracker(){
     const parents=parentsOf(r.id),kids=childrenOf(r.id),slash=pairsOf(r.id,'slash_pair'),xl=pairsOf(r.id,'cross_list');
     const meta=[`<span class="chip">${esc(kindLabel(r))}</span>`];
     if(r.is_external)meta.push('<span class="chip ext">Non-SPH</span>');
+    if(r.disposition==='on_hold'||r.disposition==='withdrawn')meta.push(`<span class="pill ${esc(r.disposition)}">${esc(STATUS_LBL[r.disposition])}</span>`);
     if(r.approval_state!=='active')meta.push(`<span class="pill ${esc(r.approval_state)}">${esc(APPROVAL_LBL[r.approval_state])}</span>`);
     if(parents.length)meta.push(`<span class="chip link" title="${esc(parents.map(itemRef).join('\n'))}">part of ${parents.map(p=>'#'+seqLabel(p.seq)).join(', ')}</span>`);
     if(kids.length)meta.push(`<span class="chip link" title="${esc(kids.map(itemRef).join('\n'))}">includes ${kids.length}</span>`);
