@@ -198,8 +198,8 @@ td.cell.ed:hover{outline:2px solid var(--teal);outline-offset:-2px}
 html[data-theme="dark"]{--sp-done:#4FBF85;--sp-next:#6FB2E8;--sp-dec:#F1867F;--sp-todo:#3B4A63;--sp-ontx:#0E1626}
 .sp-key{background:var(--surface);border:1px solid var(--rowline);border-radius:6px;padding:10px 14px;margin-bottom:18px;font-size:12px;break-inside:avoid}
 .sp-key h3,.sp-chart h3{font-size:13px;color:var(--navytx);margin-bottom:6px}
-.sp-key ol{list-style:none;display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:3px 16px}
-.sp-key li{display:flex;gap:6px;align-items:baseline}
+.sp-key ol{list-style:none;columns:220px;column-gap:16px}   /* stages fill down each column, then across */
+.sp-key li{display:flex;gap:6px;align-items:baseline;break-inside:avoid;padding:1.5px 0}
 .sp-key .k{font-weight:700;color:var(--navytx);min-width:18px;text-align:right;font-variant-numeric:tabular-nums}
 .sp-chart{background:var(--surface);border:1px solid var(--rowline);border-radius:6px;padding:12px 14px;margin-bottom:22px;break-inside:avoid}
 .sp-chart .sub{font-size:11.5px;color:var(--dgray);margin:-2px 0 8px}
