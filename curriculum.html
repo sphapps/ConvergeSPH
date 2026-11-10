@@ -150,7 +150,10 @@ td.cell{text-align:center;font-size:12px;white-space:nowrap;padding:9px 4px;font
 td.cell.done{background:var(--ltgrn);color:var(--txgrn);font-weight:600}
 td.cell.na{color:var(--muted);font-size:11px}
 td.cell.dec{background:var(--ltred);color:var(--red);font-weight:700}
-td.cell.off{background:repeating-linear-gradient(135deg,transparent 0 5px,var(--rowline) 5px 6px)}
+/* Not required for this change: hatched + tinted so it reads in both themes */
+:root{--off-bg:#F1F5F9;--off-stripe:#CBD5E1}
+html[data-theme="dark"]{--off-bg:#0F1727;--off-stripe:#4A5C7C}
+td.cell.off{background:repeating-linear-gradient(135deg,var(--off-bg) 0 5px,var(--off-stripe) 5px 7px)}
 td.cell.next{box-shadow:inset 0 0 0 2px var(--teal)}
 td.cell.next::after{content:'next';font-size:9px;font-weight:700;color:var(--teal);letter-spacing:.3px}
 td.cell.ed{cursor:pointer}
@@ -160,7 +163,7 @@ td.cell.ed:hover{outline:2px solid var(--teal);outline-offset:-2px}
 .sw{display:inline-block;width:18px;height:12px;border-radius:2px;border:1px solid var(--rowline)}
 .sw.done{background:var(--ltgrn)}
 .sw.dec{background:var(--ltred)}
-.sw.off{background:repeating-linear-gradient(135deg,transparent 0 3px,var(--mgray) 3px 4px)}
+.sw.off{background:repeating-linear-gradient(135deg,var(--off-bg) 0 3px,var(--off-stripe) 3px 5px)}
 .sw.next{box-shadow:inset 0 0 0 2px var(--teal);background:var(--surface)}
 
 /* ═══ STATUS REPORT (CCSR) ═══ */
@@ -527,6 +530,7 @@ html[data-theme="dark"] .seg input:checked+span{color:#0E1626;font-weight:600}
   .od{break-before:page;border:none;box-shadow:none;padding:0;margin:0}
   .od.od-first{break-before:auto;margin-top:14px}
   .od-a{background:#fff}
+  html[data-theme="dark"]{--off-bg:#F1F5F9;--off-stripe:#CBD5E1}
   html[data-theme="dark"]{--sp-done:#2F855A;--sp-next:#2E75B6;--sp-dec:#DC2626;--sp-todo:#CBD5E1;--sp-ontx:#FFFFFF}
   .sp-chart,.sp-key{break-inside:avoid}
   #v-prog{page:sp-land}
