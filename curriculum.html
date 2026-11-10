@@ -607,6 +607,7 @@ document.addEventListener('click',function(e){
           <option value="withdrawn">Withdrawn</option>
         </select>
         <select id="t-prog" aria-label="Program"></select>
+        <label class="ck"><input type="checkbox" id="t-hidewd" checked> Hide withdrawn</label>
         <button class="btn btn-s" id="btn-t-clear">Clear</button>
         <button class="btn btn-p btn-s edit-only" id="btn-add">+ Add change</button>
         <span class="cnt" id="t-cnt"></span>
@@ -1230,10 +1231,13 @@ function fillProgFilter(){
 /* ── TRACKER ── */
 function trackerRows(){
   const q=(val('t-q')||'').trim().toLowerCase(),lvl=val('t-level'),st=val('t-status'),pg=val('t-prog');
+  const hideWd=$('t-hidewd').checked;
   return ITEMS.filter(r=>r.season_id===SEASON_ID).filter(r=>{
     const s=itemStatus(r);
     if(st==='open'&&!(s==='not_started'||s==='in_progress'))return false;
     if(st&&st!=='all'&&st!=='open'&&s!==st)return false;
+    // "Hide withdrawn" steps aside when the Status filter asks for withdrawn changes.
+    if(hideWd&&st!=='withdrawn'&&(s==='withdrawn'||r.disposition==='withdrawn'))return false;
     if(lvl&&r.student_level!==lvl&&r.student_level!=='both')return false;
     if(pg==='__none__'&&r.program_id!=null)return false;
     if(pg&&pg!=='__none__'&&String(r.program_id)!==pg)return false;
@@ -3880,6 +3884,12 @@ function wire(){
   $('t-season').addEventListener('change',()=>setSeason(val('t-season')));
   ['t-q'].forEach(id=>$(id).addEventListener('input',renderTracker));
   ['t-level','t-status','t-prog'].forEach(id=>$(id).addEventListener('change',renderTracker));
+  // Hide withdrawn: on by default, remembered per browser.
+  try{const v=localStorage.getItem('cc-hide-withdrawn');if(v!=null)$('t-hidewd').checked=v==='1';}catch(e){}
+  $('t-hidewd').addEventListener('change',()=>{
+    try{localStorage.setItem('cc-hide-withdrawn',$('t-hidewd').checked?'1':'0');}catch(e){}
+    renderTracker();
+  });
   $('btn-t-clear').onclick=()=>{setv('t-q','');setv('t-level','');setv('t-status','all');setv('t-prog','');renderTracker();};
   $('btn-add').onclick=()=>openItem(null);
   $('t-body').addEventListener('click',e=>{
