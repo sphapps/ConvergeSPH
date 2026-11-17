@@ -2890,9 +2890,18 @@ function pkMergePlan(pk){
   // by a revision), and one of those must never become the program's form.
   const own=x=>pk.key.startsWith('ext:')?(x.r.is_external&&'ext:'+(x.r.external_name||'')===pk.key)
     :pk.key!=='prog:none'&&!x.r.is_external&&x.r.program_id!=null&&'prog:'+x.r.program_id===pk.key;
+  // Category II always wins, even when it's a shared change linked into this
+  // packet (e.g. a new course that's part of every MPH program's change). Among
+  // forms of the same category, the program's own changes come first.
   const pick=(fk,ok)=>c.find(x=>x.d.form_key===fk&&ok(x)&&x.r.target_kind==='program')||c.find(x=>x.d.form_key===fk&&ok(x));
-  const host=pick('ohsu_cat2',own)||pick('ohsu_cat3',own)||pick('ohsu_cat2',()=>true)||pick('ohsu_cat3',()=>true);
-  const srcs=c.filter(x=>x!==host);
+  const any=()=>true;
+  const host=pick('ohsu_cat2',own)||pick('ohsu_cat2',any)||pick('ohsu_cat3',own)||pick('ohsu_cat3',any);
+  const srcs=c.filter(x=>x!==host).map(x=>Object.assign({},x,{own:own(x)}));
+  srcs.sort((a,b)=>b.own-a.own);
+  // The combined form is the packet program's proposal, whichever change it's built on.
+  srcs.hostOwn=own(host);
+  srcs.progName=pk.key.startsWith('prog:')&&pk.key!=='prog:none'?(PROGRAMS[pk.key.slice(5)]||{}).name||'':
+    pk.key.startsWith('ext:')?pk.key.slice(4):'';
   return {host,srcs,skip:new Map(srcs.map(x=>[x.r.id+'|'+x.d.form_key,x]))};
 }
 function answerHTML(f,r,w){
@@ -3135,7 +3144,7 @@ function odProgramModel(d,r,w,mg){
   const ownRevs=revList(w).map(x=>Object.assign({},x));
   const revs=ownRevs.slice();   // numbered revisions → Summary, prompt 1 (Cat II), "Other, describe:"
   // ── Merge the packet's other Category II/III forms ──
-  const KS=(mg||[]).filter(m=>m&&m.d&&m.r).map(m=>({d:m.d,r:m.r,w:m.w||{},K:odKit(m.d,m.r,m.w||{}),cat:m.d.form_key==='ohsu_cat2'?2:3}));
+  const KS=(mg||[]).filter(m=>m&&m.d&&m.r).map(m=>({d:m.d,r:m.r,w:m.w||{},K:odKit(m.d,m.r,m.w||{}),cat:m.d.form_key==='ohsu_cat2'?2:3,own:!!m.own}));
   const srcHead=m=>`${itemRef(m.r)} (Category ${m.cat===2?'II':'III'})`;
   const joinT=(...a)=>a.filter(x=>!isBlank(x)).join('\n\n');
   const NA=/^\s*(n\/?a|none|not applicable)\.?\s*$/i;
@@ -3183,8 +3192,15 @@ function odProgramModel(d,r,w,mg){
   const from3=merged.filter(x=>x._from===3);
   const numOf=rv=>`${revs.indexOf(rv)+1}) ${rv.title||'(untitled)'}`;
   // Header answers: this form's, else the first merged form that has one.
-  const FV=k=>{const v=K.V(k);if(!isBlank(v))return v;for(const m of KS){const x=m.K.V(k);if(!isBlank(x))return x;}return null;};
-  const FD=k=>{const v=K.date(k);if(!isBlank(v))return v;for(const m of KS){const x=m.K.date(k);if(!isBlank(x))return x;}return null;};
+  // Degree and Major come from the program's own changes first when the form
+  // is built on a shared change. Every merged form's header answers count as
+  // placed, so they don't repeat under "Other answers".
+  const hostOwn=!mg||mg.hostOwn!==false;
+  const FV=(k,progFirst)=>{
+    const kits=progFirst&&!hostOwn?[...KS.filter(m=>m.own).map(m=>m.K),K,...KS.filter(m=>!m.own).map(m=>m.K)]:[K,...KS.map(m=>m.K)];
+    const vals=kits.map(x=>x.V(k));return vals.find(v=>!isBlank(v))??null;
+  };
+  const FD=k=>{const vals=[K,...KS.map(m=>m.K)].map(x=>x.date(k));return vals.find(v=>!isBlank(v))??null;};
   const q1=revs.length&&!revIntoSummary(d)?q1Field(d):null;
   // With revisions, "Other, describe:" prints their titles. Anything typed in
   // the old box stays unplaced, so it shows under "Other answers".
@@ -3198,7 +3214,7 @@ function odProgramModel(d,r,w,mg){
   if(KS.length)B.push({t:'note',text:'This form combines the program’s Category II/III changes: '+[itemRef(r),...KS.map(m=>itemRef(m.r))].join('; ')+'.'});
   B.push({t:'h',text:'Submission Information'},odLine('Date of Submission to the Office of the Provost:',FD('f1')));
   B.push({t:'h',text:'Program Information'},odLine('School/College:',FV('f2')),
-    {t:'row',items:[odLine('Degree(s):',FV('f3')),odLine('Major:',FV('f4'))]},
+    {t:'row',items:[odLine('Degree(s):',FV('f3',true)),odLine('Major:',FV('f4',true))]},
     {t:'row',items:[odLine('Contact’s Name:',FV('f5')),odLine('Contact’s Email:',FV('f6'))]});
   B.push({t:'h',text:'Proposed Implementation Date'},odLine(cat===2?'Term and Academic Year:':'Academic Year:',FV('f7')));
 
@@ -3321,7 +3337,7 @@ function odProgramModel(d,r,w,mg){
   const exRows=ex.flatMap(b=>b.rows);
   B.push(...odAuthBlocks(r,'modify the academic program'),...(exRows.length?[{t:'extras',rows:exRows}]:[]),odFootBlock(d));
   // Name the file for the program: this change's, else a combined change's.
-  const prog=[r,...KS.map(m=>m.r)].map(x=>ccrCtx(x,'program.name')).find(x=>!isBlank(x))||itemProgramLabel(r);
+  const prog=(mg&&mg.progName)||[r,...KS.map(m=>m.r)].map(x=>ccrCtx(x,'program.name')).find(x=>!isBlank(x))||itemProgramLabel(r);
   return {blocks:B,file:odFileName(['OHSU','Cat',roman,prog,seasonLabel(r.season_id)])};
 }
 
