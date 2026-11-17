@@ -2843,6 +2843,7 @@ function renderPackets(){
   let pk=null;
   if(PACKET_KEY.startsWith('item:')){const r=ITEM_BY_ID[PACKET_KEY.slice(5)];if(r)pk={label:itemRef(r),items:[r],single:true};}
   else pk=packs.find(p=>p.key===PACKET_KEY)||null;
+  PK_PLAN=null;
   if(!pk){box.innerHTML='<div class="rpt-empty">No curricular changes recorded for this season yet.</div>';return;}
   box.innerHTML=packetHTML(pk,$('k-notes').checked);
 }
@@ -2866,8 +2867,27 @@ function packetHTML(pk,showBlank){
         <td>${esc(r.student_level)}${r.ohsu_category?' · Cat '+esc(r.ohsu_category):''}</td><td style="white-space:nowrap">${esc(apccLabel(r.apcc_meeting_id)||'—')}</td>
         <td style="font-size:12px">${esc(nextStepText(r))}</td></tr>`).join('')}</tbody></table></div>`;
   }
-  pk.items.forEach(r=>{h+=pkItemHTML(r,showBlank);});
+  PK_PLAN=pkMergePlan(pk);
+  pk.items.forEach(r=>{h+=pkItemHTML(r,showBlank,PK_PLAN);});
   return h;
+}
+/* One Category II/III form per program packet. The host is the packet's
+   first Category II form (else its first Category III form) on a change whose
+   CCR is started; every other started Category II/III form in the packet is
+   merged into it and not printed on its own. Single-change packets print
+   each change's own forms. */
+let PK_PLAN=null;
+function pkMergePlan(pk){
+  if(!pk||pk.single)return null;
+  const c=[];
+  pk.items.forEach(r=>{
+    const saved=CCR[r.id];if(!saved)return;
+    formsForItem(r).forEach(d=>{if(REV_FORMS.has(d.form_key))c.push({r,d,w:(saved.answers||{})[d.form_key]||{}});});
+  });
+  if(c.length<2)return null;
+  const host=c.find(x=>x.d.form_key==='ohsu_cat2')||c[0];
+  const srcs=c.filter(x=>x!==host);
+  return {host,srcs,skip:new Map(srcs.map(x=>[x.r.id+'|'+x.d.form_key,x]))};
 }
 function answerHTML(f,r,w){
   let v;
@@ -2894,7 +2914,7 @@ function answerHTML(f,r,w){
   }
   return esc(v);
 }
-function pkItemHTML(r,showBlank){
+function pkItemHTML(r,showBlank,plan){
   const parents=parentsOf(r.id),kids=childrenOf(r.id),slash=pairsOf(r.id,'slash_pair'),xl=pairsOf(r.id,'cross_list');
   const links=[];
   if(parents.length)links.push('Part of '+parents.map(itemRef).join('; '));
@@ -2922,8 +2942,14 @@ function pkItemHTML(r,showBlank){
   else if(!saved)h+=`<div class="pk-nocr">CCR not started. Forms that apply: ${esc(forms.map(d=>d.definition.short||d.title).join(', '))}.</div>`;
   else forms.forEach(d=>{
     const w=(saved.answers||{})[d.form_key]||{};
+    if(plan&&plan.skip.has(r.id+'|'+d.form_key)){
+      const hr=plan.host.r,hc=plan.host.d.form_key==='ohsu_cat2'?'II':'III';
+      h+=`<div class="pk-nocr">${esc(d.definition.short||d.title)}: combined into the Category ${hc} form under #${esc(seqLabel(hr.seq))} ${esc(hr.title)}.</div>`;
+      return;
+    }
     if(OD_RENDER[d.form_key]){   // OHSU forms print in the form's own layout
-      let doc=OD_RENDER[d.form_key](d,r,w);
+      const mg=plan&&plan.host.r.id===r.id&&plan.host.d.form_key===d.form_key?plan.srcs:null;
+      let doc=OD_RENDER[d.form_key](d,r,w,mg);
       if(!odSeen){doc=doc.replace('<div class="od">','<div class="od od-first">');odSeen=true;}   // first form shares the change's header page
       h+=doc;return;
     }
@@ -2973,6 +2999,9 @@ const CAT3_OPTS=[
   {k:'m_resp',group:'Miscellaneous',label:'Change the program responsibility from one department to another'},
   {k:'m_other',group:'Miscellaneous',label:'Other, describe:'}
 ];
+// Category III Proposal prompt → the Category II prompt it answers (by number),
+// for Category III changes combined onto a program's Category II form.
+const CAT3_TO_CAT2={1:2,2:3,3:4,4:6};
 const CAT2_GRID=[
   {group:'Program Requirements',items:[
     ['prog_new_courses','Addition of courses significantly different from existing offerings'],
@@ -3083,13 +3112,73 @@ function odFileName(parts){
 }
 
 /* ── Category II / Category III ── */
-function odProgramModel(d,r,w){
+// Program packets put every Category II/III change for the program on one
+// form. mg lists the other changes' forms to fold into this one (built by
+// pkMergePlan): {d,r,w} each. Their numbered revisions join this form's list,
+// a change with no revisions becomes a numbered change of its own (titled from
+// the change, written up from its Summary / prompt 1), and its answers to the
+// other prompts print under the matching prompt here, headed by the change.
+// Category III changes merged into a Category II form are described under
+// "Other, describe:". Without mg the form prints exactly as before.
+function odProgramModel(d,r,w,mg){
   const cat=d.form_key==='ohsu_cat2'?2:3,roman=cat===2?'II':'III';
   const K=odKit(d,r,w),B=[];
   // July 2026 OHSU forms (definitions with layout "2026-07", from cc_006).
   // Older definitions keep the April 2025 wording so past CCRs print as filed.
   const jul=(d.definition&&d.definition.layout)==='2026-07';
-  const revs=revList(w);   // numbered revisions → Summary, prompt 1 (Cat II), "Other, describe:"
+  const ownRevs=revList(w).map(x=>Object.assign({},x));
+  const revs=ownRevs.slice();   // numbered revisions → Summary, prompt 1 (Cat II), "Other, describe:"
+  // ── Merge the packet's other Category II/III forms ──
+  const KS=(mg||[]).filter(m=>m&&m.d&&m.r).map(m=>({d:m.d,r:m.r,w:m.w||{},K:odKit(m.d,m.r,m.w||{}),cat:m.d.form_key==='ohsu_cat2'?2:3}));
+  const srcHead=m=>`${itemRef(m.r)} (Category ${m.cat===2?'II':'III'})`;
+  const joinT=(...a)=>a.filter(x=>!isBlank(x)).join('\n\n');
+  const NA=/^\s*(n\/?a|none|not applicable)\.?\s*$/i;
+  const normQ=s=>String(s||'').replace(/^\s*\d+[.)]\s*/,'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim();
+  const sumAdds=[],qAdds=new Map();
+  KS.forEach(m=>{
+    const sq1=revIntoSummary(m.d)?null:q1Field(m.d);
+    // A change's own write-up: Category III keeps it in the Summary, Category II in prompt 1.
+    let pre,post;
+    if(m.cat===3){pre=m.w.summary;post=m.w._sum_after;m.K.used.add('summary');}
+    else{
+      pre=sq1?m.w[sq1.key]:null;post=m.w._q1_after;if(sq1)m.K.used.add(sq1.key);
+      const s=m.K.V('summary');if(!isBlank(s))sumAdds.push({head:srcHead(m),body:s});
+    }
+    const sr=revList(m.w);
+    if(sr.length){
+      const mine=sr.map(x=>{let y=revs.find(z=>z.id===x.id);if(!y){y=Object.assign({},x,{_from:m.cat});revs.push(y);}return y;});
+      if(!isBlank(pre))mine[0].detail=joinT(pre,mine[0].detail);
+      if(!isBlank(post))mine[mine.length-1].detail=joinT(mine[mine.length-1].detail,post);
+    }else{
+      const cov=revs.find(z=>(z.item_ids||[]).includes(m.r.id));
+      if(cov)cov.detail=joinT(cov.detail,pre,post);
+      else revs.push({id:'pk:'+m.r.id,title:m.r.title,detail:joinT(pre,post),item_ids:[m.r.id],_from:m.cat});
+    }
+    // Answers to the Proposal prompts, placed under this form's prompt by number:
+    // the same number on the same category, CAT3_TO_CAT2 for Category III on a
+    // Category II form. Anything else is matched by wording.
+    let qn=0;
+    ((m.d.definition&&m.d.definition.sections)||[]).forEach(s=>{
+      if(s.title!=='Proposal'&&s.title!=='If applicable to your proposal')return;
+      (s.fields||[]).forEach(f=>{
+        if(!ANSWER_TYPES.has(f.type))return;
+        qn++;
+        if(sq1&&f.key===sq1.key)return;
+        const v=m.K.V(f.key);if(isBlank(v)||NA.test(v))return;
+        const to=m.cat===cat?qn:(m.cat===3&&cat===2?CAT3_TO_CAT2[qn]:null);
+        const k=to?'n:'+to:'l:'+normQ(f.label);
+        if(!qAdds.has(k))qAdds.set(k,{label:String(f.label||'').replace(/^\s*\d+[.)]\s*/,''),list:[]});
+        qAdds.get(k).list.push({head:srcHead(m),body:v});
+      });
+    });
+    ['revs','whats'].forEach(k=>m.K.used.add(k));
+  });
+  const merged=revs.filter(x=>x._from);
+  const from3=merged.filter(x=>x._from===3);
+  const numOf=rv=>`${revs.indexOf(rv)+1}) ${rv.title||'(untitled)'}`;
+  // Header answers: this form's, else the first merged form that has one.
+  const FV=k=>{const v=K.V(k);if(!isBlank(v))return v;for(const m of KS){const x=m.K.V(k);if(!isBlank(x))return x;}return null;};
+  const FD=k=>{const v=K.date(k);if(!isBlank(v))return v;for(const m of KS){const x=m.K.date(k);if(!isBlank(x))return x;}return null;};
   const q1=revs.length&&!revIntoSummary(d)?q1Field(d):null;
   // With revisions, "Other, describe:" prints their titles. Anything typed in
   // the old box stays unplaced, so it shows under "Other answers".
@@ -3100,23 +3189,39 @@ function odProgramModel(d,r,w){
     intro:jul
       ?'Log in or request access to the Program and Curriculum Changes SharePoint site for the deadlines by which proposals need to be submitted to the Office of the Provost for the proposed implementation date.'
       :`Review the Curriculum Modifications webpage for the deadlines by which proposals need to be submitted to the Office of the Provost${cat===2?' for the proposed implementation date':''}.`});
-  B.push({t:'h',text:'Submission Information'},odLine('Date of Submission to the Office of the Provost:',K.date('f1')));
-  B.push({t:'h',text:'Program Information'},odLine('School/College:',K.V('f2')),
-    {t:'row',items:[odLine('Degree(s):',K.V('f3')),odLine('Major:',K.V('f4'))]},
-    {t:'row',items:[odLine('Contact’s Name:',K.V('f5')),odLine('Contact’s Email:',K.V('f6'))]});
-  B.push({t:'h',text:'Proposed Implementation Date'},odLine(cat===2?'Term and Academic Year:':'Academic Year:',K.V('f7')));
+  if(KS.length)B.push({t:'note',text:'This form combines the program’s Category II/III changes: '+[itemRef(r),...KS.map(m=>itemRef(m.r))].join('; ')+'.'});
+  B.push({t:'h',text:'Submission Information'},odLine('Date of Submission to the Office of the Provost:',FD('f1')));
+  B.push({t:'h',text:'Program Information'},odLine('School/College:',FV('f2')),
+    {t:'row',items:[odLine('Degree(s):',FV('f3')),odLine('Major:',FV('f4'))]},
+    {t:'row',items:[odLine('Contact’s Name:',FV('f5')),odLine('Contact’s Email:',FV('f6'))]});
+  B.push({t:'h',text:'Proposed Implementation Date'},odLine(cat===2?'Term and Academic Year:':'Academic Year:',FV('f7')));
 
+  // Category III boxes checked on a form (saved, or implied by its linked changes).
+  const cat3On=(K_,w_,r_)=>{const s=K_.M.revs?w_.revs:undefined;return new Set(Array.isArray(s)?s:cat3Derived(r_));};
   let cols;
   if(cat===2){
     const on=new Set(r.change_facets||[]);
+    KS.filter(m=>m.cat===2).forEach(m=>(m.r.change_facets||[]).forEach(k=>on.add(k)));
     K.used.add('whats');
-    const other=otherTxt('f16a');
+    const hostOther=on.has('prog_other');
+    let other=hostOther?otherTxt('f16a'):null;
+    if(from3.length){
+      // Category III changes on a Category II form go under "Other, describe:".
+      on.add('prog_other');
+      const kinds=new Set();
+      KS.filter(m=>m.cat===3).forEach(m=>{
+        const opts=(m.K.M.revs&&m.K.M.revs.f.options)||CAT3_OPTS,ck=cat3On(m.K,m.w,m.r);
+        opts.forEach(o=>{if(ck.has(o.k)&&o.k!=='m_other'&&o.k!=='c_desig')kinds.add(o.indent?'Revise course '+String(o.label).toLowerCase():String(o.label).replace(/:$/,''));});
+      });
+      const minor=(hostOther?'':from3.map(numOf).join(' '))+(kinds.size?(hostOther?'\n':' ')+'(Minor revisions: '+[...kinds].join('; ')+')':'');
+      other=joinT(other,minor.trim());
+    }
     cols=CAT2_GRID.map(g=>({title:g.group+':',items:g.items.map(([k,l])=>({label:l,on:on.has(k),other:k==='prog_other'&&on.has(k)?(other||''):null}))}));
     B.push({t:'h',text:'Proposed Substantive Revision (Select all that apply)'});
   }else{
     const opts=(K.M.revs&&K.M.revs.f.options)||CAT3_OPTS;
-    const saved=K.M.revs?w.revs:undefined;
-    const on=new Set(Array.isArray(saved)?saved:cat3Derived(r));
+    const on=cat3On(K,w,r);
+    KS.filter(m=>m.cat===3).forEach(m=>cat3On(m.K,m.w,m.r).forEach(k=>on.add(k)));
     if(opts.some(o=>o.indent&&on.has(o.k)))on.add('c_desig');
     ['revs','whats'].forEach(k=>K.used.add(k));
     const other=otherTxt(K.M.revs_other?'revs_other':'f16a');
@@ -3126,18 +3231,30 @@ function odProgramModel(d,r,w){
   }
   B.push({t:'grid',cols},{t:'note',text:OD_REGISTRAR});
 
+  const sumMore=sumAdds.map(a=>a.head+'\n'+a.body);
+  let sumBlock;
+  if(revs.length&&revIntoSummary(d)){
+    K.used.add('summary');
+    sumBlock={t:'qrev',n:'',text:'',intro:w.summary,outro:joinT(w._sum_after,...sumMore),
+      revs:revs.map((rv,i)=>({head:`Change ${i+1}) ${rv.title||'(untitled)'}`,body:rv.detail||''}))};
+  }else if(revs.length){
+    const own=K.raw('summary');
+    // A form without revisions of its own keeps its summary first.
+    const parts=ownRevs.length||isBlank(own)?[revNumbered(revs,'\n'),own]:[own,revNumbered(revs,'\n')];
+    sumBlock={t:'q',n:'',text:'',val:joinT(...parts,...sumMore)};
+  }else sumBlock={t:'q',n:'',text:'',val:joinT(K.V('summary'),revIntoSummary(d)?w._sum_after:null,...sumMore)||null};
   B.push({t:'h',text:'Proposal Summary'},
     {t:'p',text:`Below, provide a concise summary of each revision included in the proposal.${cat===3?` Explain how the program and/or course ${jul?'are':'is'} currently designed, structured, described, or designated, and how this will change if the proposed revision is implemented.`:''} State if the revision alters the total credits for program completion, and how.`},
-    revs.length&&revIntoSummary(d)
-      ?(K.used.add('summary'),{t:'qrev',n:'',text:'',intro:w.summary,outro:w._sum_after,
-          revs:revs.map((rv,i)=>({head:`Change ${i+1}) ${rv.title||'(untitled)'}`,body:rv.detail||''}))})
-      :{t:'q',n:'',text:'',val:revs.length
-      ?revNumbered(revs,'\n')+(isBlank(K.raw('summary'))?'':'\n\n'+K.raw('summary'))
-      :[K.V('summary'),revIntoSummary(d)?w._sum_after:null].filter(x=>!isBlank(x)).join('\n\n')||null});
+    sumBlock);
 
   B.push({t:'h',text:'Proposal'},
     {t:'p',runs:[{text:`The section is designed to gather information that is essential for accreditation purposes and to ${cat===2?'effectively facilitate the development and improvement of academic programs':'facilitate academic programs’ development and improvement'}. Respond to `},{text:'each',u:true},{text:' of the following prompts/questions:'}]});
   let n=0;
+  const takeAdds=(f,num)=>{
+    const out=[];
+    ['n:'+num,'l:'+normQ(f.label)].forEach(k=>{const a=qAdds.get(k);if(a){out.push(...a.list);qAdds.delete(k);}});
+    return out;
+  };
   ((d.definition&&d.definition.sections)||[]).forEach(s=>{
     if(s.title!=='Proposal'&&s.title!=='If applicable to your proposal')return;
     if(s.title==='If applicable to your proposal')
@@ -3146,30 +3263,44 @@ function odProgramModel(d,r,w){
       if(!ANSWER_TYPES.has(f.type))return;
       n++;
       const text=String(f.label||'').replace(/^\s*\d+[.)]\s*/,'');
+      const adds=takeAdds(f,n);
       if(q1&&f.key===q1.key){
         K.used.add(f.key);
         B.push({t:'qrev',n:String(n),text,intro:w[f.key],outro:w._q1_after,
-          revs:revs.map((rv,i)=>({head:`Change ${i+1}) ${rv.title||'(untitled)'}`,body:rv.detail||''}))});
+          revs:[...revs.map((rv,i)=>({head:`Change ${i+1}) ${rv.title||'(untitled)'}`,body:rv.detail||''})),...adds]});
       }else{
         let v=K.V(f.key);
         const q1n=revIntoSummary(d)?null:q1Field(d);   // closing text typed while revisions existed, then all removed
         if(q1n&&f.key===q1n.key&&!isBlank(w._q1_after))v=[v,w._q1_after].filter(x=>!isBlank(x)).join('\n\n');
-        B.push({t:'q',n:String(n),text,val:v});
+        if(adds.length)B.push({t:'qrev',n:String(n),text,intro:v,outro:null,revs:adds});
+        else B.push({t:'q',n:String(n),text,val:v});
       }
     });
   });
+  // Merged answers to prompts this form doesn't ask (Category III wording that differs).
+  if(qAdds.size){
+    B.push({t:'p',text:'Also answered for the combined changes (these prompts aren’t on this form):'});
+    qAdds.forEach(a=>B.push({t:'qrev',n:'',text:a.label,intro:null,outro:null,revs:a.list}));
+  }
 
   const ai=((d.definition.sections||[]).find(s=>s.title==='Additional instructions')||{fields:[]});
   const tcf=(ai.fields||[]).find(f=>f.type==='links');
-  const tc=tcf?K.V(tcf.key):null;
+  let tc=tcf?K.V(tcf.key):null;
+  if(tcf)KS.forEach(m=>{
+    const sai=((m.d.definition.sections||[]).find(s=>s.title==='Additional instructions')||{fields:[]});
+    const sf=(sai.fields||[]).find(f=>f.type==='links');
+    if(sf){const x=m.K.V(sf.key);if(!isBlank(x)&&!String(tc||'').includes(x))tc=[tc,x].filter(Boolean).join('\n');}
+  });
   // July 2026: the track-changes Program Requirements item is gone from Cat II,
   // and Cat III has no Additional Instructions at all.
   if(cat===2||tcf)B.push({t:'h',text:'Additional Instructions'});
   if(cat===2){
-    const sb=((CCR[r.id]||{}).answers||{}).ohsu_sbs;
-    const sbDone=sb&&Array.isArray(sb.sbs)&&sb.sbs.length;
-    const news=(r.target_kind==='course'?[r]:relatedCourseItems(r)).filter(x=>x.action==='add');
-    const closure=(r.change_facets||[]).includes('prog_closure');
+    const all=[r,...KS.map(m=>m.r)];
+    const sbDone=all.some(x=>{const sb=((CCR[x.id]||{}).answers||{}).ohsu_sbs;return sb&&Array.isArray(sb.sbs)&&sb.sbs.length;});
+    const nm=new Map();
+    all.forEach(x=>(x.target_kind==='course'?[x]:relatedCourseItems(x)).filter(y=>y.action==='add').forEach(y=>nm.set(y.id,y)));
+    const news=[...nm.values()].sort((a,b)=>(a.seq??0)-(b.seq??0));
+    const closure=all.some(x=>x.target_kind==='program'&&(x.change_facets||[]).includes('prog_closure'));
     B.push({t:'ol',intro:'Attach the following documents or information as supplemental material:',items:[
       {text:'Complete Curriculum Side-by-side (Excel)',status:sbDone?'drafted in this CCR (Curriculum Side-by-side)':'not started'},
       {text:'Complete the New Course Form (as needed)',status:news.length?news.map(x=>'#'+seqLabel(x.seq)+' '+targetLabel(x)).join(', '):'no new courses linked'},
@@ -3179,7 +3310,10 @@ function odProgramModel(d,r,w){
     B.push({t:'ol',intro:'If the proposal includes any change(s) to the program requirements, include this supplemental material:',items:[
       {text:'Track changes version of the Program Requirements Guide',status:tc||'not attached'}]});
   }
-  B.push(...odAuthBlocks(r,'modify the academic program'),...K.extras(),odFootBlock(d));
+  // Answers the layout doesn't place, from this form and the merged ones, in one list.
+  const ex=[...K.extras(),...KS.flatMap(m=>m.K.extras().map(b=>({t:'extras',rows:b.rows.map(x=>Object.assign({},x,{label:x.label+' ('+itemRef(m.r)+')'}))})))];
+  const exRows=ex.flatMap(b=>b.rows);
+  B.push(...odAuthBlocks(r,'modify the academic program'),...(exRows.length?[{t:'extras',rows:exRows}]:[]),odFootBlock(d));
   const prog=ccrCtx(r,'program.name')||itemProgramLabel(r);
   return {blocks:B,file:odFileName(['OHSU','Cat',roman,prog,seasonLabel(r.season_id)])};
 }
@@ -3291,7 +3425,7 @@ function odToHTML(m,dl){
     case 'grid':return `<div class="od-grid">${b.cols.map(c=>`<div><div class="gh">${esc(c.title)}</div>${c.items.map(i=>
       `<div class="gi${i.indent?' in':''}${i.on?' on':''}">${BOX(i.on)}<span>${esc(i.label)}</span></div>${i.other!=null?`<div class="go">${odTextHTML(i.other)}</div>`:''}`).join('')}</div>`).join('')}</div>`;
     case 'q':return `<div class="od-q">${(b.n||b.text)?`<div class="od-qt">${b.n?`<span class="n">${esc(b.n)}.</span>`:''}<span${b.n?'':' style="font-weight:600"'}>${esc(b.text)}</span></div>`:''}<div class="od-a"${b.n||b.text?'':' style="margin-left:0"'}>${V(b.val)}</div></div>`;
-    case 'qrev':return `<div class="od-q">${b.n?`<div class="od-qt"><span class="n">${esc(b.n)}.</span><span>${esc(b.text)}</span></div>`:''}<div class="od-a"${b.n?'':' style="margin-left:0"'}>${[
+    case 'qrev':return `<div class="od-q">${(b.n||b.text)?`<div class="od-qt">${b.n?`<span class="n">${esc(b.n)}.</span>`:''}<span${b.n?'':' style="font-weight:600"'}>${esc(b.text)}</span></div>`:''}<div class="od-a"${b.n||b.text?'':' style="margin-left:0"'}>${[
       isBlank(b.intro)?'':`<div class="od-rv-p">${odTextHTML(b.intro)}</div>`,
       ...b.revs.map(x=>`<div class="od-rv-h">${esc(x.head)}</div><div class="od-rv-p">${isBlank(x.body)?blank:odTextHTML(x.body)}</div>`),
       isBlank(b.outro)?'':`<div class="od-rv-p" style="margin-top:12px">${odTextHTML(b.outro)}</div>`].join('')}</div></div>`;
@@ -3317,7 +3451,7 @@ function odToHTML(m,dl){
   return `<div class="od">${out.join('')}</div>`;
 }
 const OD_RENDER={};
-Object.keys(OD_MODEL).forEach(k=>{OD_RENDER[k]=(d,r,w)=>odToHTML(OD_MODEL[k](d,r,w),r.id+'|'+k);});
+Object.keys(OD_MODEL).forEach(k=>{OD_RENDER[k]=(d,r,w,mg)=>odToHTML(OD_MODEL[k](d,r,w,mg),r.id+'|'+k);});
 
 /* ── Model → Word (.docx) ──
    Built in the browser with the docx library, loaded from the CDN the first
@@ -3418,8 +3552,8 @@ function odToDocx(D,m){
       kids.push(answerBox(b.val,b.n?360:0),spacer());
       break;
     case 'qrev':{
-      if(b.n)kids.push(P([new TextRun({text:b.n+'.\t',bold:true}),new TextRun({text:b.text})],
-        {indent:{left:360,hanging:360},keepNext:true,spacing:{before:120,after:60}}));
+      if(b.n||b.text)kids.push(P([new TextRun({text:b.n?b.n+'.\t':'',bold:true}),new TextRun({text:b.text,bold:!b.n})],
+        {indent:b.n?{left:360,hanging:360}:undefined,keepNext:true,spacing:{before:120,after:60}}));
       const paras=[];
       const addText=v=>runsFor(v).forEach(l=>paras.push(new Paragraph({children:l,spacing:{after:40}})));
       if(!isBlank(b.intro))addText(b.intro);
@@ -3501,12 +3635,12 @@ function odToDocx(D,m){
     }]
   });
 }
-async function downloadOhsuDocx(r,d,w){
+async function downloadOhsuDocx(r,d,w,mg){
   const mk=OD_MODEL[d.form_key];if(!mk)return;
   setSS('Building Word file…');
   try{
     const D=await loadDocx();
-    const m=mk(d,r,w||{});
+    const m=mk(d,r,w||{},mg);
     const blob=await D.Packer.toBlob(odToDocx(D,m));
     const a=document.createElement('a');
     a.href=URL.createObjectURL(blob);a.download=m.file;
@@ -3927,7 +4061,8 @@ function wire(){
     if(dx){
       const [iid,fk]=dx.dataset.docx.split('|');const r=ITEM_BY_ID[iid];if(!r)return;
       const d=formsForItem(r).find(x=>x.form_key===fk);if(!d)return;
-      downloadOhsuDocx(r,d,((CCR[iid]||{}).answers||{})[fk]||{});
+      const mg=PK_PLAN&&PK_PLAN.host.r.id===iid&&PK_PLAN.host.d.form_key===fk?PK_PLAN.srcs:null;
+      downloadOhsuDocx(r,d,((CCR[iid]||{}).answers||{})[fk]||{},mg);
       return;
     }
     const a=e.target.closest('[data-open-ccr]');if(!a)return;
