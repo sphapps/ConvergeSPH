@@ -2885,7 +2885,13 @@ function pkMergePlan(pk){
     formsForItem(r).forEach(d=>{if(REV_FORMS.has(d.form_key))c.push({r,d,w:(saved.answers||{})[d.form_key]||{}});});
   });
   if(c.length<2)return null;
-  const host=c.find(x=>x.d.form_key==='ohsu_cat2')||c[0];
+  // The host must be one of this program's own changes. A packet also holds
+  // changes that are only linked in (slash/cross-list partners, changes covered
+  // by a revision), and one of those must never become the program's form.
+  const own=x=>pk.key.startsWith('ext:')?(x.r.is_external&&'ext:'+(x.r.external_name||'')===pk.key)
+    :pk.key!=='prog:none'&&!x.r.is_external&&x.r.program_id!=null&&'prog:'+x.r.program_id===pk.key;
+  const pick=(fk,ok)=>c.find(x=>x.d.form_key===fk&&ok(x)&&x.r.target_kind==='program')||c.find(x=>x.d.form_key===fk&&ok(x));
+  const host=pick('ohsu_cat2',own)||pick('ohsu_cat3',own)||pick('ohsu_cat2',()=>true)||pick('ohsu_cat3',()=>true);
   const srcs=c.filter(x=>x!==host);
   return {host,srcs,skip:new Map(srcs.map(x=>[x.r.id+'|'+x.d.form_key,x]))};
 }
@@ -3314,7 +3320,8 @@ function odProgramModel(d,r,w,mg){
   const ex=[...K.extras(),...KS.flatMap(m=>m.K.extras().map(b=>({t:'extras',rows:b.rows.map(x=>Object.assign({},x,{label:x.label+' ('+itemRef(m.r)+')'}))})))];
   const exRows=ex.flatMap(b=>b.rows);
   B.push(...odAuthBlocks(r,'modify the academic program'),...(exRows.length?[{t:'extras',rows:exRows}]:[]),odFootBlock(d));
-  const prog=ccrCtx(r,'program.name')||itemProgramLabel(r);
+  // Name the file for the program: this change's, else a combined change's.
+  const prog=[r,...KS.map(m=>m.r)].map(x=>ccrCtx(x,'program.name')).find(x=>!isBlank(x))||itemProgramLabel(r);
   return {blocks:B,file:odFileName(['OHSU','Cat',roman,prog,seasonLabel(r.season_id)])};
 }
 
