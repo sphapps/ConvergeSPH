@@ -605,6 +605,7 @@ document.addEventListener('click',function(e){
           <option value="declined">Declined</option>
           <option value="on_hold">On hold</option>
           <option value="withdrawn">Withdrawn</option>
+          <option value="slash">Slash-listed: needs attention</option>
         </select>
         <select id="t-prog" aria-label="Program"></select>
         <label class="ck"><input type="checkbox" id="t-hidewd" checked> Hide withdrawn</label>
@@ -1049,6 +1050,17 @@ function itemCourseCode(r){
   const c=COURSES[r.course_id],n=itemSide(r);
   return n?sideCode(c,n):courseCode(c);
 }
+// A change on one number of a slash-listed course should have a companion
+// change on the other number in the same season. Returns the other number's
+// code when none has been entered, else null. Any change on that number counts
+// (whatever its status), except one waiting to be deleted.
+function pairMissing(r){
+  const n=itemSide(r);if(!n)return null;
+  const c=COURSES[r.course_id],other=n===String(c.number)?String(c.number2):String(c.number);
+  const has=ITEMS.some(x=>x.id!==r.id&&x.season_id===r.season_id&&x.target_kind==='course'&&!x.is_external&&
+    x.approval_state!=='pending_delete'&&String(x.course_id)===String(r.course_id)&&itemSide(x)===other);
+  return has?null:sideCode(c,other);
+}
 function courseLabel(c){
   if(!c)return '';
   const code=courseCode(c);
@@ -1263,7 +1275,8 @@ function trackerRows(){
   return ITEMS.filter(r=>r.season_id===SEASON_ID).filter(r=>{
     const s=itemStatus(r);
     if(st==='open'&&!(s==='not_started'||s==='in_progress'))return false;
-    if(st&&st!=='all'&&st!=='open'&&s!==st)return false;
+    if(st==='slash'&&!(sideMissing(r)||pairMissing(r)))return false;
+    if(st&&st!=='all'&&st!=='open'&&st!=='slash'&&s!==st)return false;
     // "Hide withdrawn" steps aside when the Status filter asks for withdrawn changes.
     if(hideWd&&st!=='withdrawn'&&(s==='withdrawn'||r.disposition==='withdrawn'))return false;
     if(lvl&&r.student_level!==lvl&&r.student_level!=='both')return false;
@@ -1307,6 +1320,8 @@ function renderTracker(){
     const parents=parentsOf(r.id),kids=childrenOf(r.id),slash=pairsOf(r.id,'slash_pair'),xl=pairsOf(r.id,'cross_list');
     const meta=[`<span class="chip">${esc(kindLabel(r))}</span>`];
     if(sideMissing(r)){const c=COURSES[r.course_id];meta.push(`<span class="chip ext" title="This course is slash-listed. Open the change and choose which number it's for.">Pick ${esc(c.number)} or ${esc(c.number2)}</span>`);}
+    const pm=pairMissing(r);
+    if(pm)meta.push(`<span class="chip ext" title="${esc(itemCourseCode(r))} is slash-listed with ${esc(pm)}, but no change has been entered for ${esc(pm)} this season.">No ${esc(pm)} change</span>`);
     if(r.is_external)meta.push('<span class="chip ext">Non-SPH</span>');
     if(r.disposition==='on_hold'||r.disposition==='withdrawn')meta.push(`<span class="pill ${esc(r.disposition)}">${esc(STATUS_LBL[r.disposition])}</span>`);
     if(r.approval_state!=='active')meta.push(`<span class="pill ${esc(r.approval_state)}">${esc(APPROVAL_LBL[r.approval_state])}</span>`);
@@ -1622,6 +1637,8 @@ function openItem(id){
   if(r&&imReadOnly&&!LOCKED)hint.push(TIER==='viewer'?'View only.':'Only the person who entered this change (or an admin) can edit it.');
   if(LOCKED)hint.push('Editing is locked.');
   if(r&&r.created_by===MY_UID)hint.push('You entered this change.');
+  const pmM=r&&pairMissing(r);
+  if(pmM)hint.unshift(`⚠ No change entered for ${pmM} (the other number of this slash-listed course) this season.`);
   $('im-hint').textContent=hint.join(' ');
 
   const own=r&&r.created_by===MY_UID;
