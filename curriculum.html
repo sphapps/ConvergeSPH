@@ -997,7 +997,7 @@ const FIELD_LBL={
   ohsu_category:'OHSU category',institutions:'approval tracks',initiated_by_name:'initiated by',initiated_by_faculty_id:'initiated by',
   initiated_on:'initiated on',apcc_meeting_id:'APCC meeting',description:'summary',justification:'justification',
   status_note:'status notes',disposition:'disposition',approval_state:'approval',created_by:'owner',
-  is_external:'non-SPH target',external_name:'non-SPH name'
+  is_external:'non-SPH target',external_name:'non-SPH name',course_number:'course number'
 };
 const shortStage=s=>STAGE_SHORT[s.key]||s.label;
 
@@ -1019,7 +1019,35 @@ function seasonStages(sid){return (SEASON_STAGES[sid]||[]).map(r=>STAGES[r.stage
 function seasonLabel(sid){const s=SEASONS.find(x=>x.id===sid);return s?s.label:'—';}
 function courseCode(c){
   if(!c)return '';
-  return [c.prefix,c.number].filter(Boolean).join(' ')||c.course_code||c.full_name||String(c.id);
+  const num=[c.number,c.number2].filter(Boolean).join('/');
+  return [c.prefix,num].filter(Boolean).join(' ')||c.course_code||c.full_name||String(c.id);
+}
+/* Slash-listed courses (400/500, 500/600) are one catalog row with number and
+   number2. For curricular changes each number is its own course: the two sides
+   belong to different programs and 400/500 pairs go through different
+   processes. cc_items.course_number (cc_008) records which side a change is
+   for; null on a slash-listed course means "not chosen yet" and is flagged. */
+const isSlash=c=>!!(c&&c.number&&c.number2);
+function sideCode(c,num){return c?[c.prefix,num].filter(Boolean).join(' '):'';}
+// Level and approval tracks implied by a course number: 4xx is undergraduate
+// (PSU only); 5xx and up is graduate (PSU and OHSU).
+function levelForNumber(num){
+  const m=/^\s*(\d)/.exec(String(num??''));
+  if(!m)return null;
+  return Number(m[1])<=4?{level:'UG',inst:'PSU'}:{level:'GR',inst:'both'};
+}
+// The number this change is for, on a slash-listed course (null if unchosen).
+function itemSide(r){
+  const c=r&&COURSES[r.course_id];
+  if(!isSlash(c))return null;
+  const n=String(r.course_number??'').trim();
+  return n&&(n===String(c.number)||n===String(c.number2))?n:null;
+}
+const sideMissing=r=>!!r&&r.target_kind==='course'&&r.action!=='add'&&!r.is_external&&isSlash(COURSES[r.course_id])&&!itemSide(r);
+// Course code for a change: its own side of a slash-listed course.
+function itemCourseCode(r){
+  const c=COURSES[r.course_id],n=itemSide(r);
+  return n?sideCode(c,n):courseCode(c);
 }
 function courseLabel(c){
   if(!c)return '';
@@ -1030,7 +1058,7 @@ function courseLabel(c){
 function targetLabel(r){
   if(r.target_kind==='course'){
     if(r.action==='add'||r.is_external)return [r.proposed_prefix,r.proposed_number].filter(Boolean).join(' ');
-    return courseCode(COURSES[r.course_id]);
+    return itemCourseCode(r);
   }
   if(r.is_external)return r.external_name||'';
   return PROGRAMS[r.program_id]?.name||'';
@@ -1278,6 +1306,7 @@ function renderTracker(){
     const st=itemStatus(r);
     const parents=parentsOf(r.id),kids=childrenOf(r.id),slash=pairsOf(r.id,'slash_pair'),xl=pairsOf(r.id,'cross_list');
     const meta=[`<span class="chip">${esc(kindLabel(r))}</span>`];
+    if(sideMissing(r)){const c=COURSES[r.course_id];meta.push(`<span class="chip ext" title="This course is slash-listed. Open the change and choose which number it's for.">Pick ${esc(c.number)} or ${esc(c.number2)}</span>`);}
     if(r.is_external)meta.push('<span class="chip ext">Non-SPH</span>');
     if(r.disposition==='on_hold'||r.disposition==='withdrawn')meta.push(`<span class="pill ${esc(r.disposition)}">${esc(STATUS_LBL[r.disposition])}</span>`);
     if(r.approval_state!=='active')meta.push(`<span class="pill ${esc(r.approval_state)}">${esc(APPROVAL_LBL[r.approval_state])}</span>`);
@@ -1383,9 +1412,22 @@ async function copyStagesDown(pid,stageIds){
 /* ── ITEM MODAL ── */
 function fillItemSelects(r){
   $('im-season').innerHTML=seasonOptionsHTML(r?r.season_id:SEASON_ID);
-  const courses=Object.values(COURSES).filter(c=>!c.parent_id).sort((a,b)=>courseCode(a).localeCompare(courseCode(b)));
-  $('im-course').innerHTML='<option value="">— choose a course —</option>'+
-    courses.map(c=>`<option value="${esc(c.id)}">${esc(courseLabel(c))}</option>`).join('')+
+  // A slash-listed course appears once per number (value "<id>|<number>").
+  const opts=[];
+  Object.values(COURSES).filter(c=>!c.parent_id).forEach(c=>{
+    const t=c.title?' — '+c.title:'';
+    if(isSlash(c)){
+      [[c.number,c.number2],[c.number2,c.number]].forEach(([n,o])=>opts.push({v:c.id+'|'+n,code:sideCode(c,n),
+        lbl:sideCode(c,n)+t+' (slash-listed with '+o+')'}));
+    }else opts.push({v:String(c.id),code:courseCode(c),lbl:courseLabel(c)});
+  });
+  opts.sort((a,b)=>a.code.localeCompare(b.code,undefined,{numeric:true})||a.lbl.localeCompare(b.lbl));
+  // An existing change on a slash-listed course with no number chosen keeps a
+  // stand-in option so it still displays; saving asks for a number.
+  const keepC=r&&sideMissing(r)
+    ?`<option value="${esc(r.course_id)}">${esc(courseLabel(COURSES[r.course_id]))} — number not chosen</option>`:'';
+  $('im-course').innerHTML='<option value="">— choose a course —</option>'+keepC+
+    opts.map(o=>`<option value="${esc(o.v)}">${esc(o.lbl)}</option>`).join('')+
     '<option value="__ext__">Other (non-SPH course)…</option>';
   const progs=sortedPrograms();
   $('im-prog').innerHTML='<option value="">— choose a program —</option>'+
@@ -1522,7 +1564,7 @@ function openItem(id){
   setRadio('im-target',r?r.target_kind:'course');
   const extC=!!(r&&r.is_external&&r.target_kind==='course');
   const extP=!!(r&&r.is_external&&r.target_kind==='program');
-  setv('im-course',extC?'__ext__':(r?r.course_id:''));
+  setv('im-course',extC?'__ext__':(r?(itemSide(r)?r.course_id+'|'+itemSide(r):r.course_id):''));
   setv('im-new-prefix',r&&!extC?r.proposed_prefix:'');
   setv('im-new-number',r&&!extC?r.proposed_number:'');
   setv('im-ext-prefix',extC?r.proposed_prefix:'');
@@ -1595,7 +1637,7 @@ function readForm(){
   const act=radioVal('im-action'),tgt=radioVal('im-target');
   const p={
     season_id:N(val('im-season')),action:act,target_kind:tgt,
-    course_id:null,proposed_prefix:null,proposed_number:null,program_id:null,
+    course_id:null,course_number:null,proposed_prefix:null,proposed_number:null,program_id:null,
     is_external:false,external_name:null,
     change_facets:act==='edit'?[...imFacets].filter(k=>FACET_BY_KEY[k]&&FACET_BY_KEY[k].target_kind===tgt):[],
     student_level:val('im-level')||'GR',
@@ -1618,7 +1660,11 @@ function readForm(){
       p.proposed_prefix=px?px.toUpperCase():null;
       p.proposed_number=N(val('im-ext-number'));
       p.external_name=N(val('im-ext-ctitle'));
-    }else p.course_id=N(val('im-course'));
+    }else{
+      const [cid,num]=String(val('im-course')||'').split('|');
+      p.course_id=N(cid);
+      p.course_number=isSlash(COURSES[p.course_id])?N(num):null;
+    }
     p.program_id=N(val('im-assoc'));
   }else if(val('im-prog')==='__ext__'){
     p.is_external=true;
@@ -1633,7 +1679,7 @@ function suggestTitle(p){
   const words=[...new Set((p.change_facets||[]).map(k=>FACET_SHORT[k]||(FACET_BY_KEY[k]?FACET_BY_KEY[k].label.toLowerCase():k)))];
   const tail=words.length?' ('+words.join(', ')+')':'';
   if(p.target_kind==='course'){
-    const code=(p.action==='add'||p.is_external)?[p.proposed_prefix,p.proposed_number].filter(Boolean).join(' '):courseCode(COURSES[p.course_id]);
+    const code=(p.action==='add'||p.is_external)?[p.proposed_prefix,p.proposed_number].filter(Boolean).join(' '):itemCourseCode(p);
     if(p.action==='add')return (code||'Course')+' – New course';
     if(p.action==='remove')return (code||'Course')+' – Remove course';
     return (code||'Course')+' – Course change'+tail;
@@ -1656,6 +1702,7 @@ async function saveItem(){
   if(p.target_kind==='course'&&p.action==='add'&&(!p.proposed_prefix||!p.proposed_number))return imError("Enter the new course's prefix and number.");
   if(p.target_kind==='course'&&p.action!=='add'&&p.is_external&&(!p.proposed_prefix||!p.proposed_number))return imError("Enter the non-SPH course's prefix and number.");
   if(p.target_kind==='course'&&p.action!=='add'&&!p.is_external&&!p.course_id)return imError('Choose the course this change applies to.');
+  if(sideMissing(p)){const c=COURSES[p.course_id];return imError(`${courseCode(c)} is slash-listed. Choose ${sideCode(c,c.number)} or ${sideCode(c,c.number2)} in the Course list.`);}
   if(p.target_kind==='program'&&p.is_external&&!p.external_name)return imError("Enter the non-SPH program's name.");
   if(p.target_kind==='program'&&!p.is_external&&!p.program_id)return imError('Choose the program this change applies to.');
   if(val('im-fac')==='__other__'&&!p.initiated_by_name)return imError('Type the name of the person who initiated this change.');
@@ -2125,6 +2172,12 @@ function programDeps(cid){
     return p?progTitle(p)+' — '+(REL_LBL[pc.relationship_type]||pc.relationship_type||''):'';
   }).filter(Boolean))].sort().join('\n');
 }
+// Catalog links (prerequisites, program requirements) point at the whole
+// slash-listed course, so dependency lists cover both numbers. Say so.
+function slashNote(r,c,txt){
+  if(!isSlash(c)||!txt)return txt;
+  return `(Catalog links aren't split by number — this list covers both ${sideCode(c,c.number)} and ${sideCode(c,c.number2)}.)\n`+txt;
+}
 function progDegree(p){
   if(!p)return '';
   const c=(p.credential||'')+' '+(p.name||'');
@@ -2223,7 +2276,7 @@ function ccrCtx(r,key){
     case 'item.impl_ay':{const y=seasonYears(r.season_id);return y[0]+'-'+y[1].slice(2);}
     case 'ohsu.cat3_revs':return cat3Derived(r);
     case 'course.prefix':return c?c.prefix||'':'';
-    case 'course.number':return c?[c.number,c.number2].filter(Boolean).join('/'):'';
+    case 'course.number':return c?(itemSide(r)||[c.number,c.number2].filter(Boolean).join('/')):'';
     case 'course.title':return c?c.title||'':'';
     case 'course.description':return c?c.description||'':'';
     case 'course.credits':return c&&c.credits!=null?String(c.credits):'';
@@ -2236,9 +2289,9 @@ function ccrCtx(r,key){
     }
     case 'course.prereq_text':return c?prereqText(c.id):'';
     case 'course.coreq_text':return c?coreqText(c.id):'';
-    case 'course.course_deps':return c?courseDeps(c.id):'';
-    case 'course.program_deps':return c?programDeps(c.id):'';
-    case 'course.label':return c?courseLabel(c):targetLabel(r);
+    case 'course.course_deps':return c?slashNote(r,c,courseDeps(c.id)):'';
+    case 'course.program_deps':return c?slashNote(r,c,programDeps(c.id)):'';
+    case 'course.label':return c?(itemSide(r)?sideCode(c,itemSide(r))+(c.title?' — '+c.title:''):courseLabel(c)):targetLabel(r);
     case 'program.name':return p?p.name||'':(r.is_external?r.external_name||'':'');
     case 'program.title':return p?progTitle(p):(r.is_external?r.external_name||'':'');
     case 'program.description':return p?p.description||'':'';
@@ -4112,7 +4165,18 @@ function wire(){
 
   // Item modal
   document.querySelectorAll('input[name="im-action"],input[name="im-target"]').forEach(r=>r.addEventListener('change',imSync));
-  $('im-course').addEventListener('change',imSync);
+  $('im-course').addEventListener('change',()=>{
+    imSync();
+    // Picking one number of a slash-listed course sets level and approval
+    // tracks from that number (still editable afterwards).
+    const [cid,num]=String(val('im-course')||'').split('|');
+    const lv=num&&isSlash(COURSES[cid])?levelForNumber(num):null;
+    if(!lv)return;
+    setv('im-level',lv.level);
+    setv('im-inst',lv.inst);
+    instTouched=true;
+    readStages();renderStages();
+  });
   $('im-prog').addEventListener('change',imSync);
   $('im-facets').addEventListener('change',e=>{
     const cb=e.target.closest('input[type=checkbox]');if(!cb)return;
