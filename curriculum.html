@@ -831,6 +831,7 @@ document.addEventListener('click',function(e){
     <div class="mf">
       <span class="statusline lft" id="im-hint"></span>
       <button class="btn" id="btn-im-ccr">📝 CCR</button>
+      <button class="btn" id="btn-im-clone" title="Start a new change with this one's fields filled in">⧉ Clone change</button>
       <button class="btn" id="btn-im-reqdel">Request deletion</button>
       <button class="btn btn-d" id="btn-im-harddel">Delete permanently</button>
       <button class="btn" id="btn-im-restore">Keep (restore)</button>
@@ -1563,46 +1564,52 @@ function addLink(){
 }
 
 let imReadOnly=false;
-function openItem(id){
+// src: an existing change to copy into a NEW change (Clone change). Its form
+// fields are copied; stage dates, links and the CCR start fresh, and the
+// title is left blank so it regenerates.
+let cloneSrc=null;
+function openItem(id,src){
   const r=id?ITEM_BY_ID[id]:null;
   if(id&&!r)return;
   if(!r&&!canCreate())return;
+  const f=r||src||null;   // where the form's values come from
+  cloneSrc=!r&&src?src:null;
   itemId=r?r.id:null;
   imReadOnly=r?!canEditItem(r):false;
   $('im-err').style.display='none';
-  fillItemSelects(r);
+  fillItemSelects(f);
 
-  $('im-heading').textContent=r?(imReadOnly?'Curricular change':'Edit curricular change'):'Add curricular change';
+  $('im-heading').textContent=r?(imReadOnly?'Curricular change':'Edit curricular change'):(cloneSrc?'Clone curricular change':'Add curricular change');
   setv('im-title',r?r.title:'');
   setv('im-seq',r?seqLabel(r.seq):'');
-  setRadio('im-action',r?r.action:'edit');
-  setRadio('im-target',r?r.target_kind:'course');
-  const extC=!!(r&&r.is_external&&r.target_kind==='course');
-  const extP=!!(r&&r.is_external&&r.target_kind==='program');
-  setv('im-course',extC?'__ext__':(r?(itemSide(r)?r.course_id+'|'+itemSide(r):r.course_id):''));
-  setv('im-new-prefix',r&&!extC?r.proposed_prefix:'');
-  setv('im-new-number',r&&!extC?r.proposed_number:'');
-  setv('im-ext-prefix',extC?r.proposed_prefix:'');
-  setv('im-ext-number',extC?r.proposed_number:'');
-  setv('im-ext-ctitle',extC?r.external_name:'');
-  setv('im-ext-pname',extP?r.external_name:'');
-  setv('im-prog',extP?'__ext__':(r&&r.target_kind==='program'?r.program_id:''));
-  setv('im-assoc',r&&r.target_kind==='course'?r.program_id:'');
-  imFacets=new Set(r?(r.change_facets||[]):[]);
-  setv('im-level',r?r.student_level:'GR');
-  setv('im-cat',r&&r.ohsu_category?String(r.ohsu_category):'');
-  setv('im-inst',r?r.institutions:'both');
-  instTouched=!!r;
-  if(r&&r.initiated_by_faculty_id){setv('im-fac',r.initiated_by_faculty_id);setv('im-fac-other','');}
-  else if(r&&r.initiated_by_name){setv('im-fac','__other__');setv('im-fac-other',r.initiated_by_name);}
+  setRadio('im-action',f?f.action:'edit');
+  setRadio('im-target',f?f.target_kind:'course');
+  const extC=!!(f&&f.is_external&&f.target_kind==='course');
+  const extP=!!(f&&f.is_external&&f.target_kind==='program');
+  setv('im-course',extC?'__ext__':(f?(itemSide(f)?f.course_id+'|'+itemSide(f):f.course_id):''));
+  setv('im-new-prefix',f&&!extC?f.proposed_prefix:'');
+  setv('im-new-number',f&&!extC?f.proposed_number:'');
+  setv('im-ext-prefix',extC?f.proposed_prefix:'');
+  setv('im-ext-number',extC?f.proposed_number:'');
+  setv('im-ext-ctitle',extC?f.external_name:'');
+  setv('im-ext-pname',extP?f.external_name:'');
+  setv('im-prog',extP?'__ext__':(f&&f.target_kind==='program'?f.program_id:''));
+  setv('im-assoc',f&&f.target_kind==='course'?f.program_id:'');
+  imFacets=new Set(f?(f.change_facets||[]):[]);
+  setv('im-level',f?f.student_level:'GR');
+  setv('im-cat',f&&f.ohsu_category?String(f.ohsu_category):'');
+  setv('im-inst',f?f.institutions:'both');
+  instTouched=!!f;
+  if(f&&f.initiated_by_faculty_id){setv('im-fac',f.initiated_by_faculty_id);setv('im-fac-other','');}
+  else if(f&&f.initiated_by_name){setv('im-fac','__other__');setv('im-fac-other',f.initiated_by_name);}
   else{setv('im-fac','');setv('im-fac-other','');}
   $('im-fac-other').style.display=val('im-fac')==='__other__'?'':'none';
-  setv('im-date',r?r.initiated_on:todayISO());
-  fillApccSelect(val('im-season'),r?r.apcc_meeting_id:null);
-  setv('im-desc',r?r.description:'');
-  setv('im-just',r?r.justification:'');
-  setv('im-note',r?r.status_note:'');
-  setv('im-disp',r?r.disposition:'active');
+  setv('im-date',f?f.initiated_on:todayISO());
+  fillApccSelect(val('im-season'),f?f.apcc_meeting_id:null);
+  setv('im-desc',f?f.description:'');
+  setv('im-just',f?f.justification:'');
+  setv('im-note',f?f.status_note:'');
+  setv('im-disp',r?r.disposition:'active');   // a clone starts active
 
   stageEdit={};
   if(r){Object.values(EVENTS[r.id]||{}).forEach(e=>{stageEdit[e.stage_id]={state:e.state,event_date:e.event_date,note:e.note};});}
@@ -1633,6 +1640,7 @@ function openItem(id){
     if(r.approval_state==='active'){const st=itemStatus(r);pill.className='pill '+st;pill.textContent=STATUS_LBL[st]||st;}}
   else pill.style.display='none';
   const hint=[];
+  if(cloneSrc)hint.push(`Copied from ${itemRef(cloneSrc)}. Stage dates, links and the CCR start fresh.`);
   if(!r&&isEditor())hint.push('New changes wait for an admin to approve them.');
   if(r&&imReadOnly&&!LOCKED)hint.push(TIER==='viewer'?'View only.':'Only the person who entered this change (or an admin) can edit it.');
   if(LOCKED)hint.push('Editing is locked.');
@@ -1648,6 +1656,7 @@ function openItem(id){
   $('btn-im-harddel').style.display=(r&&isAdmin()&&!LOCKED)?'':'none';
   $('btn-im-reqdel').style.display=(r&&isEditor()&&own&&!LOCKED&&r.approval_state!=='pending_delete')?'':'none';
   $('btn-im-ccr').style.display=r?'':'none';
+  $('btn-im-clone').style.display=(r&&canCreate())?'':'none';
   openM('mo-item');
 }
 function readForm(){
@@ -1709,6 +1718,50 @@ function imError(m){
   const e=$('im-err');e.textContent=m||'';e.style.display=m?'block':'none';
   if(m)e.scrollIntoView({block:'nearest'});
 }
+/* ── Duplicates: one open change per course (or per number of a slash-listed
+   course) and per program in a season, until that change's APCC vote is done.
+   A withdrawn change, or one waiting to be deleted, doesn't count. ── */
+function targetKey(p){
+  if(p.target_kind==='course'){
+    if(p.action==='add'||p.is_external){
+      const k=[p.proposed_prefix,p.proposed_number].map(x=>String(x??'').trim().toUpperCase()).join(' ').trim();
+      return k?'new:'+k:null;
+    }
+    return p.course_id?'c:'+p.course_id+'|'+(itemSide(p)||''):null;
+  }
+  if(p.is_external){const n=String(p.external_name??'').trim().toLowerCase();return n?'xp:'+n:null;}
+  return p.program_id?'p:'+p.program_id:null;
+}
+function apccDone(r){
+  const s=Object.values(STAGES).find(x=>x.key==='apcc_approval');
+  const e=s&&(EVENTS[r.id]||{})[s.id];
+  return !!(e&&e.state==='done');
+}
+function openDuplicate(p,selfId){
+  const k=targetKey(p);if(!k)return null;
+  return ITEMS.filter(x=>x.id!==selfId&&x.season_id===p.season_id&&x.approval_state!=='pending_delete'&&
+    x.disposition!=='withdrawn'&&targetKey(x)===k&&!apccDone(x)).sort((a,b)=>(a.seq??0)-(b.seq??0))[0]||null;
+}
+// Append text that isn't already there.
+function mergeText(a,b){
+  const x=String(a??'').trim(),y=String(b??'').trim();
+  if(!y||x.includes(y))return x;
+  return x?x+'\n\n'+y:y;
+}
+// Open the existing change with the blocked change's details merged into the
+// form. Nothing is saved until the user clicks Save.
+function combineInto(dup,p){
+  closeM('mo-item');
+  openItem(dup.id);
+  (p.change_facets||[]).forEach(k=>{if(FACET_BY_KEY[k]&&FACET_BY_KEY[k].target_kind===dup.target_kind)imFacets.add(k);});
+  renderFacets();
+  setv('im-desc',mergeText(val('im-desc'),p.description));
+  setv('im-just',mergeText(val('im-just'),p.justification));
+  setv('im-note',mergeText(val('im-note'),p.status_note));
+  if(!val('im-assoc')&&p.target_kind==='course'&&p.program_id)setv('im-assoc',p.program_id);
+  $('im-hint').textContent='Merged in the change you were entering: “What’s changing”, summary, justification and status notes. Review, then Save.';
+  setSS('Combined — review and save');
+}
 async function saveItem(){
   if(imReadOnly)return;
   imError('');
@@ -1723,6 +1776,26 @@ async function saveItem(){
   if(p.target_kind==='program'&&p.is_external&&!p.external_name)return imError("Enter the non-SPH program's name.");
   if(p.target_kind==='program'&&!p.is_external&&!p.program_id)return imError('Choose the program this change applies to.');
   if(val('im-fac')==='__other__'&&!p.initiated_by_name)return imError('Type the name of the person who initiated this change.');
+  // Edits are only checked when they move the change onto a different course,
+  // program or season, so duplicates entered before this rule stay editable.
+  const was=itemId&&ITEM_BY_ID[itemId];
+  const moved=!was||targetKey(was)!==targetKey(p)||was.season_id!==p.season_id;
+  const dup=moved?openDuplicate(p,itemId):null;
+  if(dup){
+    const what=p.target_kind==='course'?targetLabel(p)||'this course':(itemProgramLabel(p)||'this program');
+    const msg=`${itemRef(dup)} already covers ${what} this season and its APCC vote isn't done, so a second change can't be saved.`;
+    imError(msg);
+    if(!canEditItem(dup)){
+      imError(msg+' It was entered by someone else — ask them or an admin to add your changes to it.');
+      return;
+    }
+    showCfm('Combine with the existing change?',
+      msg+` Combine this one into it? Its “What’s changing” boxes, summary, justification and notes are added to ${itemRef(dup)} for you to review and save.`+
+      (itemId?` ${itemRef(ITEM_BY_ID[itemId])} stays as it was saved; delete or withdraw it if it's no longer needed.`:' This new change is not created.'),
+      ()=>combineInto(dup,p));
+    $('cfm-ok').textContent='Combine';$('cfm-ok').className='btn btn-p';
+    return;
+  }
   p.title=N(val('im-title'))||suggestTitle(p);
   setv('im-title',p.title);
 
@@ -4164,6 +4237,7 @@ function wire(){
 
   // CCR editor
   $('btn-im-ccr').onclick=()=>{if(itemId)openCcr(itemId);};
+  $('btn-im-clone').onclick=()=>{const r=itemId&&ITEM_BY_ID[itemId];if(r)openItem(null,r);};
   $('cr-tabs').addEventListener('click',e=>{
     const b=e.target.closest('[data-crtab]');if(!b)return;
     crTab=Number(b.dataset.crtab);renderCcr();
