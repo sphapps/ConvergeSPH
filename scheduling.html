@@ -2478,11 +2478,12 @@ function delAY(ay){
     'Courses and instructors are untouched — only this year\'s terms and offerings are removed. The database will refuse if any offering has enrollment recorded.');
 }
 
-function renderSched(){
-  const canSeeEnr=isAdmin||isPD;
-  const groupColspan=canSeeEnr?13:12;
+// The Schedule tab's filter — shared by the table and its CSV export so the
+// download is always exactly the rows on screen (selected AY + every filter).
+function schedFiltered(){
   const term=val('f-term'),pfx=val('f-pfx'),mod=val('f-mod'),lvl=val('f-level'),q=val('f-q').toLowerCase();
-  let rows=DB.offerings.filter(o=>{
+  const inc=!!$('f-incomplete')?.checked;
+  return DB.offerings.filter(o=>{
     // Offerings from other academic years are loaded but not shown — the AY
     // picker, not the term filter, is what switches years.
     if(!TERMS.includes(o.term))return false;
@@ -2491,9 +2492,14 @@ function renderSched(){
     if(mod&&o.modality!==mod)return false;
     if(lvl){const g=o.grugb||'';if(lvl==='GR'&&!(g==='GR'||g==='B'))return false;if(lvl==='UG'&&!(g==='UG'||g==='B'))return false;}
     if(q&&!(`${o.fullName} ${o.instructor1} ${o.instructor2}`).toLowerCase().includes(q))return false;
-    if($('f-incomplete')?.checked&&!isIncomplete(o))return false;
+    if(inc&&!isIncomplete(o))return false;
     return true;
   });
+}
+function renderSched(){
+  const canSeeEnr=isAdmin||isPD;
+  const groupColspan=canSeeEnr?13:12;
+  let rows=schedFiltered();
   rows.sort((a,b)=>{
     let av=a[sortCol]??'',bv=b[sortCol]??'';
     if(sortCol==='term'){av=TO[av]??0;bv=TO[bv]??0;}
@@ -4629,17 +4635,16 @@ function triggerSave(){
 
 /* ─── CSV EXPORTS ───────────────────────────────────────────── */
 function expSched(){
-  const term=val('f-term'),pfx=val('f-pfx');
   // Email + category are looked up live from the roster by display name, so
   // they always match the current faculty record. Email is blank for anyone
   // who can't read emails (see loadData).
   const iMap={};DB.instructors.forEach(i=>{if(i.displayName)iMap[i.displayName]=i;});
   const iInfo=n=>{const i=n?iMap[n]:null;return [i?i.email||'':'',i?i.category||'':''];};
   const rows=[['Term','Prefix','Course','Section','Grading','PSU CRN(s)','OHSU CRN(s)','Print','Instructor 1','Instructor 1 Email','Instructor 1 Category','Instructor 2','Instructor 2 Email','Instructor 2 Category','POT','Days','Time','Modality','LMS','Total Cap','Enrollment','OHSU Cap 1','OHSU Cap 2','PSU Cap 1','PSU Cap 2','Where Roomed','Room #','Restrict OHSU','Restrict PSU','PSU Text','GR/UG/B','Admin Notes']];
-  DB.offerings.filter(o=>(!term||o.term===term)&&(!pfx||o.prefix===pfx))
-    .sort((a,b)=>(TO[a.term]-TO[b.term])||a.prefix.localeCompare(b.prefix))
+  schedFiltered()
+    .sort((a,b)=>((TO[a.term]??0)-(TO[b.term]??0))||a.prefix.localeCompare(b.prefix)||String(a.fullName).localeCompare(String(b.fullName)))
     .forEach(o=>rows.push([TL[o.term]??o.term,o.prefix,o.fullName,o.section??'',offGrading(o),o.crnPsu??'',o.crnOhsu??'',o.printStatus||'Print',o.instructor1,...iInfo(o.instructor1),o.instructor2,...iInfo(o.instructor2),o.pot??'',o.days,o.time,o.modality,o.lms,o.totalCap,o.enrollment,o.ohsuCap1,o.ohsuCap2,o.psuCap1,o.psuCap2,o.roomed,o.roomNumber,o.restrictOhsu,o.restrictPsu,o.psuText,o.grugb,o.adminNotes]));
-  dlCSV(rows,'SPH_Schedule_AY26-27.csv');
+  dlCSV(rows,`SPH_Schedule_${activeAY||'AY'}${val('f-term')?'_'+(TL[val('f-term')]??val('f-term')):''}.csv`);
 }
 function expCht(){
   const fteEx=new Set(DB.courses.filter(c=>c.fteExempt==='Yes').map(c=>c.id));
@@ -7776,7 +7781,7 @@ function wireTaEvents(){
 
 /* ─── BOOTSTRAP ─────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded',async()=>{
-  console.log('%c[SPH scheduling] build 2026-11-19a — Schedule CSV: instructor emails + categories','color:#0a7');
+  console.log('%c[SPH scheduling] build 2026-11-19b — Schedule CSV: emails + categories, matches on-screen AY/filters','color:#0a7');
   a11yCurrent(document.querySelector('nav'),'button[data-view]');
   wireEvents();
   wireTdbEvents();
