@@ -1748,6 +1748,35 @@ async function loadData(){
     return rec;
   });
 
+  // Primary emails, best-effort and signed-in only. faculty_directory (anon)
+  // carries no email; it lives on faculty.email, which the faculty app owns.
+  //   1. instructor_primary_emails() RPC (instructor_primary_email_v1.sql) —
+  //      returns rows only to scheduling admins/PDs, whatever their faculty-app
+  //      access.
+  //   2. Fallback if the RPC isn't there: faculty_profile, then faculty —
+  //      readable only by faculty-app users.
+  // Anyone else gets nothing, which just leaves emails blank (a display gap,
+  // not a load failure). Used by the Instructors tab, the offering modal and
+  // the Schedule CSV export.
+  try{
+    const facEmail={};
+    const PAGE=1000; let from=0, rows=[], rpcErr=null;
+    for(;;){
+      const {data,error}=await sb.rpc('instructor_primary_emails').range(from,from+PAGE-1);
+      if(error){rpcErr=error;break;}
+      rows.push(...(data||[]));
+      if(!data||data.length<PAGE)break;
+      from+=PAGE;
+    }
+    if(!rpcErr&&rows.length)rows.forEach(r=>{if(r.email)facEmail[r.faculty_id]=String(r.email).trim();});
+    else{
+      let eR=await fetchAll('faculty_profile','id,email');
+      if(eR.error||!(eR.data||[]).length)eR=await fetchAll('faculty','id,email');
+      if(!eR.error)(eR.data||[]).forEach(f=>{if(f.email)facEmail[f.id]=String(f.email).trim();});
+    }
+    instructors.forEach(r=>{r.email=facEmail[r.facultyId]||'';});
+  }catch(e){/* no emails is a display gap, not a load failure */}
+
   // courses: map DB columns back to legacy keys the renderers use.
   const courses=cR.data.map(c=>({
     id:c.course_code, _uuid:c.id,
@@ -1794,7 +1823,7 @@ async function loadData(){
       term:o.term, prefix:c.prefix||'', courseNumber:c.number||'',
       courseId:c.id||'', fullName:c.fullName||'', section:c.section||'',
       instructor1:i1?i1.displayName:'', instructor2:i2?i2.displayName:'',
-      i1Email:'', i2Email:'',
+      i1Email:i1?i1.email:'', i2Email:i2?i2.email:'',
       days:S(o.days), time:S(o.time), modality:S(o.modality), lms:S(o.lms),
       roomed:S(o.roomed), roomNumber:S(o.room_number),
       grugb:c.grugb||'GR',      // derived from the course — offerings.level is no longer read
@@ -4601,10 +4630,15 @@ function triggerSave(){
 /* ─── CSV EXPORTS ───────────────────────────────────────────── */
 function expSched(){
   const term=val('f-term'),pfx=val('f-pfx');
-  const rows=[['Term','Prefix','Course','Section','Grading','PSU CRN(s)','OHSU CRN(s)','Print','Instructor 1','Instructor 2','POT','Days','Time','Modality','LMS','Total Cap','Enrollment','OHSU Cap 1','OHSU Cap 2','PSU Cap 1','PSU Cap 2','Where Roomed','Room #','Restrict OHSU','Restrict PSU','PSU Text','GR/UG/B','Admin Notes']];
+  // Email + category are looked up live from the roster by display name, so
+  // they always match the current faculty record. Email is blank for anyone
+  // who can't read emails (see loadData).
+  const iMap={};DB.instructors.forEach(i=>{if(i.displayName)iMap[i.displayName]=i;});
+  const iInfo=n=>{const i=n?iMap[n]:null;return [i?i.email||'':'',i?i.category||'':''];};
+  const rows=[['Term','Prefix','Course','Section','Grading','PSU CRN(s)','OHSU CRN(s)','Print','Instructor 1','Instructor 1 Email','Instructor 1 Category','Instructor 2','Instructor 2 Email','Instructor 2 Category','POT','Days','Time','Modality','LMS','Total Cap','Enrollment','OHSU Cap 1','OHSU Cap 2','PSU Cap 1','PSU Cap 2','Where Roomed','Room #','Restrict OHSU','Restrict PSU','PSU Text','GR/UG/B','Admin Notes']];
   DB.offerings.filter(o=>(!term||o.term===term)&&(!pfx||o.prefix===pfx))
     .sort((a,b)=>(TO[a.term]-TO[b.term])||a.prefix.localeCompare(b.prefix))
-    .forEach(o=>rows.push([TL[o.term]??o.term,o.prefix,o.fullName,o.section??'',offGrading(o),o.crnPsu??'',o.crnOhsu??'',o.printStatus||'Print',o.instructor1,o.instructor2,o.pot??'',o.days,o.time,o.modality,o.lms,o.totalCap,o.enrollment,o.ohsuCap1,o.ohsuCap2,o.psuCap1,o.psuCap2,o.roomed,o.roomNumber,o.restrictOhsu,o.restrictPsu,o.psuText,o.grugb,o.adminNotes]));
+    .forEach(o=>rows.push([TL[o.term]??o.term,o.prefix,o.fullName,o.section??'',offGrading(o),o.crnPsu??'',o.crnOhsu??'',o.printStatus||'Print',o.instructor1,...iInfo(o.instructor1),o.instructor2,...iInfo(o.instructor2),o.pot??'',o.days,o.time,o.modality,o.lms,o.totalCap,o.enrollment,o.ohsuCap1,o.ohsuCap2,o.psuCap1,o.psuCap2,o.roomed,o.roomNumber,o.restrictOhsu,o.restrictPsu,o.psuText,o.grugb,o.adminNotes]));
   dlCSV(rows,'SPH_Schedule_AY26-27.csv');
 }
 function expCht(){
@@ -7742,7 +7776,7 @@ function wireTaEvents(){
 
 /* ─── BOOTSTRAP ─────────────────────────────────────────────── */
 document.addEventListener('DOMContentLoaded',async()=>{
-  console.log('%c[SPH scheduling] build 2026-10-02b — enrollment reminder banner admins only','color:#0a7');
+  console.log('%c[SPH scheduling] build 2026-11-19a — Schedule CSV: instructor emails + categories','color:#0a7');
   a11yCurrent(document.querySelector('nav'),'button[data-view]');
   wireEvents();
   wireTdbEvents();
