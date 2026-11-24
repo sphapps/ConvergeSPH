@@ -146,6 +146,20 @@ main{flex:1;overflow:hidden;display:flex;flex-direction:column}
 input,select,textarea{font-size:13px;border:1px solid var(--mgray);border-radius:6px;padding:5px 10px;color:var(--text);background:var(--surface);outline:none;font-family:inherit}
 input:focus,select:focus,textarea:focus{border-color:var(--teal)}
 select{cursor:pointer}
+/* Multi-select filter (Schedule toolbar): button + checkbox panel */
+.msel{position:relative;display:inline-block}
+.msel-btn{font-size:13px;border:1px solid var(--mgray);border-radius:6px;padding:5px 26px 5px 10px;color:var(--text);background:var(--surface);font-family:inherit;cursor:pointer;white-space:nowrap;max-width:220px;overflow:hidden;text-overflow:ellipsis;position:relative;text-align:left}
+.msel-btn::after{content:'▾';position:absolute;right:9px;top:50%;transform:translateY(-50%);font-size:11px;color:var(--dgray)}
+.msel-btn:focus{outline:none;border-color:var(--teal)}
+.msel.on .msel-btn{border-color:var(--teal);font-weight:600}
+.msel-pop{display:none;position:absolute;top:calc(100% + 4px);left:0;z-index:500;min-width:190px;max-height:320px;overflow:auto;background:var(--surface);border:1px solid var(--mgray);border-radius:6px;box-shadow:0 6px 18px rgba(0,0,0,.15);padding:4px 0}
+.msel.open .msel-pop{display:block}
+.msel-acts{display:flex;justify-content:space-between;gap:10px;padding:4px 10px 6px;border-bottom:1px solid var(--mgray);margin-bottom:4px}
+.msel-acts button{background:none;border:none;padding:0;font:inherit;font-size:12px;color:var(--teal);cursor:pointer}
+.msel-acts button:hover{text-decoration:underline}
+.msel-opt{display:flex;align-items:center;gap:7px;padding:4px 12px;font-size:13px;cursor:pointer;white-space:nowrap;color:var(--text)}
+.msel-opt:hover{background:var(--lgray)}
+.msel-opt input{margin:0;padding:0;cursor:pointer}
 
 /* ═══ BUTTONS ════════════════════════════════════════════════ */
 .btn{display:inline-flex;align-items:center;gap:5px;padding:6px 14px;border-radius:6px;border:none;font-size:13px;cursor:pointer;font-weight:500;font-family:inherit;white-space:nowrap}
@@ -578,10 +592,10 @@ document.addEventListener('click',function(e){
     <!-- SCHEDULE -->
     <div class="view active" id="view-schedule">
       <div class="toolbar">
-        <select id="f-term"><option value="">All Terms</option></select>
-        <select id="f-pfx"><option value="">All Programs</option></select>
-        <select id="f-mod"><option value="">All Modalities</option><option>Online (async)</option><option>Online (sync)</option><option>Hybrid</option><option>In-Person</option><option>By Arrangement</option><option>Dept Arranged</option><option>Attend Anywhere</option></select>
-        <select id="f-level"><option value="">All Levels</option><option value="GR">Graduate</option><option value="UG">Undergraduate</option></select>
+        <div class="msel" id="f-term" data-all="All Terms" data-noun="Terms"></div>
+        <div class="msel" id="f-pfx" data-all="All Programs" data-noun="Programs"></div>
+        <div class="msel" id="f-mod" data-all="All Modalities" data-noun="Modalities"></div>
+        <div class="msel" id="f-level" data-all="All Levels" data-noun="Levels"></div>
         <input type="search" id="f-q" placeholder="Search…" style="width:200px">
         <label class="auth-only" style="display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--dgray);cursor:pointer;white-space:nowrap"><input type="checkbox" id="f-incomplete" style="margin:0;cursor:pointer"> <span aria-hidden="true">⚠</span> Incomplete only</label>
         <div class="tb-sep"></div>
@@ -1631,6 +1645,97 @@ let cfmCb=null;
 const esc=s=>String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const $=id=>document.getElementById(id);
 const val=id=>{const e=$(id);return e?e.value:''};
+
+/* ─── MULTI-SELECT FILTERS (Schedule toolbar) ───────────────────
+   Each .msel div keeps a Set of checked values. Nothing checked = "All".
+   Changes fire a bubbling 'change' event on the div, so callers listen
+   exactly as they did on the old <select>s. Picks persist in localStorage. */
+const MS_KEY='sph_sched_filters_v1';
+const MS={};   // id -> {opts:[{v,l}], sel:Set}
+const _msStored=(()=>{try{return JSON.parse(localStorage.getItem(MS_KEY)||'{}')||{};}catch(e){return {};}})();
+function _msSave(){
+  const o={};Object.keys(MS).forEach(id=>{o[id]=[...MS[id].sel];});
+  try{localStorage.setItem(MS_KEY,JSON.stringify(o));}catch(e){}
+}
+function _msState(id){
+  if(!MS[id])MS[id]={opts:[],sel:new Set(Array.isArray(_msStored[id])?_msStored[id]:[])};
+  return MS[id];
+}
+function _msLabel(id){
+  const root=$(id),st=_msState(id);if(!root)return;
+  const btn=root.querySelector('.msel-btn');if(!btn)return;
+  const picked=st.opts.filter(o=>st.sel.has(o.v));
+  let txt;
+  if(!picked.length||picked.length===st.opts.length&&st.opts.length>1)txt=root.dataset.all||'All';
+  else if(picked.length<=2)txt=picked.map(o=>o.l).join(', ');
+  else txt=picked.length+' '+(root.dataset.noun||'selected');
+  btn.textContent=txt;
+  btn.title=picked.length?picked.map(o=>o.l).join(', '):(root.dataset.all||'All');
+  root.classList.toggle('on',picked.length>0&&picked.length<st.opts.length);
+}
+function _msFire(id){_msSave();_msLabel(id);const r=$(id);if(r)r.dispatchEvent(new Event('change',{bubbles:true}));}
+function _msClose(root,focus){
+  if(!root||!root.classList.contains('open'))return;
+  root.classList.remove('open');
+  const b=root.querySelector('.msel-btn');if(b){b.setAttribute('aria-expanded','false');if(focus)b.focus();}
+}
+function _msEnsure(id){
+  const root=$(id);if(!root||root.dataset.ready)return root;
+  root.dataset.ready='1';
+  root.innerHTML='<button type="button" class="msel-btn" aria-haspopup="true" aria-expanded="false"></button>'+
+    '<div class="msel-pop" role="group"><div class="msel-acts"><button type="button" data-ms="all">Select all</button><button type="button" data-ms="none">Clear</button></div><div class="msel-list"></div></div>';
+  const btn=root.querySelector('.msel-btn'),pop=root.querySelector('.msel-pop');
+  pop.setAttribute('aria-label',root.dataset.all||'Filter');
+  btn.addEventListener('click',()=>{
+    const opening=!root.classList.contains('open');
+    document.querySelectorAll('.msel.open').forEach(r=>_msClose(r,false));
+    if(opening){root.classList.add('open');btn.setAttribute('aria-expanded','true');const f=pop.querySelector('.msel-list input');if(f)f.focus();}
+  });
+  pop.addEventListener('click',e=>{
+    const a=e.target.closest('[data-ms]');if(!a)return;
+    const st=_msState(id);
+    if(a.dataset.ms==='all')st.opts.forEach(o=>st.sel.add(o.v));else st.sel.clear();
+    pop.querySelectorAll('.msel-list input').forEach(cb=>{cb.checked=st.sel.has(cb.value);});
+    _msFire(id);
+  });
+  pop.addEventListener('change',e=>{
+    const cb=e.target;if(!cb.matches('.msel-list input'))return;
+    e.stopPropagation();   // only the div's own synthetic 'change' should reach listeners
+    const st=_msState(id);
+    if(cb.checked)st.sel.add(cb.value);else st.sel.delete(cb.value);
+    _msFire(id);
+  });
+  root.addEventListener('keydown',e=>{if(e.key==='Escape'&&root.classList.contains('open')){e.stopPropagation();_msClose(root,true);}});
+  return root;
+}
+document.addEventListener('mousedown',e=>{document.querySelectorAll('.msel.open').forEach(r=>{if(!r.contains(e.target))_msClose(r,false);});});
+// (focus landing on an ANCESTOR — e.g. <main tabindex=-1> when a label is
+//  clicked — is not leaving the panel, so it doesn't close it)
+document.addEventListener('focusin',e=>{document.querySelectorAll('.msel.open').forEach(r=>{if(!r.contains(e.target)&&!e.target.contains(r))_msClose(r,false);});});
+/* Replace the option list. Checked values no longer offered are dropped
+   (unless the new list is empty — e.g. data not loaded yet). */
+function msSetOptions(id,opts){
+  const root=_msEnsure(id);const st=_msState(id);
+  st.opts=opts.map(o=>typeof o==='string'?{v:o,l:o}:o);
+  if(st.opts.length){
+    const ok=new Set(st.opts.map(o=>o.v));
+    [...st.sel].forEach(v=>{if(!ok.has(v))st.sel.delete(v);});
+    _msSave();
+  }
+  if(root){
+    root.querySelector('.msel-list').innerHTML=st.opts.map(o=>
+      `<label class="msel-opt"><input type="checkbox" value="${esc(o.v)}"${st.sel.has(o.v)?' checked':''}> ${esc(o.l)}</label>`).join('');
+    _msLabel(id);
+  }
+}
+const msVals=id=>[..._msState(id).sel];
+// Set the checked values (no change event — caller re-renders).
+function msSet(id,vals){
+  const st=_msState(id);st.sel=new Set(vals||[]);_msSave();
+  const root=$(id);
+  if(root)root.querySelectorAll('.msel-list input').forEach(cb=>{cb.checked=st.sel.has(cb.value);});
+  _msLabel(id);
+}
 const setv=(id,v)=>{const e=$(id);if(e)e.value=v??''};
 const chk=id=>{const e=$(id);return e?e.checked:false};
 const setc=(id,v)=>{const e=$(id);if(e)e.checked=!!v};
@@ -2175,7 +2280,8 @@ function handleOfferingDeepLink(){
   }
 
   switchView('schedule');
-  ['f-term','f-pfx','f-mod','f-level','f-q'].forEach(id=>{const e=$(id);if(e)e.value='';});
+  ['f-term','f-pfx','f-mod','f-level'].forEach(id=>msSet(id,[]));
+  {const e=$('f-q');if(e)e.value='';}
   const inc=$('f-incomplete');if(inc)inc.checked=false;
   renderSched();
 
@@ -2257,12 +2363,8 @@ function rebuildTermUI(){
   if(sub)sub.textContent='Course Scheduling · Academic Year '+(activeAY||'—');
 
   // Schedule term filter
-  const ft=$('f-term'),keepF=ft?ft.value:'';
-  if(ft){
-    ft.innerHTML='<option value="">All Terms</option>'+
-      TERMS.map(t=>`<option value="${esc(t)}">${esc(TL[t])}</option>`).join('');
-    ft.value=TERMS.includes(keepF)?keepF:'';
-  }
+  // (multi-select; checked terms not in this AY are dropped)
+  msSetOptions('f-term',TERMS.map(t=>({v:t,l:TL[t]??t})));
   // Gantt term picker — single-select, so it always needs a valid value
   const gt=$('g-term'),keepG=gt?gt.value:'';
   if(gt){
@@ -2510,16 +2612,21 @@ function delAY(ay){
 // The Schedule tab's filter — shared by the table and its CSV export so the
 // download is always exactly the rows on screen (selected AY + every filter).
 function schedFiltered(){
-  const term=val('f-term'),pfx=val('f-pfx'),mod=val('f-mod'),lvl=val('f-level'),q=val('f-q').toLowerCase();
+  // Multi-select filters: an empty set means "All"; otherwise the offering's
+  // value must be one of the checked ones.
+  const mk=id=>{const a=msVals(id);return a.length?new Set(a):null;};
+  const term=mk('f-term'),pfx=mk('f-pfx'),mod=mk('f-mod'),lvl=mk('f-level'),q=val('f-q').toLowerCase();
   const inc=!!$('f-incomplete')?.checked;
   return DB.offerings.filter(o=>{
     // Offerings from other academic years are loaded but not shown — the AY
     // picker, not the term filter, is what switches years.
     if(!TERMS.includes(o.term))return false;
-    if(term&&o.term!==term)return false;
-    if(pfx&&o.prefix!==pfx)return false;
-    if(mod&&o.modality!==mod)return false;
-    if(lvl){const g=o.grugb||'';if(lvl==='GR'&&!(g==='GR'||g==='B'))return false;if(lvl==='UG'&&!(g==='UG'||g==='B'))return false;}
+    if(term&&!term.has(o.term))return false;
+    if(pfx&&!pfx.has(o.prefix))return false;
+    if(mod&&!mod.has(o.modality||''))return false;
+    // Level is an EXACT match on GR / UG / B, so GR+B ("grad-eligible") and
+    // UG+B ("undergrad-eligible") are distinct from GR+UG.
+    if(lvl&&!lvl.has(o.grugb||''))return false;
     if(q&&!(`${o.fullName} ${o.instructor1} ${o.instructor2}`).toLowerCase().includes(q))return false;
     if(inc&&!isIncomplete(o))return false;
     return true;
@@ -2646,8 +2753,9 @@ function updateEnroll(id,v){
   }
 }
 
-/* Inclusive UG/GR level match, mirroring the Schedule tab's f-level:
-   a "B" (both) offering shows under either UG or GR. */
+/* Inclusive UG/GR level match for the Gantt's single-select g-level:
+   a "B" (both) offering shows under either UG or GR. (The Schedule tab's
+   f-level is now a multi-select with exact GR/UG/B matching.) */
 function _lvlOk(o,lvl){if(!lvl)return true;const g=o.grugb||'';if(lvl==='GR')return g==='GR'||g==='B';if(lvl==='UG')return g==='UG'||g==='B';return true;}
 /* ─── GANTT ─────────────────────────────────────────────────── */
 // "1300-1550" → "1:00pm–3:50pm" (falls back to the raw text).
@@ -3284,7 +3392,8 @@ function renderCht(){
 }
 
 /* ─── CATALOG ───────────────────────────────────────────────── */
-/* The level filter is INCLUSIVE, matching the Schedule tab's f-level: a B
+/* The level filter is INCLUSIVE (unlike the Schedule tab's exact GR/UG/B
+   multi-select): a B
    course is open to both populations, so it answers to GR and to UG. The
    explicit 'B' option is the one exact match, for isolating dual-listed
    courses. Consequence: GR count + UG count > total when any B exists. */
@@ -4673,7 +4782,9 @@ function expSched(){
   schedFiltered()
     .sort((a,b)=>((TO[a.term]??0)-(TO[b.term]??0))||a.prefix.localeCompare(b.prefix)||String(a.fullName).localeCompare(String(b.fullName)))
     .forEach(o=>rows.push([TL[o.term]??o.term,o.prefix,o.fullName,o.section??'',offGrading(o),o.crnPsu??'',o.crnOhsu??'',o.printStatus||'Print',o.instructor1,...iInfo(o.instructor1),o.instructor2,...iInfo(o.instructor2),o.pot??'',o.days,o.time,o.modality,o.lms,o.totalCap,o.enrollment,o.ohsuCap1,o.ohsuCap2,o.psuCap1,o.psuCap2,o.roomed,o.roomNumber,o.restrictOhsu,o.restrictPsu,o.psuText,o.grugb,o.adminNotes]));
-  dlCSV(rows,`SPH_Schedule_${activeAY||'AY'}${val('f-term')?'_'+(TL[val('f-term')]??val('f-term')):''}.csv`);
+  {const ts=msVals('f-term').filter(t=>TERMS.includes(t)).sort((a,b)=>(TO[a]??0)-(TO[b]??0));
+   const tsfx=ts.length&&ts.length<TERMS.length?'_'+ts.map(t=>TL[t]??t).join('+'):'';
+   dlCSV(rows,`SPH_Schedule_${activeAY||'AY'}${tsfx}.csv`);}
 }
 function expCht(){
   const fteEx=new Set(DB.courses.filter(c=>c.fteExempt==='Yes').map(c=>c.id));
@@ -5144,7 +5255,9 @@ function openCapacity(){
   const pfxs=[...new Set(DB.offerings.filter(o=>TERMS.includes(o.term)).map(o=>o.prefix).filter(Boolean))].sort();
   pSel.innerHTML='<option value="">All programs</option>'+pfxs.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
   // Start from whatever the Schedule tab is already filtered to.
-  const ft=val('f-term'), fp=val('f-pfx');
+  // Only carries over when exactly one term / program is checked.
+  const _t=msVals('f-term'),_p=msVals('f-pfx');
+  const ft=_t.length===1?_t[0]:'', fp=_p.length===1?_p[0]:'';
   tSel.value=TERMS.includes(ft)?ft:'';
   pSel.value=pfxs.includes(fp)?fp:'';
   renderCapacity();
@@ -5387,7 +5500,7 @@ const LISTS={
     defaults:PROGS.slice(),
     apply(){
       const items=getList('prefixes');
-      populateSelect('f-pfx',items,true,'All Programs');
+      msSetOptions('f-pfx',items);
       populateSelect('g-pfx',items,true,'All Programs');
       populateSelect('cc-pfx',items,true,'All Programs');
       populateSelect('cm-pfx',items,false);
@@ -5576,6 +5689,9 @@ function wireEvents(){
   });
   $('btn-ld2-unlock').addEventListener('click',()=>setLockdown(false));
   // Schedule
+  msSetOptions('f-mod',['Online (async)','Online (sync)','Hybrid','In-Person','By Arrangement','Dept Arranged','Attend Anywhere']);
+  msSetOptions('f-level',[{v:'GR',l:'Graduate (GR)'},{v:'UG',l:'Undergraduate (UG)'},{v:'B',l:'Both (B)'}]);
+  ['f-term','f-pfx'].forEach(id=>_msEnsure(id));
   ['f-term','f-pfx','f-mod','f-level'].forEach(id=>$(id).addEventListener('change',renderSched));
   $('f-q').addEventListener('input',renderSched);
   $('f-incomplete').addEventListener('change',renderSched);
@@ -7899,7 +8015,7 @@ document.addEventListener('DOMContentLoaded',async()=>{
   rebuildTermUI();
   // The Schedule tab's term filter opens on "All Terms" (users preferred that
   // over defaulting to today's term). To restore the old behavior, re-add:
-  //   const cc=currentTermCode(); if(cc&&TERMS.includes(cc))setv('f-term',cc);
+  //   const cc=currentTermCode(); if(cc&&TERMS.includes(cc))msSet('f-term',[cc]);
   renderAll();
   maybeShowEnrBanner();
   startLockPolling();
