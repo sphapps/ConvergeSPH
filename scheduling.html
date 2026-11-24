@@ -115,11 +115,21 @@ nav button.active{color:var(--navytx);border-bottom-color:var(--teal);font-weigh
 #lockdown-banner{display:none;background:#7C2D12;color:#FEE2E2;padding:9px 16px;font-size:13px;
   align-items:center;gap:10px;flex-shrink:0;border-bottom:1px solid #991B1B;line-height:1.4}
 body.is-locked #lockdown-banner{display:flex}
-body.is-locked .admin-only:not(#btn-admin-tools),
-body.is-locked .admin-strict:not(#btn-lockdown){display:none!important}
+body.is-locked .admin-only:not(#btn-admin-tools):not(#btn-capacity),
+body.is-locked .admin-strict:not(#btn-lockdown):not(#btn-capacity){display:none!important}
 body.is-locked .dd-locked-hint{display:block}
 body.is-locked.is-full-admin .dd-locked-hint{display:none}
 #btn-lockdown{color:#B91C1C;font-weight:600}
+
+/* ═══ CAPACITY REPORT ════════════════════════════════════════ */
+#cap-table thead th{cursor:default}
+#cap-table td.num{text-align:right;font-variant-numeric:tabular-nums}
+.cap-bar{display:inline-block;width:90px;height:8px;background:var(--lgray);border-radius:4px;overflow:hidden;vertical-align:middle;margin-right:8px}
+.cap-bar>span{display:block;height:100%;background:var(--teal)}
+tr.cap-over .cap-bar>span{background:var(--red)}
+tr.cap-near .cap-bar>span{background:#D97706}
+tr.cap-over td.pct{color:var(--red);font-weight:700}
+tr.cap-near td.pct{font-weight:700}
 
 /* ═══ VIEWS ══════════════════════════════════════════════════ */
 main{flex:1;overflow:hidden;display:flex;flex-direction:column}
@@ -578,6 +588,7 @@ document.addEventListener('click',function(e){
         <button class="btn btn-p admin-only" id="btn-add-off" style="display:none">+ Add Offering</button>
         <button class="btn btn-s admin-only" id="btn-undo" style="display:none" disabled title="Nothing to undo">↶ Undo</button>
         <button class="btn btn-s admin-only" id="btn-report" style="display:none">📄 Change Report</button>
+        <button class="btn btn-s admin-only admin-strict" id="btn-capacity" style="display:none" title="Offerings ranked by enrollment ÷ cap">📊 Capacity</button>
         <button class="btn btn-s auth-only" id="btn-exp-sched">⬇ CSV</button>
         <div class="tb-sp"></div>
         <button class="btn btn-s admin-only admin-strict" id="btn-reset" style="display:none;font-size:11px;color:var(--red);border-color:var(--red)">↺ Reset</button>
@@ -1225,6 +1236,24 @@ document.addEventListener('click',function(e){
     <div class="mft">
       <button class="btn btn-s" data-close="mo-report">Close</button>
       <button class="btn btn-p" id="btn-rp-gen">Generate .txt</button>
+    </div>
+  </div>
+</div>
+
+<!-- COURSE CAPACITY REPORT (Scheduling Admin only) -->
+<div class="mo" id="mo-cap">
+  <div class="modal" style="width:min(1050px,96vw)">
+    <div class="mhd"><h3>Course Capacity Report</h3><button class="mx" data-close="mo-cap">×</button></div>
+    <div class="mb">
+      <div class="fg">
+        <div><label for="cap-term">Term</label><select id="cap-term"></select><div class="fhint">Terms in the AY selected in the header.</div></div>
+        <div><label for="cap-pfx">Program</label><select id="cap-pfx"></select></div>
+      </div>
+      <div id="cap-status" class="fhint" style="margin:12px 0 6px" aria-live="polite"></div>
+      <div id="cap-table" style="overflow:auto;max-height:56vh"></div>
+    </div>
+    <div class="mft">
+      <button class="btn btn-s" data-close="mo-cap">Close</button>
     </div>
   </div>
 </div>
@@ -5104,6 +5133,65 @@ async function fetchAllRows(buildQuery){
   }
   return {data:all,error:null};
 }
+/* ─── CAPACITY REPORT ───────────────────────────────────────── */
+/* Scheduling Admin only. Ranks offerings by fill (enrollment ÷ total cap),
+   fullest first. Offerings with a blank/non-numeric enrollment or no cap can't
+   be ranked; they're counted in the status line rather than shown as 0%. */
+function openCapacity(){
+  if(!isAdmin)return;   // real gate is RLS; this keeps PDs out of the UI
+  const tSel=$('cap-term'), pSel=$('cap-pfx');
+  tSel.innerHTML='<option value="">All terms</option>'+TERMS.map(t=>`<option value="${esc(t)}">${esc(TL[t]||t)}</option>`).join('');
+  const pfxs=[...new Set(DB.offerings.filter(o=>TERMS.includes(o.term)).map(o=>o.prefix).filter(Boolean))].sort();
+  pSel.innerHTML='<option value="">All programs</option>'+pfxs.map(p=>`<option value="${esc(p)}">${esc(p)}</option>`).join('');
+  // Start from whatever the Schedule tab is already filtered to.
+  const ft=val('f-term'), fp=val('f-pfx');
+  tSel.value=TERMS.includes(ft)?ft:'';
+  pSel.value=pfxs.includes(fp)?fp:'';
+  renderCapacity();
+  openM('mo-cap');
+}
+function renderCapacity(){
+  const term=val('cap-term'), pfx=val('cap-pfx');
+  const num=v=>{const s=String(v??'').trim();return /^\d+$/.test(s)?parseInt(s,10):null;};
+  let noEnr=0, noCap=0;
+  const rows=[];
+  DB.offerings.forEach(o=>{
+    if(!TERMS.includes(o.term))return;
+    if(term&&o.term!==term)return;
+    if(pfx&&o.prefix!==pfx)return;
+    const cap=num(o.totalCap), en=num(o.enrollment);
+    if(!cap){noCap++;return;}
+    if(en==null){noEnr++;return;}
+    rows.push({o,cap,en,pct:en/cap});
+  });
+  rows.sort((a,b)=>b.pct-a.pct||b.en-a.en||(TO[a.term]??0)-(TO[b.term]??0)
+    ||a.o.prefix.localeCompare(b.o.prefix)||(a.o.fullName??'').localeCompare(b.o.fullName??''));
+  const full=rows.filter(r=>r.pct>=1).length;
+  const skipped=[noEnr?`${noEnr} with no enrollment entered`:'',noCap?`${noCap} with no cap`:''].filter(Boolean).join(', ');
+  $('cap-status').textContent=`${rows.length} offering${rows.length===1?'':'s'} ranked`
+    +(rows.length?` · ${full} at or over cap`:'')
+    +(skipped?` · not ranked: ${skipped}`:'');
+  if(!rows.length){$('cap-table').innerHTML='<div class="nores">No offerings with both an enrollment and a cap for this filter.</div>';return;}
+  let h=`<table><caption class="sr-only">Offerings ranked by enrollment as a percentage of cap, highest first</caption><thead><tr>
+    <th scope="col">#</th><th scope="col">Term</th><th scope="col">Course</th><th scope="col">Instructor(s)</th><th scope="col">Modality</th>
+    <th scope="col" style="text-align:right">Enroll</th><th scope="col" style="text-align:right">Cap</th><th scope="col">Fill</th></tr></thead><tbody>`;
+  rows.forEach((r,ix)=>{
+    const o=r.o, p=Math.round(r.pct*100);
+    const cls=r.pct>=1?'cap-over':r.pct>=0.9?'cap-near':'';
+    const inst=[o.instructor1,o.instructor2].filter(Boolean).map(esc).join(' &amp; ');
+    h+=`<tr${cls?` class="${cls}"`:''}>
+      <td class="num" style="color:var(--dgray)">${ix+1}</td>
+      <td>${termBadge(o.term)}</td>
+      <td><strong>${esc(o.prefix)}</strong> ${esc(schedCourseDisp(o))}${o.section?` <span class="secpill">${esc(o.section)}</span>`:''}</td>
+      <td>${inst||'<span style="color:var(--dgray)">—</span>'}</td>
+      <td>${modPill(o.modality,o.lms)}</td>
+      <td class="num">${r.en}</td><td class="num">${r.cap}</td>
+      <td class="pct" style="white-space:nowrap"><span class="cap-bar" aria-hidden="true"><span style="width:${Math.min(100,p)}%"></span></span>${p}%</td>
+    </tr>`;
+  });
+  $('cap-table').innerHTML=h+'</tbody></table>';
+}
+
 async function openReport(){
   // Default "From" to the last-run timestamp on this device (or 30 days back).
   let from;
@@ -5494,6 +5582,8 @@ function wireEvents(){
   $('btn-add-off').addEventListener('click',()=>openOM(null));
   $('btn-undo').addEventListener('click',undoLast);
   $('btn-report').addEventListener('click',openReport);
+  $('btn-capacity').addEventListener('click',openCapacity);
+  ['cap-term','cap-pfx'].forEach(id=>$(id).addEventListener('change',renderCapacity));
   $('btn-rp-gen').addEventListener('click',genReport);
   $('btn-exp-sched').addEventListener('click',expSched);
   $('btn-reset').addEventListener('click',resetSeed);
