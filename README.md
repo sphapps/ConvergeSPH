@@ -61,5 +61,3 @@ Embed via SharePoint's **Embed web part**:
 
 `confirm()` dialogs are replaced with inline modal confirmations, so the apps are safe to embed in sandboxed iframes.
 
-
-:)
